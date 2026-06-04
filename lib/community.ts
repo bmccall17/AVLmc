@@ -1,6 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { query } from "@/lib/db";
 
 export type ContributionType = "song" | "comment" | "voice";
 export type ContributionStatus = "visible" | "hidden" | "pending";
@@ -32,11 +31,6 @@ export type Reaction = {
   createdAt: string;
 };
 
-type CommunityStore = {
-  contributions: Contribution[];
-  reactions: Reaction[];
-};
-
 export type CommunityCounts = {
   songs: number;
   notes: number;
@@ -55,35 +49,127 @@ export type PublicEventCommunity = CommunityCounts & {
   contributions: PublicContribution[];
 };
 
-const STORE_PATH = path.join(process.cwd(), "data", "community.json");
+type ContributionRow = {
+  id: string;
+  event_id: string;
+  event_title: string;
+  type: ContributionType;
+  display_name: string | null;
+  body_text: string | null;
+  song_title: string | null;
+  song_artist: string | null;
+  song_url: string | null;
+  audio_url: string | null;
+  duration_seconds: number | null;
+  session_id: string;
+  created_at: Date | string;
+  status: ContributionStatus;
+};
+
+type CountRow = {
+  event_id?: string;
+  songs: number | string | null;
+  notes: number | string | null;
+  voices: number | string | null;
+  going: number | string | null;
+  fire: number | string | null;
+};
+
 const MAX_RECENT_CONTRIBUTIONS = 5;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 
 export async function getCommunityForEvent(eventId: string): Promise<EventCommunity> {
-  const store = await readStore();
-  const visible = store.contributions.filter(
-    (contribution) => contribution.eventId === eventId && contribution.status === "visible"
-  );
-  const counts = getCountsForEvent(store, eventId);
+  const [counts, contributions] = await Promise.all([
+    getCountsForEvent(eventId),
+    listVisibleContributionsForEvent(eventId),
+  ]);
 
   return {
     ...counts,
-    contributions: visible.sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
+    contributions,
   };
 }
 
 export async function getCommunityCountsByEvent(eventIds: string[]) {
-  const store = await readStore();
-  return Object.fromEntries(eventIds.map((eventId) => [eventId, getCountsForEvent(store, eventId)]));
+  const uniqueEventIds = Array.from(new Set(eventIds));
+
+  if (uniqueEventIds.length === 0) {
+    return {};
+  }
+
+  const countsByEvent: Record<string, CommunityCounts> = Object.fromEntries(
+    uniqueEventIds.map((eventId) => [eventId, emptyCounts()])
+  );
+
+  const contributionCounts = await query<{
+    event_id: string;
+    songs: number | string;
+    notes: number | string;
+    voices: number | string;
+  }>(
+    `
+      select
+        event_id,
+        count(*) filter (where type = 'song')::int as songs,
+        count(*) filter (where type = 'comment')::int as notes,
+        count(*) filter (where type = 'voice')::int as voices
+      from public.contributions
+      where status = 'visible'
+        and event_id = any($1::text[])
+      group by event_id
+    `,
+    [uniqueEventIds]
+  );
+
+  for (const row of contributionCounts.rows) {
+    countsByEvent[row.event_id] = {
+      ...countsByEvent[row.event_id],
+      songs: toNumber(row.songs),
+      notes: toNumber(row.notes),
+      voices: toNumber(row.voices),
+    };
+  }
+
+  const reactionCounts = await query<{
+    event_id: string;
+    going: number | string;
+    fire: number | string;
+  }>(
+    `
+      select
+        event_id,
+        count(*) filter (where type = 'going')::int as going,
+        count(*) filter (where type = 'fire')::int as fire
+      from public.reactions
+      where event_id = any($1::text[])
+      group by event_id
+    `,
+    [uniqueEventIds]
+  );
+
+  for (const row of reactionCounts.rows) {
+    countsByEvent[row.event_id] = {
+      ...countsByEvent[row.event_id],
+      going: toNumber(row.going),
+      fire: toNumber(row.fire),
+    };
+  }
+
+  return countsByEvent;
 }
 
 export async function listContributions(status?: ContributionStatus) {
-  const store = await readStore();
-  return store.contributions
-    .filter((contribution) => (status ? contribution.status === status : true))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const result = await query<ContributionRow>(
+    `
+      select ${contributionColumns}
+      from public.contributions
+      where ($1::text is null or status = $1)
+      order by created_at desc
+    `,
+    [status ?? null]
+  );
+
+  return result.rows.map(mapContributionRow);
 }
 
 export async function createContribution(input: {
@@ -99,29 +185,45 @@ export async function createContribution(input: {
   durationSeconds?: number | null;
   sessionId: string;
 }) {
-  const store = await readStore();
-  assertRateLimit(store, input.sessionId);
+  await assertRateLimit(input.sessionId);
 
-  const contribution: Contribution = {
-    id: randomUUID(),
-    eventId: input.eventId,
-    eventTitle: input.eventTitle,
-    type: input.type,
-    displayName: cleanOptional(input.displayName, 64),
-    bodyText: cleanOptional(input.bodyText, 600),
-    songTitle: cleanOptional(input.songTitle, 140),
-    songArtist: cleanOptional(input.songArtist, 140),
-    songUrl: cleanOptional(input.songUrl, 500),
-    audioUrl: cleanOptional(input.audioUrl, 500),
-    durationSeconds: input.durationSeconds ?? null,
-    sessionId: input.sessionId,
-    createdAt: new Date().toISOString(),
-    status: "visible"
-  };
+  const result = await query<ContributionRow>(
+    `
+      insert into public.contributions (
+        id,
+        event_id,
+        event_title,
+        type,
+        display_name,
+        body_text,
+        song_title,
+        song_artist,
+        song_url,
+        audio_url,
+        duration_seconds,
+        session_id,
+        status
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'visible')
+      returning ${contributionColumns}
+    `,
+    [
+      randomUUID(),
+      input.eventId,
+      input.eventTitle,
+      input.type,
+      cleanOptional(input.displayName, 64),
+      cleanOptional(input.bodyText, 600),
+      cleanOptional(input.songTitle, 140),
+      cleanOptional(input.songArtist, 140),
+      cleanOptional(input.songUrl, 500),
+      cleanOptional(input.audioUrl, 500),
+      input.durationSeconds ?? null,
+      input.sessionId,
+    ]
+  );
 
-  store.contributions.push(contribution);
-  await writeStore(store);
-  return contribution;
+  return mapContributionRow(result.rows[0]);
 }
 
 export async function toggleReaction(input: {
@@ -130,40 +232,30 @@ export async function toggleReaction(input: {
   type: ReactionType;
   sessionId: string;
 }) {
-  const store = await readStore();
-  const existing = store.reactions.find(
-    (reaction) =>
-      reaction.eventId === input.eventId &&
-      reaction.type === input.type &&
-      reaction.sessionId === input.sessionId
+  await query(
+    `
+      insert into public.reactions (id, event_id, event_title, type, session_id)
+      values ($1, $2, $3, $4, $5)
+      on conflict (event_id, type, session_id) do nothing
+    `,
+    [randomUUID(), input.eventId, input.eventTitle, input.type, input.sessionId]
   );
 
-  if (!existing) {
-    store.reactions.push({
-      id: randomUUID(),
-      eventId: input.eventId,
-      eventTitle: input.eventTitle,
-      type: input.type,
-      sessionId: input.sessionId,
-      createdAt: new Date().toISOString()
-    });
-    await writeStore(store);
-  }
-
-  return getCountsForEvent(store, input.eventId);
+  return getCountsForEvent(input.eventId);
 }
 
 export async function setContributionStatus(id: string, status: ContributionStatus) {
-  const store = await readStore();
-  const contribution = store.contributions.find((item) => item.id === id);
+  const result = await query<ContributionRow>(
+    `
+      update public.contributions
+      set status = $2
+      where id = $1
+      returning ${contributionColumns}
+    `,
+    [id, status]
+  );
 
-  if (!contribution) {
-    return null;
-  }
-
-  contribution.status = status;
-  await writeStore(store);
-  return contribution;
+  return result.rows[0] ? mapContributionRow(result.rows[0]) : null;
 }
 
 export function publicContribution(contribution: Contribution): PublicContribution {
@@ -172,55 +264,138 @@ export function publicContribution(contribution: Contribution): PublicContributi
   return safe;
 }
 
-function getCountsForEvent(store: CommunityStore, eventId: string): CommunityCounts {
-  const visible = store.contributions.filter(
-    (contribution) => contribution.eventId === eventId && contribution.status === "visible"
+const contributionColumns = `
+  id,
+  event_id,
+  event_title,
+  type,
+  display_name,
+  body_text,
+  song_title,
+  song_artist,
+  song_url,
+  audio_url,
+  duration_seconds,
+  session_id,
+  created_at,
+  status
+`;
+
+async function listVisibleContributionsForEvent(eventId: string) {
+  const result = await query<ContributionRow>(
+    `
+      select ${contributionColumns}
+      from public.contributions
+      where event_id = $1
+        and status = 'visible'
+      order by created_at desc
+    `,
+    [eventId]
   );
 
+  return result.rows.map(mapContributionRow);
+}
+
+async function getCountsForEvent(eventId: string): Promise<CommunityCounts> {
+  const result = await query<CountRow>(
+    `
+      with contribution_counts as (
+        select
+          count(*) filter (where type = 'song')::int as songs,
+          count(*) filter (where type = 'comment')::int as notes,
+          count(*) filter (where type = 'voice')::int as voices
+        from public.contributions
+        where event_id = $1
+          and status = 'visible'
+      ),
+      reaction_counts as (
+        select
+          count(*) filter (where type = 'going')::int as going,
+          count(*) filter (where type = 'fire')::int as fire
+        from public.reactions
+        where event_id = $1
+      )
+      select
+        contribution_counts.songs,
+        contribution_counts.notes,
+        contribution_counts.voices,
+        reaction_counts.going,
+        reaction_counts.fire
+      from contribution_counts
+      cross join reaction_counts
+    `,
+    [eventId]
+  );
+
+  return mapCountRow(result.rows[0]);
+}
+
+async function assertRateLimit(sessionId: string) {
+  const cutoff = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+  const result = await query<{ count: number | string }>(
+    `
+      select count(*)::int as count
+      from public.contributions
+      where session_id = $1
+        and created_at >= $2
+    `,
+    [sessionId, cutoff]
+  );
+
+  if (toNumber(result.rows[0]?.count) >= MAX_RECENT_CONTRIBUTIONS) {
+    throw new Error("Please slow down and try again in a few minutes.");
+  }
+}
+
+function mapContributionRow(row: ContributionRow): Contribution {
   return {
-    songs: visible.filter((contribution) => contribution.type === "song").length,
-    notes: visible.filter((contribution) => contribution.type === "comment").length,
-    voices: visible.filter((contribution) => contribution.type === "voice").length,
-    going: store.reactions.filter(
-      (reaction) => reaction.eventId === eventId && reaction.type === "going"
-    ).length,
-    fire: store.reactions.filter(
-      (reaction) => reaction.eventId === eventId && reaction.type === "fire"
-    ).length
+    id: row.id,
+    eventId: row.event_id,
+    eventTitle: row.event_title,
+    type: row.type,
+    displayName: row.display_name,
+    bodyText: row.body_text,
+    songTitle: row.song_title,
+    songArtist: row.song_artist,
+    songUrl: row.song_url,
+    audioUrl: row.audio_url,
+    durationSeconds: row.duration_seconds,
+    sessionId: row.session_id,
+    createdAt: toIsoString(row.created_at),
+    status: row.status,
   };
 }
 
-async function readStore(): Promise<CommunityStore> {
-  try {
-    const raw = await readFile(STORE_PATH, "utf8");
-    const parsed = JSON.parse(raw) as Partial<CommunityStore>;
-    return {
-      contributions: (parsed.contributions ?? []).map((contribution) => ({
-        ...contribution,
-        songArtist: contribution.songArtist ?? null
-      })),
-      reactions: parsed.reactions ?? []
-    };
-  } catch {
-    return { contributions: [], reactions: [] };
+function mapCountRow(row: CountRow | undefined): CommunityCounts {
+  if (!row) {
+    return emptyCounts();
   }
+
+  return {
+    songs: toNumber(row.songs),
+    notes: toNumber(row.notes),
+    voices: toNumber(row.voices),
+    going: toNumber(row.going),
+    fire: toNumber(row.fire),
+  };
 }
 
-async function writeStore(store: CommunityStore) {
-  await mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await writeFile(STORE_PATH, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+function emptyCounts(): CommunityCounts {
+  return {
+    songs: 0,
+    notes: 0,
+    voices: 0,
+    going: 0,
+    fire: 0,
+  };
 }
 
-function assertRateLimit(store: CommunityStore, sessionId: string) {
-  const cutoff = Date.now() - RATE_LIMIT_WINDOW_MS;
-  const recent = store.contributions.filter(
-    (contribution) =>
-      contribution.sessionId === sessionId && new Date(contribution.createdAt).getTime() >= cutoff
-  );
+function toIsoString(value: Date | string) {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
 
-  if (recent.length >= MAX_RECENT_CONTRIBUTIONS) {
-    throw new Error("Please slow down and try again in a few minutes.");
-  }
+function toNumber(value: number | string | null | undefined) {
+  return Number(value ?? 0);
 }
 
 function cleanOptional(value: string | null | undefined, maxLength: number) {
