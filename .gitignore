@@ -1,0 +1,10 @@
+.next
+node_modules
+out
+.vercel
+.env
+.env.local
+npm-debug.log*
+public/uploads/voice/*
+!public/uploads/voice/.gitkeep
+tsconfig.tsbuildinfo
