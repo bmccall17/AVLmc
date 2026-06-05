@@ -29,7 +29,7 @@ The first pass should feel like a simple “who’s coming to town?” discovery
 
 ## working title
 
-**AVLgo Music Companion**
+**AVL Music Companion**
 
 Alternate names:
 

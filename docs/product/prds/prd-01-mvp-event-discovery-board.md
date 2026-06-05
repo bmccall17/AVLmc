@@ -2,7 +2,7 @@
 
 ## Summary
 
-Build the first useful version of the AVLgo Music Companion: a mobile-friendly web app that shows upcoming Asheville music events from AVLgo over a rolling 21-day window.
+Build the first useful version of the AVL Music Companion: a mobile-friendly web app that shows upcoming Asheville music events from AVLgo over a rolling 21-day window.
 
 This phase proves the core browsing experience before adding community features.
 

@@ -1,4 +1,4 @@
-# AVLgo Music Companion Master Roadmap
+# AVL Music Companion Master Roadmap
 
 ## Desired Outcome
 
