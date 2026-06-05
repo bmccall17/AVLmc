@@ -55,6 +55,7 @@ type EventRow = {
 
 const AVLGO_EXPORT_URL = "https://www.avlgo.com/api/export/json";
 const LIVE_MUSIC_TAG = "Live Music";
+const EVENT_UPSERT_BATCH_SIZE = 100;
 
 const MUSIC_TAGS = [
   "music",
@@ -270,58 +271,73 @@ async function getEventByIdFromDatabase(id: string) {
 }
 
 async function upsertEvents(events: EventRecord[]) {
-  for (const event of events) {
-    await query(
-      `
-        insert into public.events (
-          id,
-          avlgo_event_id,
-          artist_name,
-          event_title,
-          venue_name,
-          event_date,
-          event_time,
-          starts_at,
-          event_url,
-          image_url,
-          source,
-          tags,
-          created_at,
-          updated_at
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-        on conflict (id) do update set
-          avlgo_event_id = excluded.avlgo_event_id,
-          artist_name = excluded.artist_name,
-          event_title = excluded.event_title,
-          venue_name = excluded.venue_name,
-          event_date = excluded.event_date,
-          event_time = excluded.event_time,
-          starts_at = excluded.starts_at,
-          event_url = excluded.event_url,
-          image_url = excluded.image_url,
-          source = excluded.source,
-          tags = excluded.tags,
-          updated_at = excluded.updated_at
-      `,
-      [
-        event.id,
-        event.avlgoEventId,
-        event.artistName,
-        event.eventTitle,
-        event.venueName,
-        event.eventDate,
-        event.eventTime,
-        event.startsAt,
-        event.eventUrl,
-        event.imageUrl,
-        event.source,
-        event.tags,
-        event.createdAt,
-        new Date().toISOString(),
-      ]
-    );
+  const updatedAt = new Date().toISOString();
+
+  for (let index = 0; index < events.length; index += EVENT_UPSERT_BATCH_SIZE) {
+    await upsertEventBatch(events.slice(index, index + EVENT_UPSERT_BATCH_SIZE), updatedAt);
   }
+}
+
+async function upsertEventBatch(events: EventRecord[], updatedAt: string) {
+  const values = events
+    .map((_, eventIndex) => {
+      const offset = eventIndex * 14;
+      const placeholders = Array.from({ length: 14 }, (_value, columnIndex) => `$${offset + columnIndex + 1}`);
+      return `(${placeholders.join(", ")})`;
+    })
+    .join(",\n");
+  const params = events.flatMap((event) => [
+    event.id,
+    event.avlgoEventId,
+    event.artistName,
+    event.eventTitle,
+    event.venueName,
+    event.eventDate,
+    event.eventTime,
+    event.startsAt,
+    event.eventUrl,
+    event.imageUrl,
+    event.source,
+    event.tags,
+    event.createdAt,
+    updatedAt,
+  ]);
+
+  await query(
+    `
+      insert into public.events (
+        id,
+        avlgo_event_id,
+        artist_name,
+        event_title,
+        venue_name,
+        event_date,
+        event_time,
+        starts_at,
+        event_url,
+        image_url,
+        source,
+        tags,
+        created_at,
+        updated_at
+      )
+      values ${values}
+      on conflict (id) do update set
+        avlgo_event_id = excluded.avlgo_event_id,
+        artist_name = excluded.artist_name,
+        event_title = excluded.event_title,
+        venue_name = excluded.venue_name,
+        event_date = excluded.event_date,
+        event_time = excluded.event_time,
+        starts_at = excluded.starts_at,
+        event_url = excluded.event_url,
+        image_url = excluded.image_url,
+        source = excluded.source,
+        tags = excluded.tags,
+        updated_at = excluded.updated_at
+    `,
+    params
+  );
 }
 
 const eventColumns = `
