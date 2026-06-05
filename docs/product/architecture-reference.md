@@ -1,6 +1,6 @@
 # Architecture Reference
 
-Updated: June 3, 2026
+Updated: June 5, 2026
 
 ## App Shape
 
@@ -14,11 +14,12 @@ Updated: June 3, 2026
 
 ### Events
 
-- `lib/events.ts` fetches AVLgo's public JSON export.
+- `lib/events.ts` reads upcoming events from Aiven Postgres.
+- If the rolling window has no stored events, `lib/events.ts` fetches AVLgo's public JSON export and upserts normalized events into Aiven.
 - Default query uses `dateFilter=custom`, today through 21 days out, and `tagsInclude=Live Music`.
 - Events are normalized into `EventRecord`.
-- Homepage and detail pages fall back to seed events if AVLgo fetch fails.
-- `/api/sync/avlgo` returns the current normalized event set and is scheduled daily in `vercel.json`.
+- Homepage and detail pages fall back to seed events only if Aiven has no matching records and AVLgo fetch fails.
+- `/api/sync/avlgo` forces an AVLgo refresh/upsert and is scheduled daily in `vercel.json`.
 
 ### Discovery Board
 
@@ -29,8 +30,8 @@ Updated: June 3, 2026
 
 ### Community
 
-- `lib/community.ts` is the current local JSON store.
-- Local development store: `data/community.json`.
+- `lib/community.ts` reads/writes Aiven Postgres.
+- Production tables: `contributions` and `reactions`.
 - Public contribution API: `/api/community/contributions`.
 - Reaction API: `/api/community/reactions`.
 - Event detail UI: `components/CommunityPanel.tsx`.
@@ -38,12 +39,9 @@ Updated: June 3, 2026
 
 ### Voice Memos
 
-- Browser recording uses `MediaRecorder` when supported.
-- Upload fallback accepts `audio/*`.
-- API cap: 3 MB max file size.
-- UI cap: 60 seconds max duration.
-- Local development uploads save to `public/uploads/voice`.
-- Public deployment should move audio storage to Supabase Storage before launch.
+- Deferred for the first production release.
+- No voice memo form, upload path, local file writes, storage bucket, or playback surface is active.
+- The database schema keeps nullable audio fields for a later storage-backed release.
 
 ### Admin
 
@@ -53,23 +51,23 @@ Updated: June 3, 2026
 - Auth model: single password plus an opaque session token from environment.
 - Required production env vars: `ADMIN_PASSWORD` and `ADMIN_SESSION_TOKEN`.
 
-## Current Local Store
+## Production Persistence
 
-The local JSON/file store is useful for the playable prototype but should not be treated as production persistence on serverless hosting.
+The app now uses Aiven Postgres for production persistence.
 
-Production `$0` migration target:
-
-- Supabase Postgres for contributions and reactions.
-- Supabase Storage for voice memo files.
-- Keep the public UI and API contracts stable while swapping the persistence layer.
+- `events`: normalized AVLgo event records.
+- `contributions`: songs and notes with moderation `status`.
+- `reactions`: anonymous session-based going/fire signals.
+- `ADMIN_PASSWORD`, `ADMIN_SESSION_TOKEN`, and `DATABASE_URL` are required in production.
+- `AVLGO_API_URL` is optional and should usually be unset so the built-in AVLgo JSON export URL is used.
 
 ## Acceptance Coverage
 
 - PRD 01: live 21-day AVLgo board, detail pages, source links, daily sync route.
 - PRD 02: song recs, text notes, going/fire reactions, counts on homepage/detail, anonymous session IDs, spam controls.
 - PRD 03: password-protected admin, recent contribution list, visible/hidden/pending filters, hide/unhide controls.
-- PRD 04: 60-second voice memo UX, upload fallback, playback, admin moderation.
-- PRD 05: `$0` deployment/auth decision memo in `docs/product/deployment-auth-investigation.md`.
+- PRD 04: deferred for production until an object-storage path is selected.
+- PRD 05: `$0` deployment/auth decision memo in `docs/product/deployment-auth-investigation.md`, updated for Aiven.
 
 ## Known Follow-Up
 

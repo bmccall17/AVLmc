@@ -8,7 +8,7 @@ This PRD is an investigation deliverable, not an implementation commitment.
 
 ## Implementation Status
 
-Documented in [Deployment and Auth Investigation](../deployment-auth-investigation.md). Recommendation: Vercel Hobby plus Supabase Free for public deployment persistence, anonymous MVP participation, and Supabase Auth later.
+Documented in [Deployment and Auth Investigation](../deployment-auth-investigation.md). Recommendation: Vercel Hobby plus Aiven Free PostgreSQL for public deployment persistence, anonymous MVP participation, and full auth later only when accounts create clear product value.
 
 ## Goals
 

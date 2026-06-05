@@ -16,7 +16,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 1 | [MVP Event Discovery Board](prds/prd-01-mvp-event-discovery-board.md) | Built | Pull AVLgo events and display the rolling 21-day show board. |
 | 2 | [Community Contributions and Reactions](prds/prd-02-community-contributions-and-reactions.md) | Built | Add song recs, notes, going signals, and fire signals. |
 | 3 | [Admin Moderation](prds/prd-03-admin-moderation.md) | Built | Let a trusted admin hide spam or bad submissions. |
-| 4 | [Voice Memos](prds/prd-04-voice-memos.md) | Built | Add short audio contributions if $0 storage remains practical. |
+| 4 | [Voice Memos](prds/prd-04-voice-memos.md) | Deferred | Add short audio contributions after a $0 storage path is selected. |
 | 5 | Personalized Discovery Backlog | Future | Add filters, sorting, and listening-history personas for best-bet recommendations. |
 
 ## Product Principles
@@ -83,6 +83,8 @@ Required outputs:
 
 Purpose: support short personal audio context once storage and moderation are ready.
 
+Production status: deferred for the first Vercel/Aiven launch. No voice memo upload or playback surface is active.
+
 Required outputs:
 
 - 60-second max voice memo contribution.
@@ -105,7 +107,7 @@ Candidate outputs:
 
 ## Implementation Reference
 
-See [Architecture Reference](architecture-reference.md) for current routes, components, storage behavior, and the production persistence migration note.
+See [Architecture Reference](architecture-reference.md) for current routes, components, storage behavior, and the Aiven production persistence path.
 
 ## Hard Constraints
 
@@ -120,7 +122,7 @@ See [Architecture Reference](architecture-reference.md) for current routes, comp
 - AVLgo may not provide auth or may not support third-party identity flows.
 - Spotify and Apple Music auth may not work as general-purpose user identity.
 - Apple Music integration may have developer-program or token requirements.
-- Free storage may not be enough for voice memos.
+- Free storage may not be enough for voice memos, so audio is excluded from the first production release.
 - Anonymous contributions may attract spam.
 
 ## Success Criteria

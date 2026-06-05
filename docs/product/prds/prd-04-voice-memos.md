@@ -8,7 +8,7 @@ This phase is intentionally later because audio storage, playback, abuse handlin
 
 ## Implementation Status
 
-Built for the local playable prototype with browser recording, upload fallback, 60-second UI validation, a 3 MB API cap, playback on event detail pages, and admin hide/unhide support. Public deployment should move audio files from local disk to Supabase Storage.
+Deferred for the first production release. The Vercel/Aiven launch excludes voice memo upload, local file storage, and playback. Keep this PRD as the future storage-backed audio plan.
 
 ## Goals
 
