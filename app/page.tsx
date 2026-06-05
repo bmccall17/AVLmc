@@ -38,7 +38,7 @@ export default async function HomePage() {
           <span className="brand-mark">AVL</span>
           <span>
             <strong>AVLmc</strong>
-            <small>Upcoming shows in the 828</small>
+            <small>AVL music connection</small>
           </span>
         </Link>
         <nav className="nav-pills" aria-label="Primary">
