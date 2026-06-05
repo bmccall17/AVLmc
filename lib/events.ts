@@ -175,8 +175,16 @@ export function getEmptyUpcomingEventsForPreview(): EventRecord[] {
   return [];
 }
 
+export function getAvlgoFeedSource(now = new Date()) {
+  return getConfiguredAvlgoApiUrl() ?? buildAvlgoLiveFeedUrl(now);
+}
+
+export function isUsingCustomAvlgoFeed() {
+  return Boolean(getConfiguredAvlgoApiUrl());
+}
+
 async function getRawEvents(now: Date): Promise<RawEventResult> {
-  const apiUrl = process.env.AVLGO_API_URL || buildAvlgoLiveFeedUrl(now);
+  const apiUrl = getAvlgoFeedSource(now);
 
   try {
     const response = await fetch(apiUrl, { next: { revalidate: 3600 } });
@@ -199,6 +207,24 @@ async function getRawEvents(now: Date): Promise<RawEventResult> {
   }
 
   return { events: seedEvents, shouldPersist: false };
+}
+
+function getConfiguredAvlgoApiUrl() {
+  const value = process.env.AVLGO_API_URL?.trim();
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+    const isBareAvlgoSite =
+      (url.hostname === "avlgo.com" || url.hostname === "www.avlgo.com") &&
+      (url.pathname === "" || url.pathname === "/");
+
+    return isBareAvlgoSite ? null : value;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeEvents(rawEvents: Array<RawSeedEvent | RawAvlgoEvent>, now: Date) {
