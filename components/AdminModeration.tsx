@@ -117,7 +117,7 @@ function ContributionSummary({ contribution }: { contribution: PublicContributio
   }
 
   if (contribution.type === "voice") {
-    return <p>Voice memo: {contribution.audioUrl ?? "No audio URL"}</p>;
+    return <p>Audio contribution deferred for this release.</p>;
   }
 
   return <p>{contribution.bodyText}</p>;

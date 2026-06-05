@@ -1,14 +1,10 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createContribution, getCommunityForEvent, publicContribution } from "@/lib/community";
 import type { ContributionType } from "@/lib/community";
 
 export const runtime = "nodejs";
 
-const TYPES = new Set<ContributionType>(["song", "comment", "voice"]);
-const MAX_AUDIO_BYTES = 3 * 1024 * 1024;
+const TYPES = new Set<ContributionType>(["song", "comment"]);
 
 type ContributionInput = {
   eventId: string | null;
@@ -83,26 +79,9 @@ async function parseJson(request: Request) {
 async function parseMultipart(request: Request) {
   const form = await request.formData();
   const type = getFormString(form, "type") as ContributionType | null;
-  let audioUrl: string | null = null;
 
   if (type === "voice") {
-    const file = form.get("audio");
-    if (!isAudioUpload(file)) {
-      throw new Error("Voice memo audio is required.");
-    }
-    if (!file.type.startsWith("audio/")) {
-      throw new Error("Voice memo must be an audio file.");
-    }
-    if (file.size > MAX_AUDIO_BYTES) {
-      throw new Error("Voice memo must be 3 MB or smaller.");
-    }
-
-    const extension = audioExtension(file.type);
-    const fileName = `${randomUUID()}.${extension}`;
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "voice");
-    await mkdir(uploadDir, { recursive: true });
-    await writeFile(path.join(uploadDir, fileName), Buffer.from(await file.arrayBuffer()));
-    audioUrl = `/uploads/voice/${fileName}`;
+    throw new Error("Voice memos are deferred for this production release.");
   }
 
   return {
@@ -114,8 +93,8 @@ async function parseMultipart(request: Request) {
     songTitle: getFormString(form, "songTitle"),
     songArtist: getFormString(form, "songArtist"),
     songUrl: getFormString(form, "songUrl"),
-    audioUrl,
-    durationSeconds: Number(getFormString(form, "durationSeconds")) || null,
+    audioUrl: null,
+    durationSeconds: null,
     sessionId: getFormString(form, "sessionId"),
     website: getFormString(form, "website")
   };
@@ -137,14 +116,6 @@ function validateContribution(input: ContributionInput): asserts input is ValidC
     throw new Error("A note is required.");
   }
 
-  if (input.type === "voice") {
-    if (!input.audioUrl) {
-      throw new Error("Voice memo audio is required.");
-    }
-    if (input.durationSeconds && input.durationSeconds > 60) {
-      throw new Error("Voice memo must be 60 seconds or shorter.");
-    }
-  }
 }
 
 function assertUrl(value: string) {
@@ -163,22 +134,4 @@ function getString(body: Record<string, unknown>, key: string) {
 function getFormString(form: FormData, key: string) {
   const value = form.get(key);
   return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function isAudioUpload(value: FormDataEntryValue | null): value is File {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as Blob).arrayBuffer === "function" &&
-    typeof (value as Blob).type === "string" &&
-    typeof (value as Blob).size === "number"
-  );
-}
-
-function audioExtension(type: string) {
-  if (type.includes("webm")) return "webm";
-  if (type.includes("ogg")) return "ogg";
-  if (type.includes("mpeg")) return "mp3";
-  if (type.includes("wav")) return "wav";
-  return "audio";
 }

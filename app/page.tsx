@@ -37,7 +37,7 @@ export default async function HomePage() {
         <Link className="brand" href="/">
           <span className="brand-mark">AVL</span>
           <span>
-            <strong>AVL Show Notes</strong>
+            <strong>AVLmc</strong>
             <small>Upcoming shows in the 828</small>
           </span>
         </Link>

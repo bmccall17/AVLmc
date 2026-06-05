@@ -1,3 +1,5 @@
+import { query } from "@/lib/db";
+
 export type EventRecord = {
   id: string;
   avlgoEventId: string;
@@ -28,6 +30,28 @@ type RawSeedEvent = {
 };
 
 type RawAvlgoEvent = Record<string, unknown>;
+
+type RawEventResult = {
+  events: Array<RawSeedEvent | RawAvlgoEvent>;
+  shouldPersist: boolean;
+};
+
+type EventRow = {
+  id: string;
+  avlgo_event_id: string;
+  artist_name: string;
+  event_title: string;
+  venue_name: string;
+  event_date: Date | string;
+  event_time: string | null;
+  starts_at: Date | string | null;
+  event_url: string;
+  image_url: string | null;
+  source: string;
+  tags: string[];
+  created_at: Date | string;
+  updated_at: Date | string;
+};
 
 const AVLGO_EXPORT_URL = "https://www.avlgo.com/api/export/json";
 const LIVE_MUSIC_TAG = "Live Music";
@@ -115,7 +139,69 @@ export function getDateWindow(now = new Date()) {
 }
 
 export async function getUpcomingEvents(now = new Date()): Promise<EventRecord[]> {
-  const rawEvents = await getRawEvents(now);
+  const storedEvents = await listUpcomingEventsFromDatabase(now);
+
+  if (storedEvents.length > 0) {
+    return storedEvents;
+  }
+
+  return syncUpcomingEvents(now);
+}
+
+export async function getEventById(id: string): Promise<EventRecord | null> {
+  const storedEvent = await getEventByIdFromDatabase(id);
+
+  if (storedEvent) {
+    return storedEvent;
+  }
+
+  const events = await syncUpcomingEvents();
+  return events.find((event) => event.id === id) ?? null;
+}
+
+export async function syncUpcomingEvents(now = new Date()): Promise<EventRecord[]> {
+  const { events: rawEvents, shouldPersist } = await getRawEvents(now);
+  const normalized = normalizeEvents(rawEvents, now);
+
+  if (shouldPersist && normalized.length > 0) {
+    await upsertEvents(normalized);
+    return listUpcomingEventsFromDatabase(now);
+  }
+
+  return normalized;
+}
+
+export function getEmptyUpcomingEventsForPreview(): EventRecord[] {
+  return [];
+}
+
+async function getRawEvents(now: Date): Promise<RawEventResult> {
+  const apiUrl = process.env.AVLGO_API_URL || buildAvlgoLiveFeedUrl(now);
+
+  try {
+    const response = await fetch(apiUrl, { next: { revalidate: 3600 } });
+    if (!response.ok) {
+      return { events: seedEvents, shouldPersist: false };
+    }
+
+    const payload = await response.json();
+    if (Array.isArray(payload)) {
+      return { events: payload as RawAvlgoEvent[], shouldPersist: true };
+    }
+    if (Array.isArray(payload.events)) {
+      return { events: payload.events as RawAvlgoEvent[], shouldPersist: true };
+    }
+    if (Array.isArray(payload.data)) {
+      return { events: payload.data as RawAvlgoEvent[], shouldPersist: true };
+    }
+  } catch {
+    return { events: seedEvents, shouldPersist: false };
+  }
+
+  return { events: seedEvents, shouldPersist: false };
+}
+
+function normalizeEvents(rawEvents: Array<RawSeedEvent | RawAvlgoEvent>, now: Date) {
   const normalized = rawEvents
     .map((event) => normalizeEvent(event, now))
     .filter((event): event is EventRecord => Boolean(event))
@@ -126,39 +212,137 @@ export async function getUpcomingEvents(now = new Date()): Promise<EventRecord[]
   return dedupeEvents(normalized).sort(compareByDateTime);
 }
 
-export async function getEventById(id: string): Promise<EventRecord | null> {
-  const events = await getUpcomingEvents();
-  return events.find((event) => event.id === id) ?? null;
+async function listUpcomingEventsFromDatabase(now: Date) {
+  const { start, end } = getDateWindow(now);
+  const result = await query<EventRow>(
+    `
+      select ${eventColumns}
+      from public.events
+      where event_date >= $1
+        and event_date <= $2
+        and (starts_at is null or starts_at >= $3)
+      order by coalesce(starts_at, (event_date::timestamp + time '23:59:00')) asc
+    `,
+    [formatYmd(start), formatYmd(end), now.toISOString()]
+  );
+
+  return result.rows.map(mapEventRow);
 }
 
-export function getEmptyUpcomingEventsForPreview(): EventRecord[] {
-  return [];
+async function getEventByIdFromDatabase(id: string) {
+  const result = await query<EventRow>(
+    `
+      select ${eventColumns}
+      from public.events
+      where id = $1
+      limit 1
+    `,
+    [id]
+  );
+
+  return result.rows[0] ? mapEventRow(result.rows[0]) : null;
 }
 
-async function getRawEvents(now: Date): Promise<Array<RawSeedEvent | RawAvlgoEvent>> {
-  const apiUrl = process.env.AVLGO_API_URL ?? buildAvlgoLiveFeedUrl(now);
-
-  try {
-    const response = await fetch(apiUrl, { next: { revalidate: 3600 } });
-    if (!response.ok) {
-      return seedEvents;
-    }
-
-    const payload = await response.json();
-    if (Array.isArray(payload)) {
-      return payload as RawAvlgoEvent[];
-    }
-    if (Array.isArray(payload.events)) {
-      return payload.events as RawAvlgoEvent[];
-    }
-    if (Array.isArray(payload.data)) {
-      return payload.data as RawAvlgoEvent[];
-    }
-  } catch {
-    return seedEvents;
+async function upsertEvents(events: EventRecord[]) {
+  for (const event of events) {
+    await query(
+      `
+        insert into public.events (
+          id,
+          avlgo_event_id,
+          artist_name,
+          event_title,
+          venue_name,
+          event_date,
+          event_time,
+          starts_at,
+          event_url,
+          image_url,
+          source,
+          tags,
+          created_at,
+          updated_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        on conflict (id) do update set
+          avlgo_event_id = excluded.avlgo_event_id,
+          artist_name = excluded.artist_name,
+          event_title = excluded.event_title,
+          venue_name = excluded.venue_name,
+          event_date = excluded.event_date,
+          event_time = excluded.event_time,
+          starts_at = excluded.starts_at,
+          event_url = excluded.event_url,
+          image_url = excluded.image_url,
+          source = excluded.source,
+          tags = excluded.tags,
+          updated_at = excluded.updated_at
+      `,
+      [
+        event.id,
+        event.avlgoEventId,
+        event.artistName,
+        event.eventTitle,
+        event.venueName,
+        event.eventDate,
+        event.eventTime,
+        event.startsAt,
+        event.eventUrl,
+        event.imageUrl,
+        event.source,
+        event.tags,
+        event.createdAt,
+        new Date().toISOString(),
+      ]
+    );
   }
+}
 
-  return seedEvents;
+const eventColumns = `
+  id,
+  avlgo_event_id,
+  artist_name,
+  event_title,
+  venue_name,
+  event_date,
+  event_time,
+  starts_at,
+  event_url,
+  image_url,
+  source,
+  tags,
+  created_at,
+  updated_at
+`;
+
+function mapEventRow(row: EventRow): EventRecord {
+  return {
+    id: row.id,
+    avlgoEventId: row.avlgo_event_id,
+    artistName: row.artist_name,
+    eventTitle: row.event_title,
+    venueName: row.venue_name,
+    eventDate: formatDbDate(row.event_date),
+    eventTime: row.event_time,
+    startsAt: row.starts_at ? toIsoString(row.starts_at) : null,
+    eventUrl: row.event_url,
+    imageUrl: row.image_url,
+    source: row.source,
+    tags: row.tags,
+    createdAt: toIsoString(row.created_at),
+    updatedAt: toIsoString(row.updated_at),
+  };
+}
+
+function formatDbDate(value: Date | string) {
+  if (value instanceof Date) {
+    return formatYmd(value);
+  }
+  return value.slice(0, 10);
+}
+
+function toIsoString(value: Date | string) {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
 function buildAvlgoLiveFeedUrl(now: Date) {
