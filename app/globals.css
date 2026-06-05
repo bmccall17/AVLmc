@@ -423,7 +423,8 @@ body {
   font-weight: 900;
   height: 44px;
   justify-content: center;
-  width: 44px;
+  min-width: 54px;
+  padding: 0 8px;
 }
 
 .brand strong,

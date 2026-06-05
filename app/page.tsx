@@ -35,10 +35,10 @@ export default async function HomePage() {
     <main className="shell">
       <header className="app-chrome">
         <Link className="brand" href="/">
-          <span className="brand-mark">AVL</span>
+          <span className="brand-mark">AVLmc</span>
           <span>
-            <strong>AVLmc</strong>
-            <small>AVL music connection</small>
+            <strong>AVL music connection</strong>
+            <small>Upcoming shows in the 828</small>
           </span>
         </Link>
         <nav className="nav-pills" aria-label="Primary">
