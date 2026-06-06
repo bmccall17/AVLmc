@@ -8,6 +8,7 @@ import type {
   PublicEventCommunity,
   ReactionType,
 } from "@/lib/community";
+import type { SpotifyTrackSearchResult } from "@/lib/music";
 
 type EventSummary = {
   id: string;
@@ -18,6 +19,7 @@ type EventSummary = {
 type CommunityPanelProps = {
   event: EventSummary;
   initialCommunity: PublicEventCommunity;
+  spotifySearchEnabled: boolean;
 };
 
 type FormState = {
@@ -27,12 +29,19 @@ type FormState = {
 
 const emptyFormState: FormState = { kind: "idle", message: "" };
 
-export function CommunityPanel({ event, initialCommunity }: CommunityPanelProps) {
+export function CommunityPanel({ event, initialCommunity, spotifySearchEnabled }: CommunityPanelProps) {
   const [community, setCommunity] = useState(initialCommunity);
   const [songState, setSongState] = useState<FormState>(emptyFormState);
   const [noteState, setNoteState] = useState<FormState>(emptyFormState);
   const [reactionState, setReactionState] = useState<FormState>(emptyFormState);
   const [reactionPending, setReactionPending] = useState<ReactionType | null>(null);
+  const [songTitle, setSongTitle] = useState("");
+  const [songArtist, setSongArtist] = useState(event.artistName);
+  const [songUrl, setSongUrl] = useState("");
+  const [spotifyQuery, setSpotifyQuery] = useState("");
+  const [spotifyResults, setSpotifyResults] = useState<SpotifyTrackSearchResult[]>([]);
+  const [spotifyPending, setSpotifyPending] = useState(false);
+  const [selectedSpotifyTrack, setSelectedSpotifyTrack] = useState<SpotifyTrackSearchResult | null>(null);
 
   const grouped = useMemo(
     () => ({
@@ -85,11 +94,57 @@ export function CommunityPanel({ event, initialCommunity }: CommunityPanelProps)
         songTitle: getFormValue(data, "songTitle"),
         songArtist: getFormValue(data, "songArtist"),
         songUrl: getFormValue(data, "songUrl"),
+        musicProvider: selectedSpotifyTrack?.provider ?? "",
+        musicProviderItemId: selectedSpotifyTrack?.providerItemId ?? "",
+        musicProviderUrl: selectedSpotifyTrack?.externalUrl ?? "",
         website: getFormValue(data, "website"),
       },
       setSongState,
       form
     );
+  }
+
+  async function searchSpotifyTracks() {
+    const normalizedQuery = spotifyQuery.trim();
+
+    if (normalizedQuery.length < 2) {
+      setSongState({ kind: "error", message: "Enter at least 2 characters to search Spotify." });
+      return;
+    }
+
+    setSpotifyPending(true);
+    setSongState({ kind: "idle", message: "Searching Spotify..." });
+
+    try {
+      const response = await fetch(`/api/me/spotify-tracks?q=${encodeURIComponent(normalizedQuery)}`);
+      const data = (await response.json()) as { tracks?: SpotifyTrackSearchResult[]; error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not search Spotify.");
+      }
+
+      setSpotifyResults(data.tracks ?? []);
+      setSongState({
+        kind: "success",
+        message: data.tracks?.length ? "Pick a Spotify track below." : "No Spotify tracks found.",
+      });
+    } catch (error) {
+      setSpotifyResults([]);
+      setSongState({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Could not search Spotify.",
+      });
+    } finally {
+      setSpotifyPending(false);
+    }
+  }
+
+  function selectSpotifyTrack(track: SpotifyTrackSearchResult) {
+    setSelectedSpotifyTrack(track);
+    setSongTitle(track.name);
+    setSongArtist(track.artistNames.join(", "));
+    setSongUrl(track.externalUrl);
+    setSongState({ kind: "success", message: "Spotify track selected." });
   }
 
   async function submitNote(formEvent: FormEvent<HTMLFormElement>) {
@@ -134,6 +189,14 @@ export function CommunityPanel({ event, initialCommunity }: CommunityPanelProps)
 
       setCommunity(data.community);
       form.reset();
+      if (values.type === "song") {
+        setSongTitle("");
+        setSongArtist(event.artistName);
+        setSongUrl("");
+        setSelectedSpotifyTrack(null);
+        setSpotifyQuery("");
+        setSpotifyResults([]);
+      }
       setState({ kind: "success", message: "Added." });
     } catch (error) {
       setState({
@@ -173,18 +236,74 @@ export function CommunityPanel({ event, initialCommunity }: CommunityPanelProps)
       <div className="community-form-grid">
         <form className="community-form" onSubmit={submitSong}>
           <h3>Recommend a song</h3>
+          {spotifySearchEnabled ? (
+            <div className="spotify-picker">
+              <label>
+                Spotify search
+                <input
+                  onChange={(inputEvent) => setSpotifyQuery(inputEvent.target.value)}
+                  placeholder="Search Spotify tracks"
+                  type="search"
+                  value={spotifyQuery}
+                />
+              </label>
+              <button disabled={spotifyPending} onClick={searchSpotifyTracks} type="button">
+                Search Spotify
+              </button>
+              {spotifyResults.length > 0 ? (
+                <div className="spotify-results">
+                  {spotifyResults.map((track) => (
+                    <button
+                      key={track.providerItemId}
+                      onClick={() => selectSpotifyTrack(track)}
+                      type="button"
+                    >
+                      <strong>{track.name}</strong>
+                      <span>{track.artistNames.join(", ")}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <label>
             Song title
-            <input maxLength={140} name="songTitle" required />
+            <input
+              maxLength={140}
+              name="songTitle"
+              onChange={(inputEvent) => setSongTitle(inputEvent.target.value)}
+              required
+              value={songTitle}
+            />
           </label>
           <label>
             Artist
-            <input defaultValue={event.artistName} maxLength={140} name="songArtist" />
+            <input
+              maxLength={140}
+              name="songArtist"
+              onChange={(inputEvent) => setSongArtist(inputEvent.target.value)}
+              value={songArtist}
+            />
           </label>
           <label>
             Music link
-            <input name="songUrl" placeholder="Spotify, YouTube, Bandcamp, Apple Music..." required type="url" />
+            <input
+              name="songUrl"
+              onChange={(inputEvent) => {
+                setSongUrl(inputEvent.target.value);
+                if (selectedSpotifyTrack && inputEvent.target.value !== selectedSpotifyTrack.externalUrl) {
+                  setSelectedSpotifyTrack(null);
+                }
+              }}
+              placeholder="Spotify, YouTube, Bandcamp, Apple Music..."
+              required
+              type="url"
+              value={songUrl}
+            />
           </label>
+          {selectedSpotifyTrack ? (
+            <p className="form-help">Linked from Spotify.</p>
+          ) : null}
           <label>
             Optional note
             <textarea maxLength={600} name="bodyText" rows={3} />
@@ -259,6 +378,9 @@ function ContributionCard({ contribution }: { contribution: PublicContribution }
           <a href={contribution.songUrl ?? "#"} target="_blank">
             {contribution.songTitle}
           </a>
+          {contribution.musicProvider ? (
+            <span className="provider-pill">{formatProvider(contribution.musicProvider)}</span>
+          ) : null}
           {contribution.songArtist ? <p>{contribution.songArtist}</p> : null}
           {contribution.bodyText ? <p>{contribution.bodyText}</p> : null}
         </>
@@ -288,4 +410,8 @@ function formatCreatedAt(value: string) {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatProvider(provider: string) {
+  return provider === "spotify" ? "Spotify" : provider;
 }

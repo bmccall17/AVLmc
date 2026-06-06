@@ -17,7 +17,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 2 | [Community Contributions and Reactions](prds/prd-02-community-contributions-and-reactions.md) | Built | Add song recs, notes, going signals, and fire signals. |
 | 3 | [Admin Moderation](prds/prd-03-admin-moderation.md) | Built | Let a trusted admin hide spam or bad submissions. |
 | 4 | [Voice Memos](prds/prd-04-voice-memos.md) | Deferred | Add short audio contributions after a $0 storage path is selected. |
-| 5 | [Personalized Discovery Backlog](personalized-discovery-backlog.md) | Future | Add filters, sorting, and optional Spotify taste-aware recommendations. |
+| 5 | [Personalized Discovery Backlog](personalized-discovery-backlog.md) | Built | Add best-bet filters, sorting, and optional Spotify taste-aware recommendations. |
 
 ## Product Principles
 
@@ -94,7 +94,9 @@ Required outputs:
 
 ### Phase 5: Personalized Discovery Backlog
 
-Purpose: make the large event feed easier to navigate with filters, sorting, and music-taste-aware recommendations.
+Purpose: make the large event feed easier to navigate with best-bet filters, sorting, and optional Spotify taste-aware recommendations.
+
+Build goal: help a visitor answer "which upcoming show is most worth checking out for me?" from the homepage. Anonymous users should get stronger public-signal recommendations, and Spotify-connected users should get best-match boosts from synced taste rows.
 
 Current production inputs as of June 6, 2026:
 
@@ -104,14 +106,14 @@ Current production inputs as of June 6, 2026:
 - A signed-in Spotify account can sync 20 top artists and 20 top tracks into `music_profile_items`.
 - OAuth tokens stay server-side in Auth.js `accounts`; discovery code should use normalized profile rows.
 
-Candidate outputs:
+Built outputs:
 
-- Search, venue, date, tag, and popularity filters.
-- Sort options such as soonest, most discussed, most reactions, and best match.
-- Optional listener persona built first from connected Spotify taste data, then from vetted Google/YouTube or Apple Music signals.
-- Recommendation scoring that surfaces best bets based on listening history, saved artists, community signals, venue preferences, and event timing.
-- Clear privacy controls, including disconnect, delete data, and opt out.
-- $0 feasibility review before implementing any music-platform integrations.
+- Ranked search, venue, date, tag, popularity, and intent filters that scale past the large AVLgo venue/tag set.
+- Sort options such as soonest, most discussed, hottest, Best Bets, and Spotify-backed Best Match.
+- Recommendation scoring based on event timing, community signals, event metadata, and optional normalized Spotify profile rows.
+- Clear privacy controls, including sync, disconnect, delete music data, and opt out.
+- Manual music links remain available for everyone; provider-backed linking starts with Spotify search/select.
+- Google/YouTube and Apple Music remain later connectors.
 
 See [Personalized Discovery Backlog](personalized-discovery-backlog.md) for next-plan notes and acceptance targets.
 

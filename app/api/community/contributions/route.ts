@@ -20,6 +20,9 @@ type ContributionInput = {
   songTitle: string | null;
   songArtist: string | null;
   songUrl: string | null;
+  musicProvider: string | null;
+  musicProviderItemId: string | null;
+  musicProviderUrl: string | null;
   audioUrl: string | null;
   durationSeconds: number | null;
   sessionId: string | null;
@@ -81,6 +84,9 @@ async function parseJson(request: Request) {
     songTitle: getString(body, "songTitle"),
     songArtist: getString(body, "songArtist"),
     songUrl: getString(body, "songUrl"),
+    musicProvider: getString(body, "musicProvider"),
+    musicProviderItemId: getString(body, "musicProviderItemId"),
+    musicProviderUrl: getString(body, "musicProviderUrl"),
     audioUrl: null,
     durationSeconds: null,
     sessionId: getString(body, "sessionId"),
@@ -105,6 +111,9 @@ async function parseMultipart(request: Request) {
     songTitle: getFormString(form, "songTitle"),
     songArtist: getFormString(form, "songArtist"),
     songUrl: getFormString(form, "songUrl"),
+    musicProvider: getFormString(form, "musicProvider"),
+    musicProviderItemId: getFormString(form, "musicProviderItemId"),
+    musicProviderUrl: getFormString(form, "musicProviderUrl"),
     audioUrl: null,
     durationSeconds: null,
     sessionId: getFormString(form, "sessionId"),
@@ -122,6 +131,9 @@ function validateContribution(input: ContributionInput): asserts input is ValidC
       throw new Error("Song title and link are required.");
     }
     assertUrl(input.songUrl);
+    if (input.musicProviderUrl) {
+      assertUrl(input.musicProviderUrl);
+    }
   }
 
   if (input.type === "comment" && !input.bodyText) {

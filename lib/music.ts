@@ -10,6 +10,7 @@ export type MusicConnection = {
   scopes: string[];
   connectedAt: string;
   lastSyncedAt: string | null;
+  tasteOptOutAt: string | null;
   disconnectedAt: string | null;
 };
 
@@ -27,11 +28,22 @@ export type MusicProfileItem = {
   syncedAt: string;
 };
 
+export type SpotifyTrackSearchResult = {
+  albumName: string | null;
+  artistNames: string[];
+  externalUrl: string;
+  imageUrl: string | null;
+  name: string;
+  provider: "spotify";
+  providerItemId: string;
+};
+
 type MusicConnectionRow = {
   provider: MusicProvider;
   scopes: string[] | string | null;
   connected_at: Date | string;
   last_synced_at: Date | string | null;
+  taste_opt_out_at: Date | string | null;
   disconnected_at: Date | string | null;
 };
 
@@ -87,6 +99,27 @@ type SpotifyTopTracksResponse = {
   }>;
 };
 
+type SpotifySearchTracksResponse = {
+  tracks?: {
+    items?: Array<{
+      album?: {
+        images?: Array<{
+          url?: string;
+        }>;
+        name?: string;
+      };
+      artists?: Array<{
+        name?: string;
+      }>;
+      external_urls?: {
+        spotify?: string;
+      };
+      id?: string;
+      name?: string;
+    } | null>;
+  };
+};
+
 const SPOTIFY_TIME_RANGE = "medium_term";
 
 export async function recordMusicConnection(input: {
@@ -119,15 +152,20 @@ export async function recordMusicConnection(input: {
 }
 
 export async function listMusicConnections(userId: string): Promise<MusicConnection[]> {
-  const result = await query<MusicConnectionRow>(
-    `
-      select provider, scopes, connected_at, last_synced_at, disconnected_at
-      from public.music_connections
-      where user_id = $1
-      order by connected_at desc
-    `,
-    [toDatabaseUserId(userId)]
-  );
+  const databaseUserId = toDatabaseUserId(userId);
+  const sql = `
+    select provider, scopes, connected_at, last_synced_at, taste_opt_out_at, disconnected_at
+    from public.music_connections
+    where user_id = $1
+    order by connected_at desc
+  `;
+  const legacySql = `
+    select provider, scopes, connected_at, last_synced_at, null::timestamptz as taste_opt_out_at, disconnected_at
+    from public.music_connections
+    where user_id = $1
+    order by connected_at desc
+  `;
+  const result = await queryMusicConnections(sql, legacySql, [databaseUserId]);
 
   return result.rows.map(mapConnectionRow);
 }
@@ -158,12 +196,17 @@ export async function listMusicProfileItems(userId: string): Promise<MusicProfil
 }
 
 export async function disconnectMusicProvider(userId: string, provider: MusicProvider) {
+  await deleteMusicProviderData(userId, provider);
+}
+
+export async function deleteMusicProviderData(userId: string, provider: MusicProvider) {
   const databaseUserId = toDatabaseUserId(userId);
 
   await query(
     `
       update public.music_connections
-      set disconnected_at = now()
+      set disconnected_at = now(),
+        taste_opt_out_at = null
       where user_id = $1
         and provider = $2
     `,
@@ -189,6 +232,18 @@ export async function disconnectMusicProvider(userId: string, provider: MusicPro
         and provider = $2
     `,
     [databaseUserId, provider]
+  );
+}
+
+export async function setMusicTasteOptOut(userId: string, provider: MusicProvider, optedOut: boolean) {
+  await query(
+    `
+      update public.music_connections
+      set taste_opt_out_at = case when $3::boolean then now() else null end
+      where user_id = $1
+        and provider = $2
+    `,
+    [toDatabaseUserId(userId), provider, optedOut]
   );
 }
 
@@ -230,6 +285,55 @@ export async function syncSpotifyMusicProfile(userId: string) {
   return listMusicProfileItems(userId);
 }
 
+export async function searchSpotifyTracks(userId: string, queryText: string) {
+  const flags = getAuthFeatureFlags();
+  const normalizedQuery = queryText.trim().slice(0, 120);
+
+  if (!flags.spotify) {
+    throw new Error("Spotify auth is not enabled.");
+  }
+  if (normalizedQuery.length < 2) {
+    return [];
+  }
+
+  const account = await getSpotifyAccount(userId);
+  const accessToken = await getUsableSpotifyAccessToken(userId, account);
+  const url = new URL("https://api.spotify.com/v1/search");
+  url.searchParams.set("q", normalizedQuery);
+  url.searchParams.set("type", "track");
+  url.searchParams.set("limit", "6");
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Could not search Spotify tracks.");
+  }
+
+  const payload = (await response.json()) as SpotifySearchTracksResponse;
+
+  return (payload.tracks?.items ?? []).flatMap((item): SpotifyTrackSearchResult[] => {
+    if (!item?.id || !item.name || !item.external_urls?.spotify) {
+      return [];
+    }
+
+    return [
+      {
+        albumName: item.album?.name ?? null,
+        artistNames: item.artists?.map((artist) => artist.name).filter(isString) ?? [],
+        externalUrl: item.external_urls.spotify,
+        imageUrl: item.album?.images?.[0]?.url ?? null,
+        name: item.name,
+        provider: "spotify",
+        providerItemId: item.id,
+      },
+    ];
+  });
+}
+
 async function upsertMusicConnection(input: {
   provider: MusicProvider;
   scopes: string[];
@@ -248,6 +352,7 @@ async function upsertMusicConnection(input: {
       on conflict (user_id, provider)
       do update set
         scopes = excluded.scopes,
+        taste_opt_out_at = null,
         disconnected_at = null
     `,
     [randomUUID(), toDatabaseUserId(input.userId), input.provider, input.scopes]
@@ -502,8 +607,21 @@ function mapConnectionRow(row: MusicConnectionRow): MusicConnection {
     scopes: toStringArray(row.scopes),
     connectedAt: toIsoString(row.connected_at),
     lastSyncedAt: row.last_synced_at ? toIsoString(row.last_synced_at) : null,
+    tasteOptOutAt: row.taste_opt_out_at ? toIsoString(row.taste_opt_out_at) : null,
     disconnectedAt: row.disconnected_at ? toIsoString(row.disconnected_at) : null,
   };
+}
+
+async function queryMusicConnections(sql: string, legacySql: string, values: unknown[]) {
+  try {
+    return await query<MusicConnectionRow>(sql, values);
+  } catch (error) {
+    if (!isMissingColumnError(error)) {
+      throw error;
+    }
+
+    return query<MusicConnectionRow>(legacySql, values);
+  }
 }
 
 function mapProfileItemRow(row: MusicProfileItemRow): MusicProfileItem {
@@ -550,4 +668,13 @@ function toIsoString(value: Date | string) {
 
 function isString(value: string | undefined): value is string {
   return typeof value === "string";
+}
+
+function isMissingColumnError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "42703"
+  );
 }

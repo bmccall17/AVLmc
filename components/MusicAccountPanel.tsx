@@ -41,6 +41,7 @@ export async function MusicAccountPanel() {
   ]);
   const spotifyConnection = connections.find((connection) => connection.provider === "spotify");
   const spotifyConnected = Boolean(spotifyConnection && !spotifyConnection.disconnectedAt);
+  const spotifyTastePaused = Boolean(spotifyConnection?.tasteOptOutAt);
   const previewItems = profileItems.slice(0, 4);
 
   return (
@@ -49,9 +50,7 @@ export async function MusicAccountPanel() {
         <p className="eyebrow">Personalized discovery</p>
         <h2>{user.name ?? "Signed in"}</h2>
         <p>
-          {spotifyConnected
-            ? `Spotify connected${spotifyConnection?.lastSyncedAt ? `, last synced ${formatDate(spotifyConnection.lastSyncedAt)}` : ""}.`
-            : "Signed in. Connect Spotify to sync taste data."}
+          {getConnectionSummary({ connected: spotifyConnected, connection: spotifyConnection })}
         </p>
         {previewItems.length > 0 ? (
           <div className="music-profile-preview">
@@ -61,11 +60,16 @@ export async function MusicAccountPanel() {
               </span>
             ))}
           </div>
+        ) : spotifyConnected ? (
+          <p className="empty-copy">Spotify is connected. Sync once to unlock Best Match ranking.</p>
+        ) : null}
+        {spotifyTastePaused ? (
+          <p className="empty-copy">Spotify taste is paused for Best Match.</p>
         ) : null}
       </div>
       <div className="music-account-controls">
         {spotifyConnected ? (
-          <MusicConnectionActions />
+          <MusicConnectionActions tasteOptedOut={spotifyTastePaused} />
         ) : features.spotify ? (
           <form action={connectSpotify}>
             <button className="primary-action" type="submit">
@@ -100,4 +104,24 @@ function formatDate(value: string) {
     month: "short",
     day: "numeric",
   }).format(new Date(value));
+}
+
+function getConnectionSummary({
+  connected,
+  connection,
+}: {
+  connected: boolean;
+  connection: Awaited<ReturnType<typeof listMusicConnections>>[number] | undefined;
+}) {
+  if (!connected) {
+    return "Signed in. Connect Spotify to sync taste data.";
+  }
+
+  if (connection?.tasteOptOutAt) {
+    return "Spotify connected, but Best Match is paused.";
+  }
+
+  return `Spotify connected${
+    connection?.lastSyncedAt ? `, last synced ${formatDate(connection.lastSyncedAt)}` : ""
+  }.`;
 }

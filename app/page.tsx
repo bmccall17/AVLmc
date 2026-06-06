@@ -3,8 +3,11 @@ import { EventBoard } from "@/components/EventBoard";
 import { EventImage } from "@/components/EventImage";
 import { MusicAccountPanel } from "@/components/MusicAccountPanel";
 import { getCommunityCountsByEvent } from "@/lib/community";
+import { getOptionalUserId } from "@/lib/current-user";
+import { scoreDiscoveryEvents } from "@/lib/discovery";
 import { getDateWindow, getUpcomingEvents } from "@/lib/events";
 import { formatWindow } from "@/lib/format";
+import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
 
 function formatDateParam(date: Date) {
   return [
@@ -28,6 +31,24 @@ function buildAvlgoSourceUrl(start: Date, end: Date) {
 export default async function HomePage() {
   const events = await getUpcomingEvents();
   const counts = await getCommunityCountsByEvent(events.map((event) => event.id));
+  const userId = await getOptionalUserId();
+  const [musicConnections, musicProfileItems] = userId
+    ? await Promise.all([listMusicConnections(userId), listMusicProfileItems(userId)])
+    : [[], []];
+  const discoveryScores = scoreDiscoveryEvents({
+    connections: musicConnections,
+    counts,
+    events,
+    profileItems: musicProfileItems,
+  });
+  const hasTasteProfile =
+    musicProfileItems.length > 0 &&
+    musicConnections.some(
+      (connection) =>
+        connection.provider === "spotify" &&
+        !connection.disconnectedAt &&
+        !connection.tasteOptOutAt
+    );
   const { start, end } = getDateWindow();
   const avlgoSourceUrl = buildAvlgoSourceUrl(start, end);
   const featured = events[0] ?? null;
@@ -100,7 +121,13 @@ export default async function HomePage() {
           </p>
         </section>
       ) : (
-        <EventBoard counts={counts} events={events} windowLabel={formatWindow(start, end)} />
+        <EventBoard
+          counts={counts}
+          discoveryScores={discoveryScores}
+          events={events}
+          hasTasteProfile={hasTasteProfile}
+          windowLabel={formatWindow(start, end)}
+        />
       )}
     </main>
   );

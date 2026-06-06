@@ -15,6 +15,9 @@ export type Contribution = {
   songTitle: string | null;
   songArtist: string | null;
   songUrl: string | null;
+  musicProvider: string | null;
+  musicProviderItemId: string | null;
+  musicProviderUrl: string | null;
   audioUrl: string | null;
   durationSeconds: number | null;
   sessionId: string;
@@ -61,6 +64,9 @@ type ContributionRow = {
   song_title: string | null;
   song_artist: string | null;
   song_url: string | null;
+  music_provider?: string | null;
+  music_provider_item_id?: string | null;
+  music_provider_url?: string | null;
   audio_url: string | null;
   duration_seconds: number | null;
   session_id: string;
@@ -162,9 +168,9 @@ export async function getCommunityCountsByEvent(eventIds: string[]) {
 }
 
 export async function listContributions(status?: ContributionStatus) {
-  const result = await query<ContributionRow>(
+  const result = await queryContributions(
     `
-      select ${contributionColumns}
+      select COLUMNS
       from public.contributions
       where ($1::text is null or status = $1)
       order by created_at desc
@@ -184,6 +190,9 @@ export async function createContribution(input: {
   songTitle?: string | null;
   songArtist?: string | null;
   songUrl?: string | null;
+  musicProvider?: string | null;
+  musicProviderItemId?: string | null;
+  musicProviderUrl?: string | null;
   audioUrl?: string | null;
   durationSeconds?: number | null;
   sessionId: string;
@@ -191,9 +200,31 @@ export async function createContribution(input: {
 }) {
   await assertRateLimit(input.sessionId);
 
-  const result = await query<ContributionRow>(
-    `
-      insert into public.contributions (
+  const insertSql = `
+    insert into public.contributions (
+      id,
+      event_id,
+      event_title,
+      type,
+      display_name,
+      body_text,
+      song_title,
+      song_artist,
+      song_url,
+      music_provider,
+      music_provider_item_id,
+      music_provider_url,
+      audio_url,
+      duration_seconds,
+      session_id,
+      user_id,
+      status
+    )
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'visible')
+    returning ${contributionColumns}
+  `;
+  const legacyInsertSql = `
+    insert into public.contributions (
         id,
         event_id,
         event_title,
@@ -208,26 +239,29 @@ export async function createContribution(input: {
         session_id,
         user_id,
         status
-      )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'visible')
-      returning ${contributionColumns}
-    `,
-    [
-      randomUUID(),
-      input.eventId,
-      input.eventTitle,
-      input.type,
-      cleanOptional(input.displayName, 64),
-      cleanOptional(input.bodyText, 600),
-      cleanOptional(input.songTitle, 140),
-      cleanOptional(input.songArtist, 140),
-      cleanOptional(input.songUrl, 500),
-      cleanOptional(input.audioUrl, 500),
-      input.durationSeconds ?? null,
-      input.sessionId,
-      toNullableUserId(input.userId),
-    ]
-  );
+    )
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $13, $14, $15, $16, 'visible')
+    returning ${legacyContributionColumns}
+  `;
+  const values = [
+    randomUUID(),
+    input.eventId,
+    input.eventTitle,
+    input.type,
+    cleanOptional(input.displayName, 64),
+    cleanOptional(input.bodyText, 600),
+    cleanOptional(input.songTitle, 140),
+    cleanOptional(input.songArtist, 140),
+    cleanOptional(input.songUrl, 500),
+    cleanOptional(input.musicProvider, 40),
+    cleanOptional(input.musicProviderItemId, 160),
+    cleanOptional(input.musicProviderUrl, 500),
+    cleanOptional(input.audioUrl, 500),
+    input.durationSeconds ?? null,
+    input.sessionId,
+    toNullableUserId(input.userId),
+  ];
+  const result = await queryContributionInsert(insertSql, legacyInsertSql, values);
 
   return mapContributionRow(result.rows[0]);
 }
@@ -259,12 +293,12 @@ export async function toggleReaction(input: {
 }
 
 export async function setContributionStatus(id: string, status: ContributionStatus) {
-  const result = await query<ContributionRow>(
+  const result = await queryContributionUpdate(
     `
       update public.contributions
       set status = $2
       where id = $1
-      returning ${contributionColumns}
+      returning COLUMNS
     `,
     [id, status]
   );
@@ -289,6 +323,30 @@ const contributionColumns = `
   song_title,
   song_artist,
   song_url,
+  music_provider,
+  music_provider_item_id,
+  music_provider_url,
+  audio_url,
+  duration_seconds,
+  session_id,
+  user_id,
+  created_at,
+  status
+`;
+
+const legacyContributionColumns = `
+  id,
+  event_id,
+  event_title,
+  type,
+  display_name,
+  body_text,
+  song_title,
+  song_artist,
+  song_url,
+  null::text as music_provider,
+  null::text as music_provider_item_id,
+  null::text as music_provider_url,
   audio_url,
   duration_seconds,
   session_id,
@@ -298,9 +356,9 @@ const contributionColumns = `
 `;
 
 async function listVisibleContributionsForEvent(eventId: string) {
-  const result = await query<ContributionRow>(
+  const result = await queryContributions(
     `
-      select ${contributionColumns}
+      select COLUMNS
       from public.contributions
       where event_id = $1
         and status = 'visible'
@@ -310,6 +368,42 @@ async function listVisibleContributionsForEvent(eventId: string) {
   );
 
   return result.rows.map(mapContributionRow);
+}
+
+async function queryContributions(sql: string, values: unknown[]) {
+  try {
+    return await query<ContributionRow>(sql.replace("COLUMNS", contributionColumns), values);
+  } catch (error) {
+    if (!isMissingColumnError(error)) {
+      throw error;
+    }
+
+    return query<ContributionRow>(sql.replace("COLUMNS", legacyContributionColumns), values);
+  }
+}
+
+async function queryContributionUpdate(sql: string, values: unknown[]) {
+  try {
+    return await query<ContributionRow>(sql.replace("COLUMNS", contributionColumns), values);
+  } catch (error) {
+    if (!isMissingColumnError(error)) {
+      throw error;
+    }
+
+    return query<ContributionRow>(sql.replace("COLUMNS", legacyContributionColumns), values);
+  }
+}
+
+async function queryContributionInsert(sql: string, legacySql: string, values: unknown[]) {
+  try {
+    return await query<ContributionRow>(sql, values);
+  } catch (error) {
+    if (!isMissingColumnError(error)) {
+      throw error;
+    }
+
+    return query<ContributionRow>(legacySql, values);
+  }
 }
 
 async function getCountsForEvent(eventId: string): Promise<CommunityCounts> {
@@ -374,6 +468,9 @@ function mapContributionRow(row: ContributionRow): Contribution {
     songTitle: row.song_title,
     songArtist: row.song_artist,
     songUrl: row.song_url,
+    musicProvider: row.music_provider ?? null,
+    musicProviderItemId: row.music_provider_item_id ?? null,
+    musicProviderUrl: row.music_provider_url ?? null,
     audioUrl: row.audio_url,
     durationSeconds: row.duration_seconds,
     sessionId: row.session_id,
@@ -395,6 +492,15 @@ function mapCountRow(row: CountRow | undefined): CommunityCounts {
     going: toNumber(row.going),
     fire: toNumber(row.fire),
   };
+}
+
+function isMissingColumnError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "42703"
+  );
 }
 
 function emptyCounts(): CommunityCounts {

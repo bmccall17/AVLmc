@@ -74,9 +74,13 @@ create table if not exists public.music_connections (
   scopes text[] not null default '{}',
   connected_at timestamptz not null default now(),
   last_synced_at timestamptz,
+  taste_opt_out_at timestamptz,
   disconnected_at timestamptz,
   unique (user_id, provider)
 );
+
+alter table if exists public.music_connections
+  add column if not exists taste_opt_out_at timestamptz;
 
 create index if not exists music_connections_user_id_idx
   on public.music_connections (user_id);
@@ -110,6 +114,9 @@ create table if not exists public.contributions (
   song_title text,
   song_artist text,
   song_url text,
+  music_provider text,
+  music_provider_item_id text,
+  music_provider_url text,
   audio_url text,
   duration_seconds integer,
   session_id text not null,
@@ -117,6 +124,11 @@ create table if not exists public.contributions (
   created_at timestamptz not null default now(),
   status text not null default 'visible' check (status in ('visible', 'hidden', 'pending'))
 );
+
+alter table if exists public.contributions
+  add column if not exists music_provider text,
+  add column if not exists music_provider_item_id text,
+  add column if not exists music_provider_url text;
 
 create index if not exists contributions_event_id_status_idx
   on public.contributions (event_id, status, created_at desc);

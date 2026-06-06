@@ -23,8 +23,10 @@ Updated: June 6, 2026
 
 ### Discovery Board
 
-- `components/EventBoard.tsx` handles client-side search, venue filter, tag filter, and sorting.
-- Sort modes: soonest, hottest, most discussed, and venue.
+- `lib/discovery.ts` scores events for anonymous Best Bets and optional Spotify-backed Best Match using public event/community signals plus normalized Spotify profile rows.
+- `components/EventBoard.tsx` handles client-side search, ranked venue/tag chips, intent chips, long-tail venue/tag selects, and sorting.
+- Sort modes: Best Bets, Best Match when Spotify taste rows are available, soonest, hottest, most discussed, and venue.
+- Homepage cards show short recommendation reasons without exposing private profile item names.
 - Homepage cards show songs, notes, going, and fire counts.
 - The `AVLgo source` button opens AVLgo with the same Live Music rolling date window.
 
@@ -45,8 +47,10 @@ Updated: June 6, 2026
 - Account status route: `/api/me`.
 - Music connection route: `/api/me/music-connections`.
 - Music profile route: `/api/me/music-profile`.
+- Spotify track search route: `/api/me/spotify-tracks`.
 - Homepage account surface: `components/MusicAccountPanel.tsx`.
 - Spotify is the first implemented provider and syncs normalized top artists/tracks into `music_profile_items`.
+- Signed-in Spotify users can pause/resume Best Match, delete Spotify profile/token data, and search Spotify tracks for song recommendations.
 - Live Spotify verification completed June 6, 2026 on `https://avlmc.vercel.app/`: callback succeeds, `/api/me` returns the signed-in user and Spotify connection, and profile sync stores 20 top artists plus 20 top tracks.
 - Spotify scopes currently requested: `user-read-private`, `user-read-email`, and `user-top-read`.
 - Google/YouTube and Apple Music flags are reserved for later connector work and do not currently create music profiles.
@@ -72,9 +76,9 @@ The app now uses Aiven Postgres for production persistence.
 
 - `events`: normalized AVLgo event records.
 - `users`, `accounts`, `sessions`, `verification_token`: Auth.js-managed account/session data.
-- `contributions`: songs and notes with moderation `status`, anonymous `session_id`, and optional `user_id`.
+- `contributions`: songs and notes with moderation `status`, anonymous `session_id`, optional `user_id`, and optional music-provider metadata for linked tracks.
 - `reactions`: anonymous session-based going/fire signals with optional `user_id`.
-- `music_connections` and `music_profile_items`: optional provider connection state and normalized taste data.
+- `music_connections` and `music_profile_items`: optional provider connection state, `taste_opt_out_at`, and normalized taste data.
 - OAuth provider tokens are stored server-side in `accounts`; public/profile APIs must not return token values.
 - `ADMIN_PASSWORD`, `ADMIN_SESSION_TOKEN`, and `DATABASE_URL` are required in production.
 - `NEXT_PUBLIC_AUTH_ENABLED=false` keeps optional auth hidden.
@@ -85,6 +89,7 @@ Schema setup note:
 
 - Production auth requires the Auth.js tables and music tables from `db/schema.sql`.
 - If community tables already exist before auth is introduced, add nullable `user_id` columns and `contributions_user_id_idx` / `reactions_user_id_idx` after the Auth.js `users` table exists.
+- Personalized discovery adds `music_connections.taste_opt_out_at` and optional contribution metadata columns: `music_provider`, `music_provider_item_id`, and `music_provider_url`.
 
 ## Acceptance Coverage
 
@@ -93,12 +98,12 @@ Schema setup note:
 - PRD 03: password-protected admin, recent contribution list, visible/hidden/pending filters, hide/unhide controls.
 - PRD 04: deferred for production until an object-storage path is selected.
 - PRD 05: `$0` deployment/auth decision memo in `docs/product/deployment-auth-investigation.md`, updated for Aiven.
+- Phase 5: anonymous Best Bets, Spotify-backed Best Match, ranked filters, recommendation reasons, privacy controls, and Spotify-linked song selection.
 
 ## Known Follow-Up
 
 Personalized discovery is intentionally incremental:
 
-- Spotify sign-in now provides a first optional taste-profile path.
-- Use `music_profile_items` and `music_connections.last_synced_at` as the first scoring inputs for taste-aware filters.
+- Spotify sign-in now provides a first optional taste-profile and provider-linking path.
 - Add Google/YouTube and Apple Music only after provider-specific privacy and API constraints are confirmed.
-- Start with filters/sorts and explicit user preferences before importing listening history.
+- Add explicit saved venue/tag preferences only after the first score/filter UX proves useful.

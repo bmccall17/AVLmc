@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { CommunityPanel } from "@/components/CommunityPanel";
 import { EventImage } from "@/components/EventImage";
 import { getCommunityForEvent, publicContribution } from "@/lib/community";
+import { getOptionalUserId } from "@/lib/current-user";
 import { getEventById } from "@/lib/events";
 import { formatLongDate } from "@/lib/format";
+import { listMusicConnections } from "@/lib/music";
 
 type EventPageProps = {
   params: Promise<{
@@ -23,6 +25,11 @@ export default async function EventPage({ params }: EventPageProps) {
   }
 
   const community = await getCommunityForEvent(event.id);
+  const userId = await getOptionalUserId();
+  const musicConnections = userId ? await listMusicConnections(userId) : [];
+  const spotifySearchEnabled = musicConnections.some(
+    (connection) => connection.provider === "spotify" && !connection.disconnectedAt
+  );
   const publicCommunity = {
     ...community,
     contributions: community.contributions.map(publicContribution),
@@ -76,6 +83,7 @@ export default async function EventPage({ params }: EventPageProps) {
           eventTitle: event.eventTitle,
         }}
         initialCommunity={publicCommunity}
+        spotifySearchEnabled={spotifySearchEnabled}
       />
     </main>
   );

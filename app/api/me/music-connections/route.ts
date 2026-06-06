@@ -4,6 +4,7 @@ import { requireUserId } from "@/lib/current-user";
 import {
   disconnectMusicProvider,
   listMusicConnections,
+  setMusicTasteOptOut,
   type MusicProvider,
 } from "@/lib/music";
 
@@ -39,6 +40,28 @@ export async function DELETE(request: Request) {
   }
 
   await disconnectMusicProvider(userId, provider);
+
+  return NextResponse.json({
+    musicConnections: await listMusicConnections(userId),
+  });
+}
+
+export async function PATCH(request: Request) {
+  const userId = await getSignedInUserId();
+
+  if (!userId) {
+    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+  }
+
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const provider = typeof body?.provider === "string" ? (body.provider as MusicProvider) : "spotify";
+  const tasteOptOut = body?.tasteOptOut === true;
+
+  if (!PROVIDERS.has(provider)) {
+    return NextResponse.json({ error: "Unsupported music provider." }, { status: 400 });
+  }
+
+  await setMusicTasteOptOut(userId, provider, tasteOptOut);
 
   return NextResponse.json({
     musicConnections: await listMusicConnections(userId),
