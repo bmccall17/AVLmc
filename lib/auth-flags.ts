@@ -20,5 +20,6 @@ export function getAuthFeatureFlags(): AuthFeatureFlags {
 }
 
 export function isEnabled(value: string | undefined) {
-  return value === "1" || value?.toLowerCase() === "true" || value?.toLowerCase() === "yes";
+  const normalized = value?.trim().replace(/^['"]|['"]$/g, "").toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
 }
