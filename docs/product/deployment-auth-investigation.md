@@ -1,6 +1,6 @@
 # Deployment and Auth Investigation
 
-Updated: June 5, 2026
+Updated: June 6, 2026
 
 ## Recommendation
 
@@ -9,10 +9,10 @@ Launch the first public prototype lean and low-cost with:
 - Hosting: Vercel Hobby for the Next.js app.
 - Source control/deploys: GitHub repo connected to Vercel.
 - Scheduled sync: Vercel Cron once daily at `/api/sync/avlgo`.
-- Database: Aiven Free PostgreSQL for events, contributions, reactions, and moderation state.
+- Database: Aiven Free PostgreSQL for events, contributions, reactions, moderation state, Auth.js sessions, and optional music taste data.
 - Storage: none for the first production release.
 - Voice memos: deferred until an object-storage path is selected.
-- Optional auth: anonymous public use remains default; Spotify sign-in can be enabled for future personalized discovery.
+- Optional auth: anonymous public use remains default; Spotify sign-in is live for future personalized discovery.
 - MVP auth now: server-issued anonymous sessions for public actions plus one admin password.
 
 The deployed production path should use Aiven for persistent event/community data. Do not rely on local JSON or local file uploads on Vercel.
@@ -53,6 +53,16 @@ Keep the MVP anonymous by default. Use server-issued anonymous session cookies f
 
 ## Production State
 
+Live production URL: `https://avlmc.vercel.app/`.
+
+Verified June 6, 2026:
+
+- Commit `dcf9632` fixed the Spotify Auth.js provider configuration by preserving Spotify's authorize URL and passing the Spotify client credentials explicitly.
+- `NEXT_PUBLIC_AUTH_ENABLED` and `AUTH_SPOTIFY_ENABLED` are enabled in Vercel production.
+- Spotify OAuth reaches the provider, returns through `/api/auth/callback/spotify`, creates an Auth.js user/session, and records a Spotify music connection.
+- `/api/me` remains anonymous by default for public visitors and returns authenticated account/music connection state only inside a signed-in session.
+- Spotify profile sync via `/api/me/music-profile` stores 20 top artists and 20 top tracks for the signed-in test account.
+
 Aiven tables:
 
 - `events`: normalized AVLgo event records keyed by stable AVLgo-derived IDs.
@@ -60,6 +70,21 @@ Aiven tables:
 - `contributions`: song and comment rows with `status`, anonymous `session_id`, and nullable `user_id`.
 - `reactions`: one row per event/session/reaction type, with nullable `user_id`.
 - `music_connections` and `music_profile_items`: normalized provider connection and taste-profile data.
+
+Operational notes:
+
+- Aiven production initially had only `events`, `contributions`, and `reactions`; Auth.js callback failed with `relation "users" does not exist` until the schema was applied.
+- Apply `db/schema.sql` before enabling auth on a fresh database.
+- If `contributions` or `reactions` already exist before auth is added, also add nullable `user_id` columns and their indexes because `create table if not exists` will not alter existing tables.
+- Keep OAuth access and refresh tokens server-only in Auth.js `accounts`. Do not expose token values through `/api/me`, music profile routes, or personalized discovery responses.
+- Future schema work should be formalized as migrations before the next production database reset or environment clone.
+
+Personalized discovery handoff:
+
+- The first available taste signal is normalized Spotify `music_profile_items`, not raw Spotify API responses.
+- `music_connections.last_synced_at` is the freshness indicator for discovery scoring.
+- Phase 5 should build filters and ranking on top of existing anonymous event/community data plus optional Spotify profile rows.
+- Google/YouTube and Apple Music remain later connectors; do not plan around YouTube Music listening history or Apple Music library access until provider setup is explicitly confirmed.
 
 Voice memo storage:
 

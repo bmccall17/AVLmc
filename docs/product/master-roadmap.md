@@ -17,7 +17,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 2 | [Community Contributions and Reactions](prds/prd-02-community-contributions-and-reactions.md) | Built | Add song recs, notes, going signals, and fire signals. |
 | 3 | [Admin Moderation](prds/prd-03-admin-moderation.md) | Built | Let a trusted admin hide spam or bad submissions. |
 | 4 | [Voice Memos](prds/prd-04-voice-memos.md) | Deferred | Add short audio contributions after a $0 storage path is selected. |
-| 5 | Personalized Discovery Backlog | Future | Add filters, sorting, and listening-history personas for best-bet recommendations. |
+| 5 | [Personalized Discovery Backlog](personalized-discovery-backlog.md) | Future | Add filters, sorting, and optional Spotify taste-aware recommendations. |
 
 ## Product Principles
 
@@ -96,6 +96,14 @@ Required outputs:
 
 Purpose: make the large event feed easier to navigate with filters, sorting, and music-taste-aware recommendations.
 
+Current production inputs as of June 6, 2026:
+
+- Anonymous browsing, reactions, and contributions remain live and do not require login.
+- Optional Spotify sign-in is live on `https://avlmc.vercel.app/`.
+- Auth.js, anonymous sessions, community tables, music connection tables, and Spotify profile tables exist in Aiven production.
+- A signed-in Spotify account can sync 20 top artists and 20 top tracks into `music_profile_items`.
+- OAuth tokens stay server-side in Auth.js `accounts`; discovery code should use normalized profile rows.
+
 Candidate outputs:
 
 - Search, venue, date, tag, and popularity filters.
@@ -104,6 +112,8 @@ Candidate outputs:
 - Recommendation scoring that surfaces best bets based on listening history, saved artists, community signals, venue preferences, and event timing.
 - Clear privacy controls, including disconnect, delete data, and opt out.
 - $0 feasibility review before implementing any music-platform integrations.
+
+See [Personalized Discovery Backlog](personalized-discovery-backlog.md) for next-plan notes and acceptance targets.
 
 ## Implementation Reference
 
@@ -120,7 +130,8 @@ See [Architecture Reference](architecture-reference.md) for current routes, comp
 
 - AVLgo API may not expose enough reliable music-event fields.
 - AVLgo may not provide auth or may not support third-party identity flows.
-- Spotify and Apple Music auth may not work as general-purpose user identity.
+- Spotify is working as the first optional music identity/taste connector, but it should not become a required account gate.
+- Apple Music auth may not work as general-purpose user identity.
 - Apple Music integration may have developer-program or token requirements.
 - Free storage may not be enough for voice memos, so audio is excluded from the first production release.
 - Anonymous contributions may attract spam.

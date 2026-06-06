@@ -1,6 +1,6 @@
 # Architecture Reference
 
-Updated: June 5, 2026
+Updated: June 6, 2026
 
 ## App Shape
 
@@ -47,6 +47,8 @@ Updated: June 5, 2026
 - Music profile route: `/api/me/music-profile`.
 - Homepage account surface: `components/MusicAccountPanel.tsx`.
 - Spotify is the first implemented provider and syncs normalized top artists/tracks into `music_profile_items`.
+- Live Spotify verification completed June 6, 2026 on `https://avlmc.vercel.app/`: callback succeeds, `/api/me` returns the signed-in user and Spotify connection, and profile sync stores 20 top artists plus 20 top tracks.
+- Spotify scopes currently requested: `user-read-private`, `user-read-email`, and `user-top-read`.
 - Google/YouTube and Apple Music flags are reserved for later connector work and do not currently create music profiles.
 
 ### Voice Memos
@@ -73,10 +75,16 @@ The app now uses Aiven Postgres for production persistence.
 - `contributions`: songs and notes with moderation `status`, anonymous `session_id`, and optional `user_id`.
 - `reactions`: anonymous session-based going/fire signals with optional `user_id`.
 - `music_connections` and `music_profile_items`: optional provider connection state and normalized taste data.
+- OAuth provider tokens are stored server-side in `accounts`; public/profile APIs must not return token values.
 - `ADMIN_PASSWORD`, `ADMIN_SESSION_TOKEN`, and `DATABASE_URL` are required in production.
 - `NEXT_PUBLIC_AUTH_ENABLED=false` keeps optional auth hidden.
 - `AUTH_SECRET`, `AUTH_SPOTIFY_ENABLED`, `AUTH_SPOTIFY_ID`, and `AUTH_SPOTIFY_SECRET` are required to enable Spotify sign-in.
 - `AVLGO_API_URL` is optional and should usually be unset so the built-in AVLgo JSON export URL is used.
+
+Schema setup note:
+
+- Production auth requires the Auth.js tables and music tables from `db/schema.sql`.
+- If community tables already exist before auth is introduced, add nullable `user_id` columns and `contributions_user_id_idx` / `reactions_user_id_idx` after the Auth.js `users` table exists.
 
 ## Acceptance Coverage
 
@@ -91,5 +99,6 @@ The app now uses Aiven Postgres for production persistence.
 Personalized discovery is intentionally incremental:
 
 - Spotify sign-in now provides a first optional taste-profile path.
+- Use `music_profile_items` and `music_connections.last_synced_at` as the first scoring inputs for taste-aware filters.
 - Add Google/YouTube and Apple Music only after provider-specific privacy and API constraints are confirmed.
 - Start with filters/sorts and explicit user preferences before importing listening history.
