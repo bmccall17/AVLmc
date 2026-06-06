@@ -650,6 +650,78 @@ body {
   background: #35e474;
 }
 
+.music-account-panel {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.music-account-panel h2 {
+  font-size: 1.25rem;
+  margin-bottom: 6px;
+}
+
+.music-account-panel p {
+  color: var(--muted);
+  line-height: 1.45;
+  margin-bottom: 0;
+}
+
+.music-account-controls,
+.music-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.music-actions {
+  justify-content: inherit;
+}
+
+.music-actions button,
+.ghost-control {
+  background: #edf5f2;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  min-height: 42px;
+  padding: 9px 12px;
+}
+
+.music-actions button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.music-profile-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.music-profile-preview span {
+  background: #f4f8f6;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #31544d;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 6px 8px;
+}
+
 .community-panel,
 .admin-panel,
 .login-panel {
@@ -935,6 +1007,7 @@ button.primary-action {
   }
 
   .reaction-strip,
+  .music-account-panel,
   .community-form-grid,
   .contribution-grid,
   .admin-toolbar,
@@ -945,5 +1018,16 @@ button.primary-action {
 
   .admin-actions {
     justify-content: stretch;
+  }
+
+  .music-account-controls,
+  .music-actions {
+    justify-content: stretch;
+  }
+
+  .music-account-controls form,
+  .music-account-controls button,
+  .music-actions button {
+    width: 100%;
   }
 }

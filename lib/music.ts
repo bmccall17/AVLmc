@@ -1,0 +1,553 @@
+import { randomUUID } from "node:crypto";
+import { getAuthFeatureFlags } from "@/lib/auth-flags";
+import { query } from "@/lib/db";
+
+export type MusicProvider = "spotify" | "google_youtube" | "apple_music";
+export type MusicProfileItemType = "top_artist" | "top_track";
+
+export type MusicConnection = {
+  provider: MusicProvider;
+  scopes: string[];
+  connectedAt: string;
+  lastSyncedAt: string | null;
+  disconnectedAt: string | null;
+};
+
+export type MusicProfileItem = {
+  id: string;
+  provider: MusicProvider;
+  itemType: MusicProfileItemType;
+  providerItemId: string;
+  name: string;
+  artistNames: string[];
+  externalUrl: string | null;
+  imageUrl: string | null;
+  rank: number;
+  timeRange: string;
+  syncedAt: string;
+};
+
+type MusicConnectionRow = {
+  provider: MusicProvider;
+  scopes: string[] | string | null;
+  connected_at: Date | string;
+  last_synced_at: Date | string | null;
+  disconnected_at: Date | string | null;
+};
+
+type MusicProfileItemRow = {
+  id: string;
+  provider: MusicProvider;
+  item_type: MusicProfileItemType;
+  provider_item_id: string;
+  name: string;
+  artist_names: string[] | string | null;
+  external_url: string | null;
+  image_url: string | null;
+  rank: number;
+  time_range: string;
+  synced_at: Date | string;
+};
+
+type AccountRow = {
+  access_token: string | null;
+  refresh_token: string | null;
+  expires_at: number | string | null;
+  scope: string | null;
+};
+
+type SpotifyTopArtistsResponse = {
+  items?: Array<{
+    id?: string;
+    name?: string;
+    external_urls?: {
+      spotify?: string;
+    };
+    images?: Array<{
+      url?: string;
+    }>;
+  }>;
+};
+
+type SpotifyTopTracksResponse = {
+  items?: Array<{
+    id?: string;
+    name?: string;
+    external_urls?: {
+      spotify?: string;
+    };
+    album?: {
+      images?: Array<{
+        url?: string;
+      }>;
+    };
+    artists?: Array<{
+      name?: string;
+    }>;
+  }>;
+};
+
+const SPOTIFY_TIME_RANGE = "medium_term";
+
+export async function recordMusicConnection(input: {
+  accessToken?: string;
+  expiresAt?: number;
+  provider: string;
+  refreshToken?: string;
+  scopes: string[];
+  tokenType?: string;
+  userId: string;
+}) {
+  if (input.provider !== "spotify") {
+    return;
+  }
+
+  await upsertMusicConnection({
+    provider: "spotify",
+    scopes: input.scopes,
+    userId: input.userId,
+  });
+  await updateStoredProviderTokens({
+    accessToken: input.accessToken,
+    expiresAt: input.expiresAt,
+    provider: "spotify",
+    refreshToken: input.refreshToken,
+    scope: input.scopes.join(" "),
+    tokenType: input.tokenType,
+    userId: input.userId,
+  });
+}
+
+export async function listMusicConnections(userId: string): Promise<MusicConnection[]> {
+  const result = await query<MusicConnectionRow>(
+    `
+      select provider, scopes, connected_at, last_synced_at, disconnected_at
+      from public.music_connections
+      where user_id = $1
+      order by connected_at desc
+    `,
+    [toDatabaseUserId(userId)]
+  );
+
+  return result.rows.map(mapConnectionRow);
+}
+
+export async function listMusicProfileItems(userId: string): Promise<MusicProfileItem[]> {
+  const result = await query<MusicProfileItemRow>(
+    `
+      select
+        id,
+        provider,
+        item_type,
+        provider_item_id,
+        name,
+        artist_names,
+        external_url,
+        image_url,
+        rank,
+        time_range,
+        synced_at
+      from public.music_profile_items
+      where user_id = $1
+      order by item_type, rank
+    `,
+    [toDatabaseUserId(userId)]
+  );
+
+  return result.rows.map(mapProfileItemRow);
+}
+
+export async function disconnectMusicProvider(userId: string, provider: MusicProvider) {
+  const databaseUserId = toDatabaseUserId(userId);
+
+  await query(
+    `
+      update public.music_connections
+      set disconnected_at = now()
+      where user_id = $1
+        and provider = $2
+    `,
+    [databaseUserId, provider]
+  );
+  await query(
+    `
+      delete from public.music_profile_items
+      where user_id = $1
+        and provider = $2
+    `,
+    [databaseUserId, provider]
+  );
+  await query(
+    `
+      update public.accounts
+      set access_token = null,
+        refresh_token = null,
+        expires_at = null,
+        token_type = null,
+        scope = null
+      where "userId" = $1
+        and provider = $2
+    `,
+    [databaseUserId, provider]
+  );
+}
+
+export async function syncSpotifyMusicProfile(userId: string) {
+  const flags = getAuthFeatureFlags();
+
+  if (!flags.spotify) {
+    throw new Error("Spotify auth is not enabled.");
+  }
+
+  const account = await getSpotifyAccount(userId);
+  const accessToken = await getUsableSpotifyAccessToken(userId, account);
+  const [artists, tracks] = await Promise.all([
+    fetchSpotifyTopItems<SpotifyTopArtistsResponse>(accessToken, "artists"),
+    fetchSpotifyTopItems<SpotifyTopTracksResponse>(accessToken, "tracks"),
+  ]);
+  const items = [
+    ...normalizeArtists(artists),
+    ...normalizeTracks(tracks),
+  ];
+
+  await replaceSpotifyProfileItems(userId, items);
+  await upsertMusicConnection({
+    provider: "spotify",
+    scopes: splitScopes(account.scope),
+    userId,
+  });
+  await query(
+    `
+      update public.music_connections
+      set last_synced_at = now(),
+        disconnected_at = null
+      where user_id = $1
+        and provider = 'spotify'
+    `,
+    [toDatabaseUserId(userId)]
+  );
+
+  return listMusicProfileItems(userId);
+}
+
+async function upsertMusicConnection(input: {
+  provider: MusicProvider;
+  scopes: string[];
+  userId: string;
+}) {
+  await query(
+    `
+      insert into public.music_connections (
+        id,
+        user_id,
+        provider,
+        scopes,
+        disconnected_at
+      )
+      values ($1, $2, $3, $4, null)
+      on conflict (user_id, provider)
+      do update set
+        scopes = excluded.scopes,
+        disconnected_at = null
+    `,
+    [randomUUID(), toDatabaseUserId(input.userId), input.provider, input.scopes]
+  );
+}
+
+async function updateStoredProviderTokens(input: {
+  accessToken?: string;
+  expiresAt?: number;
+  provider: MusicProvider;
+  refreshToken?: string;
+  scope?: string;
+  tokenType?: string;
+  userId: string;
+}) {
+  if (!input.accessToken) {
+    return;
+  }
+
+  await query(
+    `
+      update public.accounts
+      set access_token = $3,
+        expires_at = $4,
+        refresh_token = coalesce($5, refresh_token),
+        scope = coalesce($6, scope),
+        token_type = coalesce($7, token_type)
+      where "userId" = $1
+        and provider = $2
+    `,
+    [
+      toDatabaseUserId(input.userId),
+      input.provider,
+      input.accessToken,
+      input.expiresAt ?? null,
+      input.refreshToken ?? null,
+      input.scope ?? null,
+      input.tokenType ?? null,
+    ]
+  );
+}
+
+async function getSpotifyAccount(userId: string) {
+  const result = await query<AccountRow>(
+    `
+      select access_token, refresh_token, expires_at, scope
+      from public.accounts
+      where "userId" = $1
+        and provider = 'spotify'
+      limit 1
+    `,
+    [toDatabaseUserId(userId)]
+  );
+  const account = result.rows[0];
+
+  if (!account?.access_token) {
+    throw new Error("Spotify is not connected.");
+  }
+
+  return account;
+}
+
+async function getUsableSpotifyAccessToken(userId: string, account: AccountRow) {
+  const expiresAt = Number(account.expires_at ?? 0);
+  const shouldRefresh = account.refresh_token && expiresAt > 0 && expiresAt * 1000 < Date.now() + 60_000;
+
+  if (!shouldRefresh) {
+    return account.access_token as string;
+  }
+
+  return refreshSpotifyAccessToken(userId, account.refresh_token as string);
+}
+
+async function refreshSpotifyAccessToken(userId: string, refreshToken: string) {
+  const clientId = process.env.AUTH_SPOTIFY_ID;
+  const clientSecret = process.env.AUTH_SPOTIFY_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("Spotify client credentials are not configured.");
+  }
+
+  const response = await fetch("https://accounts.spotify.com/api/token", {
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Could not refresh Spotify access.");
+  }
+
+  const payload = (await response.json()) as {
+    access_token?: string;
+    expires_in?: number;
+    refresh_token?: string;
+    scope?: string;
+  };
+
+  if (!payload.access_token) {
+    throw new Error("Spotify did not return an access token.");
+  }
+
+  await query(
+    `
+      update public.accounts
+      set access_token = $2,
+        expires_at = $3,
+        refresh_token = coalesce($4, refresh_token),
+        scope = coalesce($5, scope)
+      where "userId" = $1
+        and provider = 'spotify'
+    `,
+    [
+      toDatabaseUserId(userId),
+      payload.access_token,
+      Math.floor(Date.now() / 1000) + Number(payload.expires_in ?? 3600),
+      payload.refresh_token ?? null,
+      payload.scope ?? null,
+    ]
+  );
+
+  return payload.access_token;
+}
+
+async function fetchSpotifyTopItems<ResponseBody>(accessToken: string, type: "artists" | "tracks") {
+  const url = new URL(`https://api.spotify.com/v1/me/top/${type}`);
+  url.searchParams.set("time_range", SPOTIFY_TIME_RANGE);
+  url.searchParams.set("limit", "20");
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Could not sync Spotify taste data.");
+  }
+
+  return (await response.json()) as ResponseBody;
+}
+
+function normalizeArtists(response: SpotifyTopArtistsResponse) {
+  return (response.items ?? []).flatMap((item, index) => {
+    if (!item.id || !item.name) {
+      return [];
+    }
+
+    return [
+      {
+        artistNames: [],
+        externalUrl: item.external_urls?.spotify ?? null,
+        imageUrl: item.images?.[0]?.url ?? null,
+        itemType: "top_artist" as const,
+        name: item.name,
+        providerItemId: item.id,
+        rank: index + 1,
+      },
+    ];
+  });
+}
+
+function normalizeTracks(response: SpotifyTopTracksResponse) {
+  return (response.items ?? []).flatMap((item, index) => {
+    if (!item.id || !item.name) {
+      return [];
+    }
+
+    return [
+      {
+        artistNames: item.artists?.map((artist) => artist.name).filter(isString) ?? [],
+        externalUrl: item.external_urls?.spotify ?? null,
+        imageUrl: item.album?.images?.[0]?.url ?? null,
+        itemType: "top_track" as const,
+        name: item.name,
+        providerItemId: item.id,
+        rank: index + 1,
+      },
+    ];
+  });
+}
+
+async function replaceSpotifyProfileItems(
+  userId: string,
+  items: Array<{
+    artistNames: string[];
+    externalUrl: string | null;
+    imageUrl: string | null;
+    itemType: MusicProfileItemType;
+    name: string;
+    providerItemId: string;
+    rank: number;
+  }>
+) {
+  const databaseUserId = toDatabaseUserId(userId);
+
+  await query(
+    `
+      delete from public.music_profile_items
+      where user_id = $1
+        and provider = 'spotify'
+        and time_range = $2
+    `,
+    [databaseUserId, SPOTIFY_TIME_RANGE]
+  );
+
+  await Promise.all(
+    items.map((item) =>
+      query(
+        `
+          insert into public.music_profile_items (
+            id,
+            user_id,
+            provider,
+            item_type,
+            provider_item_id,
+            name,
+            artist_names,
+            external_url,
+            image_url,
+            rank,
+            time_range
+          )
+          values ($1, $2, 'spotify', $3, $4, $5, $6, $7, $8, $9, $10)
+        `,
+        [
+          randomUUID(),
+          databaseUserId,
+          item.itemType,
+          item.providerItemId,
+          item.name,
+          item.artistNames,
+          item.externalUrl,
+          item.imageUrl,
+          item.rank,
+          SPOTIFY_TIME_RANGE,
+        ]
+      )
+    )
+  );
+}
+
+function mapConnectionRow(row: MusicConnectionRow): MusicConnection {
+  return {
+    provider: row.provider,
+    scopes: toStringArray(row.scopes),
+    connectedAt: toIsoString(row.connected_at),
+    lastSyncedAt: row.last_synced_at ? toIsoString(row.last_synced_at) : null,
+    disconnectedAt: row.disconnected_at ? toIsoString(row.disconnected_at) : null,
+  };
+}
+
+function mapProfileItemRow(row: MusicProfileItemRow): MusicProfileItem {
+  return {
+    id: row.id,
+    provider: row.provider,
+    itemType: row.item_type,
+    providerItemId: row.provider_item_id,
+    name: row.name,
+    artistNames: toStringArray(row.artist_names),
+    externalUrl: row.external_url,
+    imageUrl: row.image_url,
+    rank: row.rank,
+    timeRange: row.time_range,
+    syncedAt: toIsoString(row.synced_at),
+  };
+}
+
+function toDatabaseUserId(userId: string) {
+  const parsed = Number(userId);
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error("Invalid user id.");
+  }
+
+  return parsed;
+}
+
+function splitScopes(scope: string | null) {
+  return scope?.split(" ").filter(Boolean) ?? [];
+}
+
+function toStringArray(value: string[] | string | null) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  return value ? [value] : [];
+}
+
+function toIsoString(value: Date | string) {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function isString(value: string | undefined): value is string {
+  return typeof value === "string";
+}

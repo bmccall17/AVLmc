@@ -28,7 +28,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 - Keep AVLgo as the source of truth for event listings.
 - Preserve community contributions across event refreshes.
 - Make every public page work well on mobile.
-- Add authentication only when it unlocks clear value.
+- Keep authentication optional and add it only when it unlocks clear value.
 
 ## Phased Roadmap
 
@@ -100,7 +100,7 @@ Candidate outputs:
 
 - Search, venue, date, tag, and popularity filters.
 - Sort options such as soonest, most discussed, most reactions, and best match.
-- Optional listener persona built from connected Spotify, YouTube Music, or Apple Music history.
+- Optional listener persona built first from connected Spotify taste data, then from vetted Google/YouTube or Apple Music signals.
 - Recommendation scoring that surfaces best bets based on listening history, saved artists, community signals, venue preferences, and event timing.
 - Clear privacy controls, including disconnect, delete data, and opt out.
 - $0 feasibility review before implementing any music-platform integrations.
@@ -113,7 +113,7 @@ See [Architecture Reference](architecture-reference.md) for current routes, comp
 
 - No paid hosting, database, storage, auth, email, transcription, or API services in the first version.
 - No paid Apple developer account, paid OAuth provider, or paid media storage unless explicitly approved later.
-- No full user accounts in MVP.
+- No required user accounts in MVP; optional music sign-in must not block anonymous browsing or participation.
 - No private messaging, profiles, ticketing, calendar integration, AI summaries, or personalized recommendations in MVP.
 
 ## Key Risks

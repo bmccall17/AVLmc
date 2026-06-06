@@ -1,0 +1,103 @@
+import { auth, signIn, signOut } from "@/auth";
+import { MusicConnectionActions } from "@/components/MusicConnectionActions";
+import { getAuthFeatureFlags } from "@/lib/auth-flags";
+import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
+
+export async function MusicAccountPanel() {
+  const features = getAuthFeatureFlags();
+
+  if (!features.auth) {
+    return null;
+  }
+
+  const session = await auth();
+  const user = session?.user ?? null;
+
+  if (!user?.id) {
+    return (
+      <section className="music-account-panel" aria-label="Music account">
+        <div>
+          <p className="eyebrow">Personalized discovery</p>
+          <h2>Connect your music taste</h2>
+          <p>Optional sign-in can shape future recommendations. Browsing and community posts stay open without an account.</p>
+        </div>
+        {features.spotify ? (
+          <form action={connectSpotify}>
+            <button className="primary-action" type="submit">
+              Connect Spotify
+            </button>
+          </form>
+        ) : (
+          <p className="empty-copy">Spotify sign-in is not configured yet.</p>
+        )}
+      </section>
+    );
+  }
+
+  const userId = user.id;
+  const [connections, profileItems] = await Promise.all([
+    listMusicConnections(userId),
+    listMusicProfileItems(userId),
+  ]);
+  const spotifyConnection = connections.find((connection) => connection.provider === "spotify");
+  const spotifyConnected = Boolean(spotifyConnection && !spotifyConnection.disconnectedAt);
+  const previewItems = profileItems.slice(0, 4);
+
+  return (
+    <section className="music-account-panel" aria-label="Music account">
+      <div>
+        <p className="eyebrow">Personalized discovery</p>
+        <h2>{user.name ?? "Signed in"}</h2>
+        <p>
+          {spotifyConnected
+            ? `Spotify connected${spotifyConnection?.lastSyncedAt ? `, last synced ${formatDate(spotifyConnection.lastSyncedAt)}` : ""}.`
+            : "Signed in. Connect Spotify to sync taste data."}
+        </p>
+        {previewItems.length > 0 ? (
+          <div className="music-profile-preview">
+            {previewItems.map((item) => (
+              <span key={item.id}>
+                {item.itemType === "top_artist" ? "Artist" : "Track"}: {item.name}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <div className="music-account-controls">
+        {spotifyConnected ? (
+          <MusicConnectionActions />
+        ) : features.spotify ? (
+          <form action={connectSpotify}>
+            <button className="primary-action" type="submit">
+              Connect Spotify
+            </button>
+          </form>
+        ) : null}
+        <form action={signOutOfApp}>
+          <button className="ghost-control" type="submit">
+            Sign out
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+async function connectSpotify() {
+  "use server";
+
+  await signIn("spotify", { redirectTo: "/" });
+}
+
+async function signOutOfApp() {
+  "use server";
+
+  await signOut({ redirectTo: "/" });
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
+}

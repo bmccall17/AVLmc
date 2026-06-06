@@ -18,6 +18,7 @@ export type Contribution = {
   audioUrl: string | null;
   durationSeconds: number | null;
   sessionId: string;
+  userId: string | null;
   createdAt: string;
   status: ContributionStatus;
 };
@@ -28,6 +29,7 @@ export type Reaction = {
   eventTitle: string;
   type: ReactionType;
   sessionId: string;
+  userId: string | null;
   createdAt: string;
 };
 
@@ -43,7 +45,7 @@ export type EventCommunity = CommunityCounts & {
   contributions: Contribution[];
 };
 
-export type PublicContribution = Omit<Contribution, "sessionId">;
+export type PublicContribution = Omit<Contribution, "sessionId" | "userId">;
 
 export type PublicEventCommunity = CommunityCounts & {
   contributions: PublicContribution[];
@@ -62,6 +64,7 @@ type ContributionRow = {
   audio_url: string | null;
   duration_seconds: number | null;
   session_id: string;
+  user_id: number | string | null;
   created_at: Date | string;
   status: ContributionStatus;
 };
@@ -184,6 +187,7 @@ export async function createContribution(input: {
   audioUrl?: string | null;
   durationSeconds?: number | null;
   sessionId: string;
+  userId?: string | null;
 }) {
   await assertRateLimit(input.sessionId);
 
@@ -202,9 +206,10 @@ export async function createContribution(input: {
         audio_url,
         duration_seconds,
         session_id,
+        user_id,
         status
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'visible')
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'visible')
       returning ${contributionColumns}
     `,
     [
@@ -220,6 +225,7 @@ export async function createContribution(input: {
       cleanOptional(input.audioUrl, 500),
       input.durationSeconds ?? null,
       input.sessionId,
+      toNullableUserId(input.userId),
     ]
   );
 
@@ -231,14 +237,22 @@ export async function toggleReaction(input: {
   eventTitle: string;
   type: ReactionType;
   sessionId: string;
+  userId?: string | null;
 }) {
   await query(
     `
-      insert into public.reactions (id, event_id, event_title, type, session_id)
-      values ($1, $2, $3, $4, $5)
+      insert into public.reactions (id, event_id, event_title, type, session_id, user_id)
+      values ($1, $2, $3, $4, $5, $6)
       on conflict (event_id, type, session_id) do nothing
     `,
-    [randomUUID(), input.eventId, input.eventTitle, input.type, input.sessionId]
+    [
+      randomUUID(),
+      input.eventId,
+      input.eventTitle,
+      input.type,
+      input.sessionId,
+      toNullableUserId(input.userId),
+    ]
   );
 
   return getCountsForEvent(input.eventId);
@@ -259,8 +273,9 @@ export async function setContributionStatus(id: string, status: ContributionStat
 }
 
 export function publicContribution(contribution: Contribution): PublicContribution {
-  const { sessionId, ...safe } = contribution;
+  const { sessionId, userId, ...safe } = contribution;
   void sessionId;
+  void userId;
   return safe;
 }
 
@@ -277,6 +292,7 @@ const contributionColumns = `
   audio_url,
   duration_seconds,
   session_id,
+  user_id,
   created_at,
   status
 `;
@@ -361,6 +377,7 @@ function mapContributionRow(row: ContributionRow): Contribution {
     audioUrl: row.audio_url,
     durationSeconds: row.duration_seconds,
     sessionId: row.session_id,
+    userId: row.user_id === null ? null : String(row.user_id),
     createdAt: toIsoString(row.created_at),
     status: row.status,
   };
@@ -404,4 +421,13 @@ function cleanOptional(value: string | null | undefined, maxLength: number) {
     return null;
   }
   return cleaned.slice(0, maxLength);
+}
+
+function toNullableUserId(userId: string | null | undefined) {
+  if (!userId) {
+    return null;
+  }
+
+  const parsed = Number(userId);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }

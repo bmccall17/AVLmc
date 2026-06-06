@@ -56,7 +56,7 @@ Each event supports:
 
 Rules:
 
-- One reaction per browser session per event per reaction type.
+- One reaction per server-issued anonymous session per event per reaction type.
 - Counts display on event detail pages.
 - Counts display on homepage cards.
 - Reactions do not require an account.
@@ -119,7 +119,7 @@ Reaction:
 
 - Anonymous submissions may create spam.
 - URL validation may reject legitimate music links if too strict.
-- Session-based reactions are imperfect but acceptable for MVP.
+- Anonymous session-based reactions are imperfect but acceptable for MVP.
 
 ## Acceptance Criteria
 

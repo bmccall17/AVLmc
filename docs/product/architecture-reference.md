@@ -36,6 +36,18 @@ Updated: June 5, 2026
 - Reaction API: `/api/community/reactions`.
 - Event detail UI: `components/CommunityPanel.tsx`.
 - Public pages only show `visible` contributions.
+- Public actions use a server-issued HTTP-only `avl_anonymous_session` cookie; client-provided `sessionId` values are deprecated and ignored.
+- Signed-in users are optional and stored as nullable `user_id` links on contributions and reactions.
+
+### Optional Music Auth
+
+- Auth route: `/api/auth/*`, backed by Auth.js and the Aiven Postgres adapter tables.
+- Account status route: `/api/me`.
+- Music connection route: `/api/me/music-connections`.
+- Music profile route: `/api/me/music-profile`.
+- Homepage account surface: `components/MusicAccountPanel.tsx`.
+- Spotify is the first implemented provider and syncs normalized top artists/tracks into `music_profile_items`.
+- Google/YouTube and Apple Music flags are reserved for later connector work and do not currently create music profiles.
 
 ### Voice Memos
 
@@ -50,15 +62,20 @@ Updated: June 5, 2026
 - Moderation route: `/api/admin/contributions`.
 - Auth model: single password plus an opaque session token from environment.
 - Required production env vars: `ADMIN_PASSWORD` and `ADMIN_SESSION_TOKEN`.
+- Production no longer falls back to local admin secrets.
 
 ## Production Persistence
 
 The app now uses Aiven Postgres for production persistence.
 
 - `events`: normalized AVLgo event records.
-- `contributions`: songs and notes with moderation `status`.
-- `reactions`: anonymous session-based going/fire signals.
+- `users`, `accounts`, `sessions`, `verification_token`: Auth.js-managed account/session data.
+- `contributions`: songs and notes with moderation `status`, anonymous `session_id`, and optional `user_id`.
+- `reactions`: anonymous session-based going/fire signals with optional `user_id`.
+- `music_connections` and `music_profile_items`: optional provider connection state and normalized taste data.
 - `ADMIN_PASSWORD`, `ADMIN_SESSION_TOKEN`, and `DATABASE_URL` are required in production.
+- `NEXT_PUBLIC_AUTH_ENABLED=false` keeps optional auth hidden.
+- `AUTH_SECRET`, `AUTH_SPOTIFY_ENABLED`, `AUTH_SPOTIFY_ID`, and `AUTH_SPOTIFY_SECRET` are required to enable Spotify sign-in.
 - `AVLGO_API_URL` is optional and should usually be unset so the built-in AVLgo JSON export URL is used.
 
 ## Acceptance Coverage
@@ -71,7 +88,8 @@ The app now uses Aiven Postgres for production persistence.
 
 ## Known Follow-Up
 
-Personalized discovery is intentionally future backlog:
+Personalized discovery is intentionally incremental:
 
-- Connect Spotify, YouTube Music, or Apple Music only after privacy and auth are designed.
+- Spotify sign-in now provides a first optional taste-profile path.
+- Add Google/YouTube and Apple Music only after provider-specific privacy and API constraints are confirmed.
 - Start with filters/sorts and explicit user preferences before importing listening history.

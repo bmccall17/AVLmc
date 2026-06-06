@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EventBoard } from "@/components/EventBoard";
 import { EventImage } from "@/components/EventImage";
+import { MusicAccountPanel } from "@/components/MusicAccountPanel";
 import { getCommunityCountsByEvent } from "@/lib/community";
 import { getDateWindow, getUpcomingEvents } from "@/lib/events";
 import { formatWindow } from "@/lib/format";
@@ -87,6 +88,8 @@ export default async function HomePage() {
           </Link>
         ) : null}
       </section>
+
+      <MusicAccountPanel />
 
       {events.length === 0 ? (
         <section className="empty-state">

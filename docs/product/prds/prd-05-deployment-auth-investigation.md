@@ -8,7 +8,7 @@ This PRD is an investigation deliverable, not an implementation commitment.
 
 ## Implementation Status
 
-Documented in [Deployment and Auth Investigation](../deployment-auth-investigation.md). Recommendation: Vercel Hobby plus Aiven Free PostgreSQL for public deployment persistence, anonymous MVP participation, and full auth later only when accounts create clear product value.
+Documented in [Deployment and Auth Investigation](../deployment-auth-investigation.md). Recommendation: Vercel Hobby plus Aiven Free PostgreSQL for public deployment persistence, anonymous MVP participation, and optional Spotify auth only when personalized discovery needs taste data.
 
 ## Goals
 
@@ -21,8 +21,8 @@ Documented in [Deployment and Auth Investigation](../deployment-auth-investigati
 ## Non-Goals
 
 - No paid provider selection.
-- No full user accounts in MVP.
-- No production auth implementation during the MVP unless a later decision explicitly adds it.
+- No required user accounts in MVP.
+- No production auth gate for browsing, reactions, or contributions.
 - No assumption that Spotify, Apple Music, or AVLgo can act as general-purpose identity providers without verification.
 
 ## Investigation Questions
@@ -53,8 +53,8 @@ Documented in [Deployment and Auth Investigation](../deployment-auth-investigati
 Evaluate these auth paths:
 
 - Google auth.
-- Plain email auth.
-- Spotify auth.
+- Plain email auth as a later fallback.
+- Spotify auth for optional taste data.
 - Apple Music auth.
 - AVLgo auth, if AVLgo supports any relevant auth flow.
 
@@ -79,9 +79,9 @@ For each path, determine:
 
 - MVP remains anonymous.
 - Use optional display names only.
-- Use session-based reactions.
+- Use server-issued anonymous sessions for reactions.
 - Use a single admin password for moderation.
-- Defer full auth until a clear need appears.
+- Keep music auth optional until a clear personalization need appears.
 - Defer voice memos if `$0` storage is not practical.
 
 ## Acceptance Criteria

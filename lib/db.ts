@@ -4,7 +4,7 @@ import type { QueryResult, QueryResultRow } from "pg";
 
 let pool: Pool | null = null;
 
-function getPool() {
+export function getPool() {
   const connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {

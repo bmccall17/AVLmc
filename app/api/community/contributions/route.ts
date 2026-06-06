@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createContribution, getCommunityForEvent, publicContribution } from "@/lib/community";
 import type { ContributionType } from "@/lib/community";
+import {
+  getOrCreateAnonymousSessionId,
+  setAnonymousSessionCookie,
+} from "@/lib/anonymous-session";
+import { getOptionalUserId } from "@/lib/current-user";
 
 export const runtime = "nodejs";
 
@@ -25,11 +30,12 @@ type ValidContributionInput = ContributionInput & {
   eventId: string;
   eventTitle: string;
   type: ContributionType;
-  sessionId: string;
 };
 
 export async function POST(request: Request) {
   try {
+    const sessionId = getOrCreateAnonymousSessionId(request);
+    const userId = await getOptionalUserId();
     const contentType = request.headers.get("content-type") ?? "";
     const input = contentType.includes("multipart/form-data")
       ? await parseMultipart(request)
@@ -40,16 +46,22 @@ export async function POST(request: Request) {
     }
 
     validateContribution(input);
-    const contribution = await createContribution(input);
+    const contribution = await createContribution({
+      ...input,
+      sessionId,
+      userId,
+    });
     const community = await getCommunityForEvent(input.eventId);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       contribution: publicContribution(contribution),
       community: {
         ...community,
         contributions: community.contributions.map(publicContribution)
       }
     });
+    setAnonymousSessionCookie(response, sessionId);
+    return response;
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not save contribution." },
@@ -101,7 +113,7 @@ async function parseMultipart(request: Request) {
 }
 
 function validateContribution(input: ContributionInput): asserts input is ValidContributionInput {
-  if (!input.eventId || !input.eventTitle || !input.sessionId || !input.type || !TYPES.has(input.type)) {
+  if (!input.eventId || !input.eventTitle || !input.type || !TYPES.has(input.type)) {
     throw new Error("Missing contribution fields.");
   }
 

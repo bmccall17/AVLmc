@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import type {
   CommunityCounts,
   ContributionType,
@@ -29,14 +29,10 @@ const emptyFormState: FormState = { kind: "idle", message: "" };
 
 export function CommunityPanel({ event, initialCommunity }: CommunityPanelProps) {
   const [community, setCommunity] = useState(initialCommunity);
-  const [sessionId, setSessionId] = useState("");
   const [songState, setSongState] = useState<FormState>(emptyFormState);
   const [noteState, setNoteState] = useState<FormState>(emptyFormState);
   const [reactionState, setReactionState] = useState<FormState>(emptyFormState);
   const [reactionPending, setReactionPending] = useState<ReactionType | null>(null);
-  useEffect(() => {
-    setSessionId(getSessionId());
-  }, []);
 
   const grouped = useMemo(
     () => ({
@@ -56,7 +52,6 @@ export function CommunityPanel({ event, initialCommunity }: CommunityPanelProps)
         body: JSON.stringify({
           eventId: event.id,
           eventTitle: event.eventTitle,
-          sessionId: sessionId || getSessionId(),
           type,
         }),
       });
@@ -129,7 +124,6 @@ export function CommunityPanel({ event, initialCommunity }: CommunityPanelProps)
           ...values,
           eventId: event.id,
           eventTitle: event.eventTitle,
-          sessionId: sessionId || getSessionId(),
         }),
       });
       const data = (await response.json()) as { community?: PublicEventCommunity; error?: string };
@@ -280,21 +274,6 @@ function FormMessage({ state }: { state: FormState }) {
   }
 
   return <p className={`form-message ${state.kind}`}>{state.message}</p>;
-}
-
-function getSessionId() {
-  const key = "avlmc-session";
-  const existing = window.localStorage.getItem(key);
-  if (existing) {
-    return existing;
-  }
-
-  const next =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  window.localStorage.setItem(key, next);
-  return next;
 }
 
 function getFormValue(data: FormData, key: string) {
