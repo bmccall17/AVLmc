@@ -1066,15 +1066,19 @@ body {
   border-radius: 8px;
   color: var(--ink);
   cursor: pointer;
-  display: grid;
+  display: flex;
   font: inherit;
   font-size: 0.76rem;
   font-weight: 900;
-  gap: 3px;
-  justify-items: center;
+  gap: 5px;
+  justify-content: center;
   min-height: 44px;
   min-width: 0;
   padding: 7px 5px;
+}
+
+.compact-learning-actions svg {
+  flex: 0 0 auto;
 }
 
 .compact-learning-actions button[aria-pressed="true"] {
@@ -1398,6 +1402,28 @@ button.primary-action {
     grid-template-columns: 1fr;
   }
 
+  .sandbox-shell {
+    padding: 22px 14px 40px;
+  }
+
+  .sandbox-layout,
+  .sandbox-event-card {
+    grid-template-columns: 1fr;
+  }
+
+  .sandbox-art {
+    display: none;
+  }
+
+  .sandbox-date {
+    align-items: center;
+    flex-direction: row;
+    justify-content: flex-start;
+    min-height: auto;
+    padding: 10px 12px;
+    text-align: left;
+  }
+
   .reaction-strip,
   .music-account-panel,
   .community-form-grid,
@@ -1430,7 +1456,7 @@ button.primary-action {
   }
 }
 
-@media (max-width: 720px) {
+@media (min-width: 681px) and (max-width: 720px) {
   .sandbox-event-card {
     grid-template-columns: 68px minmax(0, 1fr);
   }

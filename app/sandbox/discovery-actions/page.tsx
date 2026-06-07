@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CalendarCheck, EyeOff, Flame } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Discovery Action Sandbox",
@@ -127,16 +128,26 @@ function SandboxCard({
           </div>
         ) : (
           <div className="compact-learning-actions" aria-label="Compact discovery actions">
-            <button aria-label={`Planning to go: ${event.going}`} aria-pressed={selected} type="button">
-              <span>Go</span>
+            <button
+              aria-label={`Planning to go: ${event.going}`}
+              aria-pressed={selected}
+              title="Planning to go"
+              type="button"
+            >
+              <CalendarCheck aria-hidden="true" size={18} strokeWidth={2.4} />
               <strong>{event.going}</strong>
             </button>
-            <button aria-label={`Fire: ${event.fire}`} aria-pressed={selected} type="button">
-              <span>Fire</span>
+            <button
+              aria-label={`Fire: ${event.fire}`}
+              aria-pressed={selected}
+              title="Fire"
+              type="button"
+            >
+              <Flame aria-hidden="true" size={18} strokeWidth={2.4} />
               <strong>{event.fire}</strong>
             </button>
-            <button aria-label="Remove from my listings" type="button">
-              <span>Hide</span>
+            <button aria-label="Remove from my listings" title="Remove from my listings" type="button">
+              <EyeOff aria-hidden="true" size={18} strokeWidth={2.4} />
             </button>
           </div>
         )}
