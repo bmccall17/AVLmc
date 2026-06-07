@@ -3,9 +3,9 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { UserCircle } from "lucide-react";
 import {
-  SandboxDiscoveryExperience,
-  type SandboxEvent,
-} from "@/app/sandbox/discovery-actions/SandboxDiscoveryExperience";
+  FreshDiscoveryExperience,
+  type FreshSandboxEvent,
+} from "@/app/sandbox/discovery-actions/FreshDiscoveryExperience";
 import {
   ANONYMOUS_SESSION_COOKIE_NAME,
   getAnonymousSessionIdFromCookieValue,
@@ -31,8 +31,7 @@ export const metadata: Metadata = {
 
 export default async function DiscoveryActionSandboxPage() {
   const allEvents = await getUpcomingEvents();
-  const events = allEvents.slice(0, 9);
-  const eventIds = events.map((event) => event.id);
+  const eventIds = allEvents.map((event) => event.id);
   const cookieStore = await cookies();
   const sessionId = getAnonymousSessionIdFromCookieValue(
     cookieStore.get(ANONYMOUS_SESSION_COOKIE_NAME)?.value
@@ -56,11 +55,12 @@ export default async function DiscoveryActionSandboxPage() {
   const scores = scoreDiscoveryEvents({
     connections: musicConnections,
     counts,
-    events,
+    events: allEvents,
     preferenceSignals,
     profileItems: musicProfileItems,
     spotifyMatchCorrections,
   });
+  const events = allEvents.filter((event) => !discoveryStates[event.id]?.removed).slice(0, 9);
   const cards = events.map((event, index) =>
     buildSandboxEvent({
       counts: counts[event.id],
@@ -98,7 +98,7 @@ export default async function DiscoveryActionSandboxPage() {
         </button>
       </header>
 
-      <SandboxDiscoveryExperience events={cards} />
+      <FreshDiscoveryExperience events={cards} />
     </main>
   );
 }
@@ -117,14 +117,13 @@ function buildSandboxEvent({
   goingSelected: boolean;
   index: number;
   score: DiscoveryScore | undefined;
-}): SandboxEvent {
+}): FreshSandboxEvent {
   const tag = getPrimaryTag(event);
   const initials = getInitials(event.artistName || event.eventTitle);
   const date = parseEventDate(event);
   const fire = counts?.fire ?? 0;
   const going = counts?.going ?? 0;
   const songs = counts?.songs ?? 0;
-  const image = buildImageBackground(event, index);
 
   return {
     artist: event.artistName,
@@ -137,7 +136,7 @@ function buildSandboxEvent({
     going,
     goingSelected,
     id: event.id,
-    image,
+    imageUrl: event.imageUrl,
     initials,
     match: formatMatchScore(score, index),
     note: buildNote({ counts, event, score, tag }),
@@ -147,22 +146,6 @@ function buildSandboxEvent({
     title: event.eventTitle,
     venue: event.venueName,
   };
-}
-
-function buildImageBackground(event: EventRecord, index: number) {
-  const accent = [
-    "rgba(255, 237, 213, 0.88)",
-    "rgba(251, 146, 60, 0.74)",
-    "rgba(244, 244, 245, 0.62)",
-    "rgba(161, 161, 170, 0.58)",
-    "rgba(212, 212, 216, 0.48)",
-    "rgba(253, 186, 116, 0.58)",
-  ][index % 6];
-  const imageLayer = event.imageUrl
-    ? `linear-gradient(145deg, rgba(10, 10, 10, 0.02), rgba(10, 10, 10, 0.78)), url(${JSON.stringify(event.imageUrl)})`
-    : `linear-gradient(145deg, rgba(10, 10, 10, 0.08), rgba(10, 10, 10, 0.88)), radial-gradient(circle at ${24 + (index % 3) * 20}% ${18 + (index % 2) * 18}%, ${accent}, transparent 16rem)`;
-
-  return `${imageLayer}, linear-gradient(135deg, #18181b 0%, #3f3f46 46%, #09090b 100%)`;
 }
 
 function buildNote({

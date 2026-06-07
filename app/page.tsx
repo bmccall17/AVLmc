@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { UserCircle } from "lucide-react";
 import { EventBoard } from "@/components/EventBoard";
-import { EventImage } from "@/components/EventImage";
 import { MusicAccountPanel } from "@/components/MusicAccountPanel";
 import {
   ANONYMOUS_SESSION_COOKIE_NAME,
@@ -81,64 +81,44 @@ export default async function HomePage() {
     );
   const { start, end } = getDateWindow();
   const avlgoSourceUrl = buildAvlgoSourceUrl(start, end);
-  const featured = visibleEvents[0] ?? null;
+  const profileLabel = userId ? "Signed in listener" : "Guest listener";
+  const profileDetail = hasTasteProfile
+    ? `${musicProfileItems.length} taste signals`
+    : `${visibleEvents.length} live picks`;
 
   return (
-    <main className="shell">
-      <header className="app-chrome">
-        <Link className="brand" href="/">
-          <span className="brand-mark">AVLmc</span>
-          <span>
-            <strong>AVL music connection</strong>
-            <small>Upcoming shows in the 828</small>
-          </span>
+    <main className="sandbox-shell">
+      <header className="sandbox-topbar">
+        <Link className="sandbox-brand" href="/">
+          <span>AVLmc</span>
+          <strong>Asheville Music Connection</strong>
         </Link>
-        <nav className="nav-pills" aria-label="Primary">
-          <a href="#shows" aria-current="page">Shows</a>
-          <a href="#hot">Hot</a>
-          <a href="#stories">Stories</a>
+        <nav className="sandbox-tabs" aria-label="Primary">
+          <a href="#discover" aria-current="page">Discover</a>
+          <a href="#beats">Beats</a>
+          <a href="#cards">Cards</a>
         </nav>
-        <div className="header-actions">
+        <div className="sandbox-topbar-actions">
           <a
-            className="playlist-button"
+            className="sandbox-source-link is-playlist"
             href="https://open.spotify.com/playlist/4fcdaCe97lEeEMe8rOhuSM?si=BcTWAtvxQqu3kRlZDlIuBQ"
+            rel="noreferrer"
             target="_blank"
           >
-            Ryan&apos;s weekly playlist
+            Ryan&apos;s playlist
           </a>
-          <a className="ghost-button" href={avlgoSourceUrl} target="_blank">
+          <a className="sandbox-source-link" href={avlgoSourceUrl} rel="noreferrer" target="_blank">
             AVLgo source
           </a>
+          <button className="sandbox-profile" type="button">
+            <UserCircle aria-hidden="true" size={22} strokeWidth={2.2} />
+            <span>
+              <strong>{profileLabel}</strong>
+              <small>{profileDetail}</small>
+            </span>
+          </button>
         </div>
       </header>
-
-      <section className="hero-band">
-        <div className="hero-copy">
-          <p className="eyebrow">Live AVLgo feed</p>
-          <h1>Find the Asheville show worth talking about.</h1>
-          <p className="lede">
-            A rolling 21-day live music board, with local notes and listening
-            signals layered on top.
-          </p>
-        </div>
-        {featured ? (
-          <Link className="featured-show" href={`/event/${featured.id}`}>
-            <EventImage
-              className="featured-image"
-              src={featured.imageUrl}
-              fallbackLabel={featured.eventTitle}
-              loading="eager"
-            />
-            <span className="featured-copy">
-              <small>Next up</small>
-              <strong>{featured.eventTitle}</strong>
-              <em>
-                {featured.eventTime ?? "Time TBA"} at {featured.venueName}
-              </em>
-            </span>
-          </Link>
-        ) : null}
-      </section>
 
       <MusicAccountPanel />
 

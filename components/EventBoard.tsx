@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { EventImage } from "@/components/EventImage";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { CalendarCheck, ChevronRight, ExternalLink, Flame, Headphones, Search, X } from "lucide-react";
 import type { CommunityCounts } from "@/lib/community";
 import type { DiscoveryReason, DiscoveryScore, DiscoveryScoresByEvent } from "@/lib/discovery";
 import type {
@@ -11,11 +12,16 @@ import type {
   DiscoveryStateByEvent,
 } from "@/lib/discovery-memory";
 import type { EventRecord } from "@/lib/events";
-import { formatDate } from "@/lib/format";
 
 type SortMode = "best-bets" | "best-match" | "soonest" | "hottest" | "discussion" | "venue";
 type QuickFilterId = "tonight" | "weekend" | "free" | "dance" | "jazz" | "rock" | "local" | "outdoor";
-type CardAction = Extract<DiscoveryEventAction, "avlgo_click" | "fire" | "planning" | "remove">;
+type CardAction = Extract<DiscoveryEventAction, "avlgo_click" | "fire" | "planning" | "remove" | "unremove">;
+type ActionKind = "fire" | "going" | "remove";
+
+type ActiveTooltip = {
+  action: ActionKind;
+  eventId: string;
+};
 
 type EventBoardProps = {
   counts: Record<string, CommunityCounts | undefined>;
@@ -54,6 +60,32 @@ type SpotifyMatchCorrectionResponse = {
   error?: string;
 };
 
+const TOOLTIP_DELAY_MS = 1500;
+const SKIP_REMOVE_CONFIRM_KEY = "avlmc:homepage:skip-remove-confirm";
+
+const actionHelp: Record<ActionKind, { body: string; impact: string; title: string }> = {
+  going: {
+    body:
+      "Adds this show to your intent list and teaches personal discovery to favor similar artists, venues, timing, and tags.",
+    impact:
+      "Also raises the public planning count, so other listeners can see that the show has momentum.",
+    title: "Planning to go",
+  },
+  fire: {
+    body:
+      "A stronger positive signal than Going. Use it when a show feels especially relevant, even if you are not committing.",
+    impact: "Adds heat to the community signal and can lift the show in social discovery rows.",
+    title: "Fire",
+  },
+  remove: {
+    body:
+      "Hides this event from your list and sends a negative taste signal so similar picks show up less often for you.",
+    impact:
+      "Aggregate dismissals can help reduce weak recommendations for everyone without exposing who dismissed it.",
+    title: "Remove",
+  },
+};
+
 export function EventBoard({
   counts,
   discoveryScores,
@@ -71,6 +103,14 @@ export function EventBoard({
   const [eventScores, setEventScores] = useState(discoveryScores);
   const [discoveryStates, setDiscoveryStates] = useState(initialDiscoveryStates);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
+  const [confirmEvent, setConfirmEvent] = useState<EventRecord | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [revealedEventId, setRevealedEventId] = useState<string | null>(events[0]?.id ?? null);
+  const [skipConfirm, setSkipConfirm] = useState(false);
+  const [skipFutureConfirm, setSkipFutureConfirm] = useState(false);
+  const [toastEvent, setToastEvent] = useState<EventRecord | null>(null);
+  const tooltipTimer = useRef<number | null>(null);
   const trackedImpressions = useRef(new Set<string>());
   const visibleEvents = useMemo(
     () => events.filter((event) => !discoveryStates[event.id]?.removed),
@@ -89,6 +129,22 @@ export function EventBoard({
       setSortMode("best-bets");
     }
   }, [hasTasteProfile, sortMode]);
+
+  useEffect(() => {
+    setSkipConfirm(window.localStorage.getItem(SKIP_REMOVE_CONFIRM_KEY) === "true");
+
+    return () => {
+      clearTooltipTimer();
+    };
+  }, []);
+
+  useEffect(() => {
+    setRevealedEventId((current) =>
+      current && visibleEvents.some((event) => event.id === current)
+        ? current
+        : visibleEvents[0]?.id ?? null
+    );
+  }, [visibleEvents]);
 
   const filteredEvents = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -129,9 +185,36 @@ export function EventBoard({
     }
   }, [filteredEvents, quickFilter, sortMode]);
 
-  async function recordCardAction(event: EventRecord, action: CardAction) {
+  function clearTooltipTimer() {
+    if (tooltipTimer.current) {
+      window.clearTimeout(tooltipTimer.current);
+      tooltipTimer.current = null;
+    }
+  }
+
+  function queueTooltip(eventId: string, action: ActionKind) {
+    clearTooltipTimer();
+    tooltipTimer.current = window.setTimeout(() => {
+      setActiveTooltip({ action, eventId });
+    }, TOOLTIP_DELAY_MS);
+  }
+
+  function clearTooltip() {
+    clearTooltipTimer();
+    setActiveTooltip(null);
+  }
+
+  async function recordCardAction(
+    event: EventRecord,
+    action: CardAction,
+    options: { silent?: boolean; surface?: string } = {}
+  ) {
     const pendingKey = `${event.id}:${action}`;
-    setPendingAction(pendingKey);
+
+    if (!options.silent) {
+      setPendingAction(pendingKey);
+      setErrorMessage(null);
+    }
 
     try {
       const response = await fetch("/api/discovery/event-action", {
@@ -140,7 +223,7 @@ export function EventBoard({
         body: JSON.stringify({
           action,
           eventId: event.id,
-          surface: "homepage",
+          surface: options.surface ?? "homepage",
         }),
       });
       const data = (await response.json()) as EventActionResponse;
@@ -161,24 +244,105 @@ export function EventBoard({
           [event.id]: data.state,
         }));
       }
+
+      return data;
     } catch {
-      // Keep cards stable if a background learning request fails.
+      if (!options.silent) {
+        setErrorMessage("Could not save discovery action.");
+      }
+      return null;
     } finally {
-      setPendingAction(null);
+      if (!options.silent) {
+        setPendingAction(null);
+      }
     }
+  }
+
+  async function togglePositiveAction(event: EventRecord, action: Extract<ActionKind, "fire" | "going">) {
+    clearTooltip();
+    setToastEvent(null);
+    await recordCardAction(event, action === "going" ? "planning" : "fire");
+  }
+
+  async function trackAvlgoClick(event: EventRecord) {
+    await recordCardAction(event, "avlgo_click", { silent: true, surface: "homepage:avlgo" });
+  }
+
+  async function requestRemove(event: EventRecord) {
+    clearTooltip();
+
+    if (skipConfirm) {
+      const removed = await recordCardAction(event, "remove");
+
+      if (removed) {
+        setToastEvent(event);
+      }
+      return;
+    }
+
+    setSkipFutureConfirm(false);
+    setConfirmEvent(event);
+  }
+
+  async function confirmRemove() {
+    if (!confirmEvent) {
+      return;
+    }
+
+    if (skipFutureConfirm) {
+      window.localStorage.setItem(SKIP_REMOVE_CONFIRM_KEY, "true");
+      setSkipConfirm(true);
+    }
+
+    const removed = await recordCardAction(confirmEvent, "remove");
+
+    if (removed) {
+      setToastEvent(confirmEvent);
+      setConfirmEvent(null);
+    }
+  }
+
+  async function undoRemove(event: EventRecord) {
+    const restored = await recordCardAction(event, "unremove");
+
+    if (restored) {
+      setToastEvent(null);
+      setRevealedEventId(event.id);
+    }
+  }
+
+  function toggleReveal(eventId: string) {
+    setRevealedEventId((current) => (current === eventId ? null : eventId));
   }
 
   return (
     <>
-      <section className="search-panel" aria-label="Discovery controls">
-        <input
-          className="search-input"
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search artists, venues, notes..."
-          type="search"
-          value={query}
-        />
+      <section className="sandbox-hero" id="discover">
+        <div className="sandbox-header">
+          <p className="eyebrow">Community pulse</p>
+          <h1>Find the Asheville show worth talking about.</h1>
+          <p className="lede">
+            A rolling {windowLabel} live music board, ranked into match cards and live social beats.
+          </p>
+          <label className="sandbox-search">
+            <Search aria-hidden="true" size={17} strokeWidth={2.4} />
+            <input
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search venues, artists, signals"
+              type="search"
+              value={query}
+            />
+          </label>
+        </div>
 
+        <SocialDiscoveryBeats
+          counts={eventCounts}
+          events={filteredEvents.slice(0, 6)}
+          scores={eventScores}
+        />
+      </section>
+
+      <section className="search-panel discovery-filter-panel" aria-label="Discovery controls">
         <div className="filter-group" aria-label="Intent filters">
           {quickFilters.map((filter) => (
             <button
@@ -284,125 +448,547 @@ export function EventBoard({
         </div>
       </section>
 
+      {errorMessage ? <p className="sandbox-error-message">{errorMessage}</p> : null}
+
       {filteredEvents.length === 0 ? (
         <section className="empty-state">
           <h2>No matching music events</h2>
           <p>Try clearing a filter or searching for a different artist, venue, or tag.</p>
         </section>
       ) : (
-        <section className="event-grid" id="shows" aria-label="Upcoming music events">
-          {filteredEvents.map((event) => {
+        <section className="sandbox-layout" id="cards" aria-label="Upcoming music events">
+          {filteredEvents.map((event, index) => {
             const score = eventScores[event.id];
             const reasons = score?.reasons ?? [];
             const countsForEvent = eventCounts[event.id];
             const state = discoveryStates[event.id];
-            const spotifySaves = countsForEvent?.goingSources.spotify ?? 0;
-            const ticketClicks = countsForEvent?.goingSources.ticket_click ?? 0;
 
             return (
-              <article className="event-card" key={event.id}>
-                <div className="date-block">
-                  <span>{formatDate(event.eventDate).split(" ")[0]}</span>
-                  <strong>{formatDate(event.eventDate).replace(/^[A-Za-z]+ /, "")}</strong>
-                </div>
-
-                <EventImage
-                  className="event-image"
-                  fallbackLabel={event.eventTitle}
-                  src={event.imageUrl}
-                />
-
-                <div className="event-card-body">
-                  <p className="card-kicker">{event.venueName}</p>
-                  <h2>{event.eventTitle}</h2>
-                  <p className="event-meta">
-                    {event.eventTime ? event.eventTime : "Time TBA"} · {event.artistName}
-                  </p>
-                  {reasons.length > 0 ? (
-                    <div className="reason-row" aria-label="Recommendation reasons">
-                      {reasons.map((reason) => (
-                        <ReasonBadge
-                          event={event}
-                          key={getReasonKey(reason)}
-                          onScoreChange={(updatedScore) => {
-                            setEventScores((current) => ({
-                              ...current,
-                              [event.id]: updatedScore,
-                            }));
-                          }}
-                          reason={reason}
-                          score={score}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="tag-row">
-                    {event.tags.slice(0, 3).map((tagName) => (
-                      <span key={tagName}>{tagName}</span>
-                    ))}
-                  </div>
-                  <div className="signal-row" aria-label="Community signals">
-                    <span>{countsForEvent?.going ?? 0} planning</span>
-                    <span>{countsForEvent?.notes ?? 0} notes</span>
-                    <span>{countsForEvent?.songs ?? 0} songs</span>
-                    <span>{countsForEvent?.fire ?? 0} fire</span>
-                  </div>
-                  {spotifySaves > 0 || ticketClicks > 0 ? (
-                    <div className="intent-mini-row" aria-label="Saved signal sources">
-                      {spotifySaves > 0 ? <span className="spotify-source">Spotify {spotifySaves}</span> : null}
-                      {ticketClicks > 0 ? <span>Tickets {ticketClicks}</span> : null}
-                    </div>
-                  ) : null}
-                  <div className="card-learning-actions" aria-label="Personal discovery actions">
-                    <button
-                      aria-pressed={state?.planning ?? false}
-                      className={`learning-action planning ${state?.planning ? "is-active" : ""}`}
-                      disabled={pendingAction === `${event.id}:planning`}
-                      onClick={() => recordCardAction(event, "planning")}
-                      type="button"
-                    >
-                      <span>I&apos;m planning to go</span>
-                      <strong>{countsForEvent?.going ?? 0}</strong>
-                    </button>
-                    <button
-                      aria-pressed={state?.fire ?? false}
-                      className={`learning-action fire ${state?.fire ? "is-active" : ""}`}
-                      disabled={pendingAction === `${event.id}:fire`}
-                      onClick={() => recordCardAction(event, "fire")}
-                      type="button"
-                    >
-                      <span>Fire</span>
-                      <strong>{countsForEvent?.fire ?? 0}</strong>
-                    </button>
-                    <button
-                      className="learning-action remove"
-                      disabled={pendingAction === `${event.id}:remove`}
-                      onClick={() => recordCardAction(event, "remove")}
-                      type="button"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                  <div className="card-actions">
-                    <Link href={`/event/${event.id}`}>View details</Link>
-                    <a
-                      href={event.eventUrl}
-                      onClick={() => {
-                        void recordCardAction(event, "avlgo_click");
-                      }}
-                      target="_blank"
-                    >
-                      AVLgo listing
-                    </a>
-                  </div>
-                </div>
-              </article>
+              <DiscoveryEventCard
+                activeTooltip={activeTooltip}
+                counts={countsForEvent}
+                event={event}
+                index={index}
+                isPending={pendingAction?.startsWith(`${event.id}:`) ?? false}
+                isRevealed={revealedEventId === event.id}
+                key={event.id}
+                onClearTooltip={clearTooltip}
+                onQueueTooltip={queueTooltip}
+                onRemove={requestRemove}
+                onReveal={toggleReveal}
+                onScoreChange={(updatedScore) => {
+                  setEventScores((current) => ({
+                    ...current,
+                    [event.id]: updatedScore,
+                  }));
+                }}
+                onTogglePositiveAction={togglePositiveAction}
+                onTrackAvlgoClick={trackAvlgoClick}
+                reasons={reasons}
+                score={score}
+                state={state}
+              />
             );
           })}
         </section>
       )}
+
+      {confirmEvent ? (
+        <RemoveConfirmationDialog
+          event={confirmEvent}
+          onCancel={() => setConfirmEvent(null)}
+          onConfirm={confirmRemove}
+          onSkipFutureChange={setSkipFutureConfirm}
+          skipFuture={skipFutureConfirm}
+        />
+      ) : null}
+
+      {toastEvent ? (
+        <div className="sandbox-toast" role="status">
+          <span>
+            Removed <strong>{toastEvent.eventTitle}</strong>. Similar signals will rank lower for you.
+          </span>
+          <button onClick={() => void undoRemove(toastEvent)} type="button">
+            Undo
+          </button>
+        </div>
+      ) : null}
     </>
   );
+}
+
+function DiscoveryEventCard({
+  activeTooltip,
+  counts,
+  event,
+  index,
+  isPending,
+  isRevealed,
+  onClearTooltip,
+  onQueueTooltip,
+  onRemove,
+  onReveal,
+  onScoreChange,
+  onTogglePositiveAction,
+  onTrackAvlgoClick,
+  reasons,
+  score,
+  state,
+}: {
+  activeTooltip: ActiveTooltip | null;
+  counts: CommunityCounts | undefined;
+  event: EventRecord;
+  index: number;
+  isPending: boolean;
+  isRevealed: boolean;
+  onClearTooltip: () => void;
+  onQueueTooltip: (eventId: string, action: ActionKind) => void;
+  onRemove: (event: EventRecord) => void;
+  onReveal: (eventId: string) => void;
+  onScoreChange: (score: DiscoveryScore) => void;
+  onTogglePositiveAction: (event: EventRecord, action: Extract<ActionKind, "fire" | "going">) => void;
+  onTrackAvlgoClick: (event: EventRecord) => void;
+  reasons: DiscoveryReason[];
+  score: DiscoveryScore | undefined;
+  state: DiscoveryPersonEventState | undefined;
+}) {
+  const date = parseEventDate(event);
+  const tag = getPrimaryTag(event);
+  const match = formatMatchScore(score, index);
+  const fire = counts?.fire ?? 0;
+  const going = counts?.going ?? 0;
+  const songs = counts?.songs ?? 0;
+  const spotifySaves = counts?.goingSources.spotify ?? 0;
+  const ticketClicks = counts?.goingSources.ticket_click ?? 0;
+
+  function handleCardClick(eventClick: MouseEvent<HTMLElement>) {
+    if (isInteractiveTarget(eventClick.target)) {
+      return;
+    }
+
+    onReveal(event.id);
+  }
+
+  function handleCardKeyDown(keyEvent: KeyboardEvent<HTMLElement>) {
+    if (keyEvent.key !== "Enter" && keyEvent.key !== " ") {
+      return;
+    }
+
+    if (isInteractiveTarget(keyEvent.target)) {
+      return;
+    }
+
+    keyEvent.preventDefault();
+    onReveal(event.id);
+  }
+
+  return (
+    <article
+      className={`sandbox-event-card fresh-card ${isRevealed ? "is-revealed" : ""}`}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      tabIndex={0}
+    >
+      <EventPoster event={event} />
+
+      <div className="sandbox-card-top">
+        <span>{tag}</span>
+        <strong>{match}% match</strong>
+      </div>
+
+      <div className="sandbox-card-body">
+        <div className="sandbox-date">
+          <span>{formatWeekday(date)}</span>
+          <strong>{formatMonthDay(date)}</strong>
+        </div>
+        <p className="card-kicker">{event.venueName}</p>
+        <h3>{event.eventTitle}</h3>
+        <p className="event-meta">
+          {event.eventTime ?? "Time TBA"} · {event.artistName}
+        </p>
+        <div className="sandbox-pulse" aria-label="Social pulse">
+          <span className="avatar-stack" aria-hidden="true">
+            <i>M</i>
+            <i>J</i>
+            <i>R</i>
+          </span>
+          <span>
+            {going} planning · {songs} songs · {fire} fire
+          </span>
+        </div>
+        <div className="sandbox-card-disclosure">
+          <p className="sandbox-note">{buildNote({ counts, event, score, tag })}</p>
+          {reasons.length > 0 ? (
+            <div className="reason-row card-reason-row" aria-label="Recommendation reasons">
+              {reasons.map((reason) => (
+                <ReasonBadge
+                  event={event}
+                  key={getReasonKey(reason)}
+                  onScoreChange={onScoreChange}
+                  reason={reason}
+                  score={score}
+                />
+              ))}
+            </div>
+          ) : null}
+          {spotifySaves > 0 || ticketClicks > 0 ? (
+            <div className="intent-mini-row card-intent-row" aria-label="Saved signal sources">
+              {spotifySaves > 0 ? <span className="spotify-source">Spotify {spotifySaves}</span> : null}
+              {ticketClicks > 0 ? <span>AVLgo {ticketClicks}</span> : null}
+            </div>
+          ) : null}
+          <div className="sandbox-card-links" aria-label="Event links">
+            <Link href={`/event/${event.id}`}>Details</Link>
+            <a
+              href={event.eventUrl}
+              onClick={() => {
+                void onTrackAvlgoClick(event);
+              }}
+              target="_blank"
+            >
+              AVLgo <ExternalLink aria-hidden="true" size={13} strokeWidth={2.4} />
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div className="sandbox-action-bar" aria-label="Discovery actions">
+        <ActionButton
+          action="going"
+          activeTooltip={activeTooltip}
+          ariaLabel={`Planning to go: ${going}`}
+          eventId={event.id}
+          isDisabled={isPending}
+          isPressed={state?.planning ?? false}
+          onClearTooltip={onClearTooltip}
+          onClick={() => onTogglePositiveAction(event, "going")}
+          onQueueTooltip={onQueueTooltip}
+        >
+          <CalendarCheck aria-hidden="true" size={16} strokeWidth={2.5} />
+          <span>Going</span>
+          <strong>{going}</strong>
+        </ActionButton>
+        <ActionButton
+          action="fire"
+          activeTooltip={activeTooltip}
+          ariaLabel={`Fire: ${fire}`}
+          eventId={event.id}
+          isDisabled={isPending}
+          isPressed={state?.fire ?? false}
+          onClearTooltip={onClearTooltip}
+          onClick={() => onTogglePositiveAction(event, "fire")}
+          onQueueTooltip={onQueueTooltip}
+        >
+          <Flame aria-hidden="true" size={16} strokeWidth={2.5} />
+          <span>Fire</span>
+          <strong>{fire}</strong>
+        </ActionButton>
+        <ActionButton
+          action="remove"
+          activeTooltip={activeTooltip}
+          ariaLabel="Remove from my discovery"
+          eventId={event.id}
+          isDisabled={isPending}
+          isPressed={false}
+          onClearTooltip={onClearTooltip}
+          onClick={() => onRemove(event)}
+          onQueueTooltip={onQueueTooltip}
+        >
+          <X aria-hidden="true" size={18} strokeWidth={2.6} />
+        </ActionButton>
+      </div>
+    </article>
+  );
+}
+
+function EventPoster({ event }: { event: EventRecord }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = Boolean(event.imageUrl && !failed);
+
+  return (
+    <div className={`sandbox-art ${showImage ? "has-image" : "is-fallback"}`} aria-hidden="true">
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          alt=""
+          decoding="async"
+          loading="lazy"
+          onError={() => setFailed(true)}
+          src={event.imageUrl ?? undefined}
+        />
+      ) : null}
+      <span>{getInitials(event.artistName || event.eventTitle)}</span>
+    </div>
+  );
+}
+
+function ActionButton({
+  action,
+  activeTooltip,
+  ariaLabel,
+  children,
+  eventId,
+  isDisabled,
+  isPressed,
+  onClearTooltip,
+  onClick,
+  onQueueTooltip,
+}: {
+  action: ActionKind;
+  activeTooltip: ActiveTooltip | null;
+  ariaLabel: string;
+  children: ReactNode;
+  eventId: string;
+  isDisabled: boolean;
+  isPressed: boolean;
+  onClearTooltip: () => void;
+  onClick: () => void;
+  onQueueTooltip: (eventId: string, action: ActionKind) => void;
+}) {
+  const tooltipId = `event-${eventId}-${action}-tooltip`;
+  const isTooltipActive = activeTooltip?.eventId === eventId && activeTooltip.action === action;
+
+  return (
+    <button
+      aria-describedby={isTooltipActive ? tooltipId : undefined}
+      aria-label={ariaLabel}
+      aria-pressed={isPressed}
+      className={`is-${action}`}
+      disabled={isDisabled}
+      onBlur={onClearTooltip}
+      onClick={onClick}
+      onFocus={() => onQueueTooltip(eventId, action)}
+      onMouseEnter={() => onQueueTooltip(eventId, action)}
+      onMouseLeave={onClearTooltip}
+      type="button"
+    >
+      {children}
+      {isTooltipActive ? <ActionTooltip action={action} id={tooltipId} /> : null}
+    </button>
+  );
+}
+
+function ActionTooltip({ action, id }: { action: ActionKind; id: string }) {
+  const help = actionHelp[action];
+
+  return (
+    <span className="sandbox-action-tooltip" id={id} role="tooltip">
+      <strong>{help.title}</strong>
+      <span>{help.body}</span>
+      <em>{help.impact}</em>
+    </span>
+  );
+}
+
+function RemoveConfirmationDialog({
+  event,
+  onCancel,
+  onConfirm,
+  onSkipFutureChange,
+  skipFuture,
+}: {
+  event: EventRecord;
+  onCancel: () => void;
+  onConfirm: () => void;
+  onSkipFutureChange: (value: boolean) => void;
+  skipFuture: boolean;
+}) {
+  const dialogRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const firstButton = dialogRef.current?.querySelector<HTMLButtonElement>("button");
+    firstButton?.focus();
+  }, []);
+
+  function handleKeyDown(keyEvent: KeyboardEvent<HTMLElement>) {
+    if (keyEvent.key === "Escape") {
+      onCancel();
+      return;
+    }
+
+    if (keyEvent.key !== "Tab") {
+      return;
+    }
+
+    const focusable = Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(
+        "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+      ) ?? []
+    );
+
+    if (focusable.length === 0) {
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (keyEvent.shiftKey && document.activeElement === first) {
+      keyEvent.preventDefault();
+      last.focus();
+      return;
+    }
+
+    if (!keyEvent.shiftKey && document.activeElement === last) {
+      keyEvent.preventDefault();
+      first.focus();
+    }
+  }
+
+  return (
+    <div
+      className="sandbox-dialog-backdrop"
+      onMouseDown={(mouseEvent) => {
+        if (mouseEvent.target === mouseEvent.currentTarget) {
+          onCancel();
+        }
+      }}
+    >
+      <section
+        aria-labelledby="homepage-remove-title"
+        aria-modal="true"
+        className="sandbox-remove-dialog"
+        onKeyDown={handleKeyDown}
+        ref={dialogRef}
+        role="dialog"
+      >
+        <p className="eyebrow">Remove signal</p>
+        <h2 id="homepage-remove-title">Remove this event from your discovery?</h2>
+        <p>
+          <strong>{event.eventTitle}</strong> will hide from this surface. The personal discovery
+          algorithm treats Remove as a negative signal for similar artists, venues, tags, and timing.
+        </p>
+        <p>
+          This does not publicly shame the event. In aggregate, dismissals can help keep weak matches
+          from rising for other listeners.
+        </p>
+        <label className="sandbox-confirm-checkbox">
+          <input
+            checked={skipFuture}
+            onChange={(changeEvent) => onSkipFutureChange(changeEvent.target.checked)}
+            type="checkbox"
+          />
+          <span>Don&apos;t show me this again</span>
+        </label>
+        <div className="sandbox-dialog-actions">
+          <button className="secondary" onClick={onCancel} type="button">
+            Keep event
+          </button>
+          <button className="danger" onClick={onConfirm} type="button">
+            Remove
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SocialDiscoveryBeats({
+  counts,
+  events,
+  scores,
+}: {
+  counts: EventBoardProps["counts"];
+  events: EventRecord[];
+  scores: DiscoveryScoresByEvent;
+}) {
+  return (
+    <aside className="sandbox-beats" id="beats" aria-label="Social Discovery Beats">
+      <div className="sandbox-beats-header">
+        <span className="sandbox-beats-title">
+          <Headphones aria-hidden="true" size={15} strokeWidth={2.4} />
+          <p className="eyebrow">Social Discovery Beats</p>
+        </span>
+        <strong>{events.length} live rows</strong>
+      </div>
+      <div className="sandbox-beat-list">
+        {events.map((event, index) => {
+          const eventCounts = counts[event.id];
+          const date = parseEventDate(event);
+
+          return (
+            <Link className="sandbox-beat-tile" href={`/event/${event.id}`} key={event.id}>
+              <span className={`sandbox-beat-thumb ${event.imageUrl ? "" : "is-fallback"}`} aria-hidden="true">
+                {event.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img alt="" decoding="async" loading="lazy" src={event.imageUrl} />
+                ) : null}
+                <i>{getInitials(event.artistName || event.eventTitle)}</i>
+                <em>{index === 0 || (eventCounts?.fire ?? 0) > 0 ? "HOT" : "NEW"}</em>
+              </span>
+              <span className="sandbox-beat-copy">
+                <strong>{event.eventTitle}</strong>
+                <small>
+                  {formatWeekday(date)} {formatMonthDay(date)} · {event.venueName}
+                </small>
+                <span>
+                  {formatMatchScore(scores[event.id], index)}% match · {eventCounts?.going ?? 0} planning ·{" "}
+                  {eventCounts?.fire ?? 0} fire
+                </span>
+              </span>
+              <ChevronRight aria-hidden="true" size={16} strokeWidth={2.4} />
+            </Link>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+
+function buildNote({
+  counts,
+  event,
+  score,
+  tag,
+}: {
+  counts: CommunityCounts | undefined;
+  event: EventRecord;
+  score: DiscoveryScore | undefined;
+  tag: string;
+}) {
+  const reason = score?.reasons[0]?.label ?? `${tag.toLowerCase()} signal`;
+  const notes = counts?.notes ?? 0;
+  const songs = counts?.songs ?? 0;
+
+  if (notes > 0 || songs > 0) {
+    return `${reason}: ${notes} notes and ${songs} songs are already attached to this listing.`;
+  }
+
+  return `${reason}: ${event.artistName} at ${event.venueName} is inside the current live music window.`;
+}
+
+function formatMatchScore(score: DiscoveryScore | undefined, index: number) {
+  const rawScore = score?.bestMatchScore ?? score?.bestBetsScore ?? 0;
+  return Math.max(70, Math.min(98, Math.round(70 + rawScore / 3 - index * 1.3)));
+}
+
+function getPrimaryTag(event: EventRecord) {
+  return event.tags.find((tag) => tag.toLowerCase() !== "live music") ?? event.tags[0] ?? "Live";
+}
+
+function getInitials(value: string) {
+  const words = value
+    .replace(/[^a-z0-9\s]/gi, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return (words[0]?.[0] ?? "A") + (words[1]?.[0] ?? words[0]?.[1] ?? "V");
+}
+
+function parseEventDate(event: EventRecord) {
+  return new Date(event.startsAt ?? `${event.eventDate}T12:00:00`);
+}
+
+function formatWeekday(date: Date) {
+  return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(date);
+}
+
+function formatMonthDay(date: Date) {
+  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(date);
+}
+
+function isInteractiveTarget(target: EventTarget) {
+  return target instanceof Element && Boolean(target.closest("a, button, input, label"));
 }
 
 function ReasonBadge({
