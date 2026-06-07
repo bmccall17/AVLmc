@@ -1,4 +1,9 @@
 import { query } from "@/lib/db";
+import {
+  buildEventDuplicateAudit,
+  getCanonicalEvents,
+  type EventDuplicateAuditGroup,
+} from "@/lib/event-dedupe";
 
 export type EventRecord = {
   id: string;
@@ -34,6 +39,13 @@ type RawAvlgoEvent = Record<string, unknown>;
 type RawEventResult = {
   events: Array<RawSeedEvent | RawAvlgoEvent>;
   shouldPersist: boolean;
+};
+
+export type EventSyncWithDuplicateAudit = {
+  events: EventRecord[];
+  duplicateAudit: EventDuplicateAuditGroup[];
+  incomingDuplicateAudit: EventDuplicateAuditGroup[];
+  storedDuplicateAudit: EventDuplicateAuditGroup[];
 };
 
 type EventRow = {
@@ -172,6 +184,36 @@ export async function syncUpcomingEvents(now = new Date()): Promise<EventRecord[
   return normalized;
 }
 
+export async function syncUpcomingEventsWithDuplicateAudit(
+  now = new Date()
+): Promise<EventSyncWithDuplicateAudit> {
+  const { events: rawEvents, shouldPersist } = await getRawEvents(now);
+  const normalizedCandidates = normalizeEventCandidates(rawEvents, now);
+  const incomingDuplicateAudit = buildEventDuplicateAudit(normalizedCandidates);
+  const normalized = getCanonicalEvents(normalizedCandidates).sort(compareByDateTime);
+
+  if (shouldPersist && normalized.length > 0) {
+    await upsertEvents(normalized);
+
+    const storedCandidates = await listUpcomingEventsFromDatabase(now, { dedupe: false });
+    const storedDuplicateAudit = buildEventDuplicateAudit(storedCandidates);
+
+    return {
+      events: getCanonicalEvents(storedCandidates).sort(compareByDateTime),
+      duplicateAudit: mergeDuplicateAuditGroups(storedDuplicateAudit, incomingDuplicateAudit),
+      incomingDuplicateAudit,
+      storedDuplicateAudit,
+    };
+  }
+
+  return {
+    events: normalized,
+    duplicateAudit: incomingDuplicateAudit,
+    incomingDuplicateAudit,
+    storedDuplicateAudit: [],
+  };
+}
+
 export function getEmptyUpcomingEventsForPreview(): EventRecord[] {
   return [];
 }
@@ -229,17 +271,21 @@ function getConfiguredAvlgoApiUrl() {
 }
 
 function normalizeEvents(rawEvents: Array<RawSeedEvent | RawAvlgoEvent>, now: Date) {
-  const normalized = rawEvents
+  const normalized = normalizeEventCandidates(rawEvents, now);
+
+  return getCanonicalEvents(normalized).sort(compareByDateTime);
+}
+
+function normalizeEventCandidates(rawEvents: Array<RawSeedEvent | RawAvlgoEvent>, now: Date) {
+  return rawEvents
     .map((event) => normalizeEvent(event, now))
     .filter((event): event is EventRecord => Boolean(event))
     .filter(isMusicEvent)
     .filter((event) => isInsideRollingWindow(event, now))
     .filter((event) => isNotPastEvent(event, now));
-
-  return dedupeEvents(normalized).sort(compareByDateTime);
 }
 
-async function listUpcomingEventsFromDatabase(now: Date) {
+async function listUpcomingEventsFromDatabase(now: Date, options?: { dedupe?: boolean }) {
   const { start, end } = getDateWindow(now);
   const result = await query<EventRow>(
     `
@@ -253,7 +299,10 @@ async function listUpcomingEventsFromDatabase(now: Date) {
     [formatYmd(start), formatYmd(end), now.toISOString()]
   );
 
-  return result.rows.map(mapEventRow);
+  const events = result.rows.map(mapEventRow);
+  return options?.dedupe === false
+    ? events
+    : getCanonicalEvents(events).sort(compareByDateTime);
 }
 
 async function getEventByIdFromDatabase(id: string) {
@@ -508,16 +557,6 @@ function isNotPastEvent(event: EventRecord, now: Date) {
   return new Date(event.startsAt).getTime() >= now.getTime();
 }
 
-function dedupeEvents(events: EventRecord[]) {
-  const byAvlgoId = new Map<string, EventRecord>();
-
-  for (const event of events) {
-    byAvlgoId.set(event.avlgoEventId, event);
-  }
-
-  return Array.from(byAvlgoId.values());
-}
-
 function compareByDateTime(a: EventRecord, b: EventRecord) {
   if (a.startsAt && b.startsAt) {
     return new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
@@ -715,4 +754,20 @@ function slugify(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function mergeDuplicateAuditGroups(
+  primary: EventDuplicateAuditGroup[],
+  secondary: EventDuplicateAuditGroup[]
+) {
+  const byIdentity = new Map<string, EventDuplicateAuditGroup>();
+
+  for (const group of [...primary, ...secondary]) {
+    byIdentity.set(
+      [group.groupKey, group.canonicalId, ...group.hiddenIds].join("|"),
+      group
+    );
+  }
+
+  return Array.from(byIdentity.values());
 }

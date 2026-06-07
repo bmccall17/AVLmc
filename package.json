@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
+    "test:event-dedupe": "rm -rf /tmp/avlmc-event-dedupe-tests && tsc --target es2022 --module commonjs --moduleResolution node --rootDir . --outDir /tmp/avlmc-event-dedupe-tests --esModuleInterop --skipLibCheck --strict tests/event-dedupe.test.ts lib/event-dedupe.ts && node --test /tmp/avlmc-event-dedupe-tests/tests/event-dedupe.test.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
