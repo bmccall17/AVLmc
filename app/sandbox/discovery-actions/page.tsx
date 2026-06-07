@@ -1,5 +1,25 @@
 import type { Metadata } from "next";
-import { CalendarCheck, Flame, X } from "lucide-react";
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { UserCircle } from "lucide-react";
+import {
+  SandboxDiscoveryExperience,
+  type SandboxEvent,
+} from "@/app/sandbox/discovery-actions/SandboxDiscoveryExperience";
+import {
+  ANONYMOUS_SESSION_COOKIE_NAME,
+  getAnonymousSessionIdFromCookieValue,
+} from "@/lib/anonymous-session";
+import { getCommunityCountsByEvent, type CommunityCounts } from "@/lib/community";
+import { getOptionalUserId } from "@/lib/current-user";
+import { scoreDiscoveryEvents, type DiscoveryScore } from "@/lib/discovery";
+import {
+  listDiscoveryPreferenceSignals,
+  listDiscoveryStates,
+  listSpotifyMatchCorrections,
+} from "@/lib/discovery-memory";
+import { getUpcomingEvents, type EventRecord } from "@/lib/events";
+import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
 
 export const metadata: Metadata = {
   title: "Discovery Action Sandbox",
@@ -9,117 +29,190 @@ export const metadata: Metadata = {
   },
 };
 
-const sampleEvents = [
-  {
-    artist: "River Radio",
-    date: "Sat Jun 13",
-    fire: 12,
-    going: 8,
-    image:
-      "linear-gradient(145deg, rgba(12, 12, 12, 0.12), rgba(10, 10, 10, 0.88)), radial-gradient(circle at 24% 18%, rgba(255, 237, 213, 0.92), transparent 19rem), linear-gradient(135deg, #18181b 0%, #52525b 44%, #09090b 100%)",
-    match: 94,
-    note: "Maya and Jules both saved this one after your last Orange Peel pick.",
-    reasons: ["matches your recent picks", "happening soon"],
-    songs: 4,
-    tags: ["Indie", "Dance", "Local"],
-    time: "8:00 PM",
-    title: "River Radio with Glass Moon",
-    venue: "The Orange Peel",
-  },
-  {
-    artist: "Blue Ridge Brass",
-    date: "Sun Jun 14",
-    fire: 5,
-    going: 3,
-    image:
-      "linear-gradient(145deg, rgba(9, 9, 11, 0.1), rgba(9, 9, 11, 0.9)), radial-gradient(circle at 72% 22%, rgba(251, 146, 60, 0.72), transparent 15rem), linear-gradient(135deg, #27272a 0%, #3f3f46 48%, #09090b 100%)",
-    match: 87,
-    note: "Low-pressure patio set with the same local brass thread you keep opening.",
-    reasons: ["learned from your clicks", "local context"],
-    songs: 2,
-    tags: ["Jazz", "Outdoor", "Free"],
-    time: "6:30 PM",
-    title: "Blue Ridge Brass Patio Session",
-    venue: "Salvage Station",
-  },
-];
+export default async function DiscoveryActionSandboxPage() {
+  const allEvents = await getUpcomingEvents();
+  const events = allEvents.slice(0, 9);
+  const eventIds = events.map((event) => event.id);
+  const cookieStore = await cookies();
+  const sessionId = getAnonymousSessionIdFromCookieValue(
+    cookieStore.get(ANONYMOUS_SESSION_COOKIE_NAME)?.value
+  );
+  const userId = await getOptionalUserId();
+  const [
+    counts,
+    musicConnections,
+    musicProfileItems,
+    discoveryStates,
+    preferenceSignals,
+    spotifyMatchCorrections,
+  ] = await Promise.all([
+    getCommunityCountsByEvent(eventIds),
+    userId ? listMusicConnections(userId) : Promise.resolve([]),
+    userId ? listMusicProfileItems(userId) : Promise.resolve([]),
+    listDiscoveryStates(eventIds, { sessionId, userId }),
+    listDiscoveryPreferenceSignals({ sessionId, userId }),
+    listSpotifyMatchCorrections(eventIds, { sessionId, userId }),
+  ]);
+  const scores = scoreDiscoveryEvents({
+    connections: musicConnections,
+    counts,
+    events,
+    preferenceSignals,
+    profileItems: musicProfileItems,
+    spotifyMatchCorrections,
+  });
+  const cards = events.map((event, index) =>
+    buildSandboxEvent({
+      counts: counts[event.id],
+      event,
+      index,
+      score: scores[event.id],
+      fireSelected: Boolean(discoveryStates[event.id]?.fire),
+      goingSelected: Boolean(discoveryStates[event.id]?.planning),
+    })
+  );
+  const profileLabel = userId ? `Listener ${userId}` : "Guest listener";
+  const profileDetail =
+    musicProfileItems.length > 0
+      ? `${musicProfileItems.length} taste signals`
+      : `${cards.length} live picks`;
 
-export default function DiscoveryActionSandboxPage() {
   return (
     <main className="sandbox-shell">
-      <header className="sandbox-header">
-        <p className="eyebrow">Hidden sandbox</p>
-        <h1>Music event card redesign</h1>
-        <p className="lede">
-          Image-forward discovery cards with match signals and hover actions.
-        </p>
+      <header className="sandbox-topbar">
+        <Link className="sandbox-brand" href="/">
+          <span>AVLmc</span>
+          <strong>Asheville Music Connection</strong>
+        </Link>
+        <nav className="sandbox-tabs" aria-label="Sandbox sections">
+          <a href="#discover" aria-current="page">Discover</a>
+          <a href="#beats">Beats</a>
+          <a href="#cards">Cards</a>
+        </nav>
+        <button className="sandbox-profile" type="button">
+          <UserCircle aria-hidden="true" size={22} strokeWidth={2.2} />
+          <span>
+            <strong>{profileLabel}</strong>
+            <small>{profileDetail}</small>
+          </span>
+        </button>
       </header>
 
-      <section className="sandbox-layout" aria-label="Music event card redesign">
-        {sampleEvents.map((event, index) => (
-          <SandboxCard key={event.title} event={event} selected={index === 0} />
-        ))}
-      </section>
+      <SandboxDiscoveryExperience events={cards} />
     </main>
   );
 }
 
-function SandboxCard({
+function buildSandboxEvent({
+  counts,
   event,
-  selected,
+  fireSelected,
+  goingSelected,
+  index,
+  score,
 }: {
-  event: (typeof sampleEvents)[number];
-  selected: boolean;
+  counts: CommunityCounts | undefined;
+  event: EventRecord;
+  fireSelected: boolean;
+  goingSelected: boolean;
+  index: number;
+  score: DiscoveryScore | undefined;
+}): SandboxEvent {
+  const tag = getPrimaryTag(event);
+  const initials = getInitials(event.artistName || event.eventTitle);
+  const date = parseEventDate(event);
+  const fire = counts?.fire ?? 0;
+  const going = counts?.going ?? 0;
+  const songs = counts?.songs ?? 0;
+  const image = buildImageBackground(event, index);
+
+  return {
+    artist: event.artistName,
+    dateLabel: formatMonthDay(date),
+    dayLabel: formatWeekday(date),
+    detailHref: `/event/${event.id}`,
+    eventUrl: event.eventUrl,
+    fire,
+    fireSelected,
+    going,
+    goingSelected,
+    id: event.id,
+    image,
+    initials,
+    match: formatMatchScore(score, index),
+    note: buildNote({ counts, event, score, tag }),
+    songs,
+    tag,
+    time: event.eventTime ?? "Time TBA",
+    title: event.eventTitle,
+    venue: event.venueName,
+  };
+}
+
+function buildImageBackground(event: EventRecord, index: number) {
+  const accent = [
+    "rgba(255, 237, 213, 0.88)",
+    "rgba(251, 146, 60, 0.74)",
+    "rgba(244, 244, 245, 0.62)",
+    "rgba(161, 161, 170, 0.58)",
+    "rgba(212, 212, 216, 0.48)",
+    "rgba(253, 186, 116, 0.58)",
+  ][index % 6];
+  const imageLayer = event.imageUrl
+    ? `linear-gradient(145deg, rgba(10, 10, 10, 0.02), rgba(10, 10, 10, 0.78)), url(${JSON.stringify(event.imageUrl)})`
+    : `linear-gradient(145deg, rgba(10, 10, 10, 0.08), rgba(10, 10, 10, 0.88)), radial-gradient(circle at ${24 + (index % 3) * 20}% ${18 + (index % 2) * 18}%, ${accent}, transparent 16rem)`;
+
+  return `${imageLayer}, linear-gradient(135deg, #18181b 0%, #3f3f46 46%, #09090b 100%)`;
+}
+
+function buildNote({
+  counts,
+  event,
+  score,
+  tag,
+}: {
+  counts: CommunityCounts | undefined;
+  event: EventRecord;
+  score: DiscoveryScore | undefined;
+  tag: string;
 }) {
-  return (
-    <article className="sandbox-event-card" tabIndex={0}>
-      <div className="sandbox-art" style={{ background: event.image }} aria-hidden="true">
-        <span>{event.artist.slice(0, 2)}</span>
-      </div>
+  const reason = score?.reasons[0]?.label ?? `${tag.toLowerCase()} signal`;
+  const notes = counts?.notes ?? 0;
+  const songs = counts?.songs ?? 0;
 
-      <div className="sandbox-card-top">
-        <span>{event.tags[0]}</span>
-        <strong>{event.match}% match</strong>
-      </div>
+  if (notes > 0 || songs > 0) {
+    return `${reason}: ${notes} notes and ${songs} songs are already attached to this listing.`;
+  }
 
-      <div className="sandbox-card-body">
-        <div className="sandbox-date">
-          <span>{event.date.split(" ")[0]}</span>
-          <strong>{event.date.replace(/^[A-Za-z]+ /, "")}</strong>
-        </div>
-        <p className="card-kicker">{event.venue}</p>
-        <h3>{event.title}</h3>
-        <p className="event-meta">
-          {event.time} · {event.artist}
-        </p>
-        <div className="sandbox-pulse" aria-label="Social pulse">
-          <span className="avatar-stack" aria-hidden="true">
-            <i>M</i>
-            <i>J</i>
-            <i>R</i>
-          </span>
-          <span>
-            {event.going} planning · {event.songs} songs · {event.fire} fire
-          </span>
-        </div>
-        <p className="sandbox-note">{event.note}</p>
-      </div>
+  return `${reason}: ${event.artistName} at ${event.venueName} is inside the current live music window.`;
+}
 
-      <div className="sandbox-action-bar" aria-label="Discovery actions">
-        <button aria-pressed={selected} className="is-going" type="button">
-          <CalendarCheck aria-hidden="true" size={16} strokeWidth={2.5} />
-          <span>Going</span>
-          <strong>{event.going}</strong>
-        </button>
-        <button aria-pressed={selected} className="is-fire" type="button">
-          <Flame aria-hidden="true" size={16} strokeWidth={2.5} />
-          <span>Fire</span>
-          <strong>{event.fire}</strong>
-        </button>
-        <button aria-label="Remove from my listings" className="is-remove" type="button">
-          <X aria-hidden="true" size={18} strokeWidth={2.6} />
-        </button>
-      </div>
-    </article>
-  );
+function formatMatchScore(score: DiscoveryScore | undefined, index: number) {
+  const rawScore = score?.bestMatchScore ?? 0;
+  return Math.max(70, Math.min(98, Math.round(70 + rawScore / 3 - index * 1.3)));
+}
+
+function getPrimaryTag(event: EventRecord) {
+  return event.tags.find((tag) => tag.toLowerCase() !== "live music") ?? event.tags[0] ?? "Live";
+}
+
+function getInitials(value: string) {
+  const words = value
+    .replace(/[^a-z0-9\s]/gi, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return (words[0]?.[0] ?? "A") + (words[1]?.[0] ?? words[0]?.[1] ?? "V");
+}
+
+function parseEventDate(event: EventRecord) {
+  return new Date(event.startsAt ?? `${event.eventDate}T12:00:00`);
+}
+
+function formatWeekday(date: Date) {
+  return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(date);
+}
+
+function formatMonthDay(date: Date) {
+  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(date);
 }
