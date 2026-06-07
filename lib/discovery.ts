@@ -1,13 +1,36 @@
 import type { CommunityCounts } from "@/lib/community";
-import type { DiscoveryPreferenceSignal } from "@/lib/discovery-memory";
+import type {
+  DiscoveryPreferenceSignal,
+  SpotifyMatchCorrection,
+} from "@/lib/discovery-memory";
 import type { EventRecord } from "@/lib/events";
 import type { MusicConnection, MusicProfileItem } from "@/lib/music";
+
+export type DiscoveryReason =
+  | {
+      kind: "spotify_artist";
+      label: string;
+      detail: {
+        field: string;
+        matchedText: string;
+        matchedTerm: string;
+        normalizedTerm: string;
+        score: number;
+        source: string;
+        sourceName: string;
+        sourceProviderItemId: string | null;
+      };
+    }
+  | {
+      kind: "simple";
+      label: string;
+    };
 
 export type DiscoveryScore = {
   bestBetsScore: number;
   bestMatchScore: number;
   eventId: string;
-  reasons: string[];
+  reasons: DiscoveryReason[];
   spotifyMatched: boolean;
 };
 
@@ -20,14 +43,24 @@ type ScoreDiscoveryEventsInput = {
   now?: Date;
   preferenceSignals?: DiscoveryPreferenceSignal[];
   profileItems?: MusicProfileItem[];
+  spotifyMatchCorrections?: SpotifyMatchCorrection[];
 };
 
 type ProfileTerm = {
+  name: string;
   normalized: string;
+  providerItemId: string | null;
+  source: string;
   weight: number;
 };
 
+type SpotifyEventField = {
+  label: string;
+  value: string;
+};
+
 const MAX_REASONS = 3;
+const MAX_SPOTIFY_SCORE = 80;
 
 export function scoreDiscoveryEvents({
   connections = [],
@@ -36,6 +69,7 @@ export function scoreDiscoveryEvents({
   now = new Date(),
   preferenceSignals = [],
   profileItems = [],
+  spotifyMatchCorrections = [],
 }: ScoreDiscoveryEventsInput): DiscoveryScoresByEvent {
   const spotifyEnabled = connections.some(
     (connection) =>
@@ -49,12 +83,16 @@ export function scoreDiscoveryEvents({
     events.map((event) => {
       const eventCounts = counts[event.id];
       const publicScore = scorePublicSignals(event, eventCounts, now);
-      const profileScore = scoreSpotifyMatch(event, profileTerms);
+      const profileScore = scoreSpotifyMatch(
+        event,
+        profileTerms,
+        spotifyMatchCorrections.filter((correction) => correction.eventId === event.id)
+      );
       const personalScore = scorePersonalSignals(event, preferenceSignals);
       const reasons = compactReasons([
         ...personalScore.reasons,
         ...publicScore.reasons,
-        ...(profileScore.score > 0 ? ["Spotify artist match"] : []),
+        ...profileScore.reasons,
       ]);
 
       return [
@@ -85,19 +123,19 @@ function scorePublicSignals(event: EventRecord, counts: CommunityCounts | undefi
   const songs = counts?.songs ?? 0;
   const voices = counts?.voices ?? 0;
   const communityScore = Math.min(42, fire * 7 + going * 5 + notes * 4 + songs * 3 + voices * 3);
-  const reasons = [];
+  const reasons: DiscoveryReason[] = [];
 
   if (hoursUntil <= 48) {
-    reasons.push("happening soon");
+    reasons.push(simpleReason("happening soon"));
   }
   if (fire > 0 || going > 1) {
-    reasons.push("high community signal");
+    reasons.push(simpleReason("high community signal"));
   }
   if (notes > 0 || songs > 0 || voices > 0) {
-    reasons.push("local context");
+    reasons.push(simpleReason("local context"));
   }
   if (reasons.length === 0 && event.tags.length > 0) {
-    reasons.push("tag match");
+    reasons.push(simpleReason("tag match"));
   }
 
   return {
@@ -129,12 +167,12 @@ function scorePersonalSignals(event: EventRecord, signals: DiscoveryPreferenceSi
   }
 
   const score = Math.max(-80, Math.min(70, positiveScore - negativeScore));
-  const reasons = [];
+  const reasons: DiscoveryReason[] = [];
 
   if (positiveScore >= 24) {
-    reasons.push("matches your recent picks");
+    reasons.push(simpleReason("matches your recent picks"));
   } else if (positiveScore >= 10) {
-    reasons.push("learned from your clicks");
+    reasons.push(simpleReason("learned from your clicks"));
   }
 
   return { reasons, score };
@@ -194,30 +232,69 @@ function getPositiveActionWeight(action: DiscoveryPreferenceSignal["action"]) {
   return 0;
 }
 
-function scoreSpotifyMatch(event: EventRecord, terms: ProfileTerm[]) {
+function scoreSpotifyMatch(
+  event: EventRecord,
+  terms: ProfileTerm[],
+  corrections: SpotifyMatchCorrection[]
+) {
   if (terms.length === 0) {
-    return { score: 0 };
+    return { reasons: [], score: 0 };
   }
 
-  const haystack = normalizeText([
-    event.artistName,
-    event.eventTitle,
-    event.venueName,
-    ...event.tags,
-  ].join(" "));
+  const fields: SpotifyEventField[] = [
+    { label: "artist", value: event.artistName },
+    { label: "title", value: event.eventTitle },
+    ...event.tags.map((tag) => ({ label: "tag", value: tag })),
+    { label: "venue", value: event.venueName },
+  ];
   let score = 0;
+  const reasons: DiscoveryReason[] = [];
 
   for (const term of terms) {
-    if (term.normalized.length >= 4 && haystack.includes(term.normalized)) {
-      score += term.weight;
+    const correction = corrections.find((candidate) => candidate.normalizedTerm === term.normalized);
+
+    if (correction?.action === "reject") {
+      continue;
+    }
+
+    const match = findSpotifyFieldMatch(fields, term.normalized);
+
+    if (!match) {
+      continue;
+    }
+
+    const contribution = Math.max(0, Math.min(term.weight, MAX_SPOTIFY_SCORE - score));
+
+    if (contribution === 0) {
+      break;
+    }
+
+    score += contribution;
+    reasons.push({
+      kind: "spotify_artist",
+      label: correction?.action === "replace" ? "corrected Spotify artist" : "Spotify artist match",
+      detail: {
+        field: match.field,
+        matchedText: match.text,
+        matchedTerm: correction?.replacementName ?? term.name,
+        normalizedTerm: term.normalized,
+        score: contribution,
+        source: correction?.action === "replace" ? "correction" : term.source,
+        sourceName: term.name,
+        sourceProviderItemId: term.providerItemId,
+      },
+    });
+
+    if (score >= MAX_SPOTIFY_SCORE) {
+      break;
     }
   }
 
-  return { score: Math.min(score, 80) };
+  return { reasons: reasons.slice(0, 1), score };
 }
 
 function buildProfileTerms(profileItems: MusicProfileItem[]) {
-  const weighted = new Map<string, number>();
+  const weighted = new Map<string, ProfileTerm>();
 
   for (const item of profileItems) {
     if (item.provider !== "spotify") {
@@ -225,32 +302,78 @@ function buildProfileTerms(profileItems: MusicProfileItem[]) {
     }
 
     if (item.itemType === "top_artist") {
-      addTerm(weighted, item.name, Math.max(18, 46 - item.rank));
+      addTerm(weighted, item.name, Math.max(18, 46 - item.rank), item);
     }
 
     if (item.itemType === "top_track") {
-      addTerm(weighted, item.name, Math.max(5, 14 - Math.floor(item.rank / 3)));
+      addTerm(weighted, item.name, Math.max(5, 14 - Math.floor(item.rank / 3)), item);
       for (const artistName of item.artistNames) {
-        addTerm(weighted, artistName, Math.max(12, 30 - Math.floor(item.rank / 2)));
+        addTerm(weighted, artistName, Math.max(12, 30 - Math.floor(item.rank / 2)), item);
       }
     }
   }
 
-  return Array.from(weighted, ([normalized, weight]) => ({ normalized, weight }));
+  return Array.from(weighted.values());
 }
 
-function addTerm(terms: Map<string, number>, value: string, weight: number) {
+function addTerm(terms: Map<string, ProfileTerm>, value: string, weight: number, item: MusicProfileItem) {
   const normalized = normalizeText(value).replace(/^the /, "");
+  const existing = terms.get(normalized);
 
   if (normalized.length < 4 || isGenericTerm(normalized)) {
     return;
   }
 
-  terms.set(normalized, Math.max(terms.get(normalized) ?? 0, weight));
+  if (!existing || weight > existing.weight) {
+    terms.set(normalized, {
+      name: value,
+      normalized,
+      providerItemId: item.itemType === "top_artist" ? item.providerItemId : null,
+      source: item.itemType,
+      weight,
+    });
+  }
 }
 
-function compactReasons(reasons: string[]) {
-  return Array.from(new Set(reasons)).slice(0, MAX_REASONS);
+function compactReasons(reasons: DiscoveryReason[]) {
+  const seen = new Set<string>();
+  const compacted: DiscoveryReason[] = [];
+
+  for (const reason of reasons) {
+    const key = reason.kind === "spotify_artist" ? `${reason.kind}:${reason.detail.normalizedTerm}` : reason.label;
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    compacted.push(reason);
+  }
+
+  return compacted.slice(0, MAX_REASONS);
+}
+
+function findSpotifyFieldMatch(fields: SpotifyEventField[], term: string) {
+  for (const field of fields) {
+    const normalizedValue = normalizeText(field.value);
+
+    if (!normalizedValue) {
+      continue;
+    }
+
+    if (normalizedValue === term || normalizedValue.includes(term)) {
+      return {
+        field: field.label,
+        text: field.value,
+      };
+    }
+  }
+
+  return null;
+}
+
+function simpleReason(label: string): DiscoveryReason {
+  return { kind: "simple", label };
 }
 
 function getHoursUntil(event: EventRecord, now: Date) {

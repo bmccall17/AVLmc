@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EventImage } from "@/components/EventImage";
 import type { CommunityCounts } from "@/lib/community";
-import type { DiscoveryScoresByEvent } from "@/lib/discovery";
+import type { DiscoveryReason, DiscoveryScore, DiscoveryScoresByEvent } from "@/lib/discovery";
 import type {
   DiscoveryEventAction,
   DiscoveryPersonEventState,
@@ -32,6 +32,28 @@ type EventActionResponse = {
   state?: DiscoveryPersonEventState;
 };
 
+type SpotifyArtistSearchResult = {
+  externalUrl: string;
+  imageUrl: string | null;
+  name: string;
+  provider: "spotify";
+  providerItemId: string;
+};
+
+type SpotifyMatchCorrectionResponse = {
+  correction?: {
+    action: "reject" | "replace";
+    eventId: string;
+    matchedTerm: string;
+    normalizedTerm: string;
+    replacementImageUrl: string | null;
+    replacementName: string | null;
+    replacementProviderItemId: string | null;
+    replacementUrl: string | null;
+  } | null;
+  error?: string;
+};
+
 export function EventBoard({
   counts,
   discoveryScores,
@@ -46,6 +68,7 @@ export function EventBoard({
   const [quickFilter, setQuickFilter] = useState<QuickFilterId | "all">("all");
   const [sortMode, setSortMode] = useState<SortMode>(hasTasteProfile ? "best-match" : "best-bets");
   const [eventCounts, setEventCounts] = useState(counts);
+  const [eventScores, setEventScores] = useState(discoveryScores);
   const [discoveryStates, setDiscoveryStates] = useState(initialDiscoveryStates);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const trackedImpressions = useRef(new Set<string>());
@@ -76,8 +99,8 @@ export function EventBoard({
       .filter((event) => (venue === "all" ? true : event.venueName === venue))
       .filter((event) => (tag === "all" ? true : event.tags.includes(tag)))
       .filter((event) => (activeQuickFilter ? activeQuickFilter.matches(event) : true))
-      .sort((a, b) => compareEvents(a, b, eventCounts, discoveryScores, sortMode));
-  }, [discoveryScores, eventCounts, query, quickFilter, sortMode, tag, venue, visibleEvents]);
+      .sort((a, b) => compareEvents(a, b, eventCounts, eventScores, sortMode));
+  }, [eventCounts, eventScores, query, quickFilter, sortMode, tag, venue, visibleEvents]);
 
   function clearFilters() {
     setQuery("");
@@ -269,7 +292,7 @@ export function EventBoard({
       ) : (
         <section className="event-grid" id="shows" aria-label="Upcoming music events">
           {filteredEvents.map((event) => {
-            const score = discoveryScores[event.id];
+            const score = eventScores[event.id];
             const reasons = score?.reasons ?? [];
             const countsForEvent = eventCounts[event.id];
             const state = discoveryStates[event.id];
@@ -298,7 +321,18 @@ export function EventBoard({
                   {reasons.length > 0 ? (
                     <div className="reason-row" aria-label="Recommendation reasons">
                       {reasons.map((reason) => (
-                        <span key={reason}>{reason}</span>
+                        <ReasonBadge
+                          event={event}
+                          key={getReasonKey(reason)}
+                          onScoreChange={(updatedScore) => {
+                            setEventScores((current) => ({
+                              ...current,
+                              [event.id]: updatedScore,
+                            }));
+                          }}
+                          reason={reason}
+                          score={score}
+                        />
                       ))}
                     </div>
                   ) : null}
@@ -369,6 +403,273 @@ export function EventBoard({
       )}
     </>
   );
+}
+
+function ReasonBadge({
+  event,
+  onScoreChange,
+  reason,
+  score,
+}: {
+  event: EventRecord;
+  onScoreChange: (score: DiscoveryScore) => void;
+  reason: DiscoveryReason;
+  score: DiscoveryScore | undefined;
+}) {
+  if (reason.kind !== "spotify_artist") {
+    return <span>{reason.label}</span>;
+  }
+
+  return (
+    <SpotifyMatchBadge
+      event={event}
+      onScoreChange={onScoreChange}
+      reason={reason}
+      score={score}
+    />
+  );
+}
+
+function SpotifyMatchBadge({
+  event,
+  onScoreChange,
+  reason,
+  score,
+}: {
+  event: EventRecord;
+  onScoreChange: (score: DiscoveryScore) => void;
+  reason: Extract<DiscoveryReason, { kind: "spotify_artist" }>;
+  score: DiscoveryScore | undefined;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState(reason.detail.matchedTerm);
+  const [artists, setArtists] = useState<SpotifyArtistSearchResult[]>([]);
+  const [pending, setPending] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function rejectMatch() {
+    setPending("reject");
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/discovery/spotify-match-correction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reject",
+          eventId: event.id,
+          matchedTerm: reason.detail.matchedTerm,
+          normalizedTerm: reason.detail.normalizedTerm,
+        }),
+      });
+      const data = (await response.json()) as SpotifyMatchCorrectionResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not remove Spotify match.");
+      }
+
+      if (score) {
+        onScoreChange(removeSpotifyReason(score, reason));
+      }
+      setIsOpen(false);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not remove Spotify match.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function searchArtists() {
+    const normalizedQuery = query.trim();
+
+    if (normalizedQuery.length < 2) {
+      setArtists([]);
+      return;
+    }
+
+    setPending("search");
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/me/spotify-artists?q=${encodeURIComponent(normalizedQuery)}`);
+      const data = (await response.json()) as { artists?: SpotifyArtistSearchResult[]; error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not search Spotify artists.");
+      }
+
+      setArtists(data.artists ?? []);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not search Spotify artists.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function replaceMatch(artist: SpotifyArtistSearchResult) {
+    setPending(artist.providerItemId);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/discovery/spotify-match-correction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "replace",
+          eventId: event.id,
+          matchedTerm: reason.detail.matchedTerm,
+          normalizedTerm: reason.detail.normalizedTerm,
+          replacement: artist,
+        }),
+      });
+      const data = (await response.json()) as SpotifyMatchCorrectionResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not correct Spotify match.");
+      }
+
+      if (score) {
+        onScoreChange(replaceSpotifyReason(score, reason, artist));
+      }
+      setIsOpen(false);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not correct Spotify match.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return (
+    <span className="spotify-match-wrap" onMouseLeave={() => setIsOpen(false)}>
+      <button
+        aria-expanded={isOpen}
+        className="reason-badge-button spotify-match-button"
+        onBlur={(event) => {
+          if (!event.currentTarget.parentElement?.contains(event.relatedTarget as Node | null)) {
+            setIsOpen(false);
+          }
+        }}
+        onClick={() => setIsOpen((current) => !current)}
+        onFocus={() => setIsOpen(true)}
+        onMouseEnter={() => setIsOpen(true)}
+        type="button"
+      >
+        {reason.label}
+      </button>
+      {isOpen ? (
+        <span
+          className="spotify-match-popover"
+          onBlur={(event) => {
+            if (!event.currentTarget.parentElement?.contains(event.relatedTarget as Node | null)) {
+              setIsOpen(false);
+            }
+          }}
+        >
+          <strong>{reason.label}</strong>
+          <span>{formatSpotifyMatchExplanation(reason)}</span>
+          <span className="spotify-match-actions">
+            <button disabled={Boolean(pending)} onClick={rejectMatch} type="button">
+              Remove match
+            </button>
+          </span>
+          <span className="spotify-artist-search">
+            <input
+              aria-label="Search Spotify artists"
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void searchArtists();
+                }
+              }}
+              placeholder="Correct artist"
+              type="search"
+              value={query}
+            />
+            <button disabled={pending === "search"} onClick={searchArtists} type="button">
+              Search
+            </button>
+          </span>
+          {artists.length > 0 ? (
+            <span className="spotify-artist-results">
+              {artists.map((artist) => (
+                <button
+                  disabled={Boolean(pending)}
+                  key={artist.providerItemId}
+                  onClick={() => replaceMatch(artist)}
+                  type="button"
+                >
+                  {artist.name}
+                </button>
+              ))}
+            </span>
+          ) : null}
+          {message ? <span className="spotify-match-message">{message}</span> : null}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function getReasonKey(reason: DiscoveryReason) {
+  return reason.kind === "spotify_artist" ? `${reason.kind}:${reason.detail.normalizedTerm}` : reason.label;
+}
+
+function removeSpotifyReason(
+  score: DiscoveryScore,
+  reason: Extract<DiscoveryReason, { kind: "spotify_artist" }>
+): DiscoveryScore {
+  const nextReasons = score.reasons.filter(
+    (candidate) =>
+      candidate.kind !== "spotify_artist" ||
+      candidate.detail.normalizedTerm !== reason.detail.normalizedTerm
+  );
+
+  return {
+    ...score,
+    bestMatchScore: Math.max(score.bestBetsScore, score.bestMatchScore - reason.detail.score),
+    reasons: nextReasons,
+    spotifyMatched: nextReasons.some((candidate) => candidate.kind === "spotify_artist"),
+  };
+}
+
+function replaceSpotifyReason(
+  score: DiscoveryScore,
+  reason: Extract<DiscoveryReason, { kind: "spotify_artist" }>,
+  artist: SpotifyArtistSearchResult
+): DiscoveryScore {
+  return {
+    ...score,
+    reasons: score.reasons.map((candidate) => {
+      if (
+        candidate.kind !== "spotify_artist" ||
+        candidate.detail.normalizedTerm !== reason.detail.normalizedTerm
+      ) {
+        return candidate;
+      }
+
+      return {
+        ...candidate,
+        label: "corrected Spotify artist",
+        detail: {
+          ...candidate.detail,
+          matchedTerm: artist.name,
+          source: "correction",
+        },
+      };
+    }),
+    spotifyMatched: true,
+  };
+}
+
+function formatSpotifyMatchExplanation(reason: Extract<DiscoveryReason, { kind: "spotify_artist" }>) {
+  const fieldText = `${reason.detail.field}: ${reason.detail.matchedText}`;
+
+  if (reason.detail.source === "correction") {
+    return `Corrected to ${reason.detail.matchedTerm}. Original Spotify term ${reason.detail.sourceName} matched because "${reason.detail.normalizedTerm}" appears in this event's ${fieldText}.`;
+  }
+
+  return `Matched your Spotify artist ${reason.detail.sourceName} because "${reason.detail.normalizedTerm}" appears in this event's ${fieldText}.`;
 }
 
 const sortLabels: Record<SortMode, string> = {

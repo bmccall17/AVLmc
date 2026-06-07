@@ -34,6 +34,19 @@ export type DiscoveryPreferenceSignal = {
   venueName: string;
 };
 
+export type SpotifyMatchCorrectionAction = "reject" | "replace";
+
+export type SpotifyMatchCorrection = {
+  action: SpotifyMatchCorrectionAction;
+  eventId: string;
+  matchedTerm: string;
+  normalizedTerm: string;
+  replacementImageUrl: string | null;
+  replacementName: string | null;
+  replacementProviderItemId: string | null;
+  replacementUrl: string | null;
+};
+
 type DiscoveryIdentityInput = {
   sessionId?: string | null;
   userId?: string | null;
@@ -59,6 +72,17 @@ type PreferenceSignalRow = {
   event_title: string;
   tags: string[] | null;
   venue_name: string | null;
+};
+
+type SpotifyMatchCorrectionRow = {
+  action: SpotifyMatchCorrectionAction;
+  event_id: string;
+  matched_term: string;
+  normalized_term: string;
+  replacement_image_url: string | null;
+  replacement_name: string | null;
+  replacement_provider_item_id: string | null;
+  replacement_url: string | null;
 };
 
 const STATE_ACTIONS = new Set<DiscoveryEventAction>(["fire", "planning", "remove", "unremove"]);
@@ -135,6 +159,130 @@ export async function listDiscoveryPreferenceSignals(
   } catch (error) {
     if (isMissingRelationError(error)) {
       return [];
+    }
+    throw error;
+  }
+}
+
+export async function listSpotifyMatchCorrections(
+  eventIds: string[],
+  identity: DiscoveryIdentityInput
+): Promise<SpotifyMatchCorrection[]> {
+  const uniqueEventIds = Array.from(new Set(eventIds));
+  const identityKeys = getIdentityKeys(identity);
+
+  if (uniqueEventIds.length === 0 || identityKeys.length === 0) {
+    return [];
+  }
+
+  try {
+    const result = await query<SpotifyMatchCorrectionRow>(
+      `
+        select
+          event_id,
+          matched_term,
+          normalized_term,
+          action,
+          replacement_provider_item_id,
+          replacement_name,
+          replacement_url,
+          replacement_image_url
+        from public.spotify_event_match_corrections
+        where event_id = any($1::text[])
+          and identity_key = any($2::text[])
+          and provider = 'spotify'
+        order by updated_at desc
+      `,
+      [uniqueEventIds, identityKeys]
+    );
+
+    return result.rows.map(mapSpotifyMatchCorrectionRow);
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function recordSpotifyMatchCorrection(input: DiscoveryIdentityInput & {
+  action: SpotifyMatchCorrectionAction;
+  event: EventRecord;
+  matchedTerm: string;
+  normalizedTerm: string;
+  replacementImageUrl?: string | null;
+  replacementName?: string | null;
+  replacementProviderItemId?: string | null;
+  replacementUrl?: string | null;
+}) {
+  const identityKey = getWriteIdentityKey(input);
+
+  if (!identityKey) {
+    return null;
+  }
+
+  try {
+    await query(
+      `
+        insert into public.spotify_event_match_corrections (
+          id,
+          event_id,
+          event_title,
+          provider,
+          matched_term,
+          normalized_term,
+          action,
+          replacement_provider_item_id,
+          replacement_name,
+          replacement_url,
+          replacement_image_url,
+          session_id,
+          user_id,
+          identity_key
+        )
+        values ($1, $2, $3, 'spotify', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        on conflict (event_id, identity_key, provider, normalized_term) do update
+          set event_title = excluded.event_title,
+            matched_term = excluded.matched_term,
+            action = excluded.action,
+            replacement_provider_item_id = excluded.replacement_provider_item_id,
+            replacement_name = excluded.replacement_name,
+            replacement_url = excluded.replacement_url,
+            replacement_image_url = excluded.replacement_image_url,
+            session_id = excluded.session_id,
+            user_id = excluded.user_id,
+            updated_at = now()
+      `,
+      [
+        randomUUID(),
+        input.event.id,
+        input.event.eventTitle,
+        input.matchedTerm,
+        input.normalizedTerm,
+        input.action,
+        input.action === "replace" ? input.replacementProviderItemId ?? null : null,
+        input.action === "replace" ? input.replacementName ?? null : null,
+        input.action === "replace" ? input.replacementUrl ?? null : null,
+        input.action === "replace" ? input.replacementImageUrl ?? null : null,
+        input.sessionId ?? "",
+        toNullableUserId(input.userId),
+        identityKey,
+      ]
+    );
+
+    return {
+      action: input.action,
+      eventId: input.event.id,
+      matchedTerm: input.matchedTerm,
+      normalizedTerm: input.normalizedTerm,
+      replacementImageUrl: input.action === "replace" ? input.replacementImageUrl ?? null : null,
+      replacementName: input.action === "replace" ? input.replacementName ?? null : null,
+      replacementProviderItemId: input.action === "replace" ? input.replacementProviderItemId ?? null : null,
+      replacementUrl: input.action === "replace" ? input.replacementUrl ?? null : null,
+    };
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      return null;
     }
     throw error;
   }
@@ -302,6 +450,19 @@ function mergeStateRows(rows: StateRow[]) {
   }
 
   return states;
+}
+
+function mapSpotifyMatchCorrectionRow(row: SpotifyMatchCorrectionRow): SpotifyMatchCorrection {
+  return {
+    action: row.action,
+    eventId: row.event_id,
+    matchedTerm: row.matched_term,
+    normalizedTerm: row.normalized_term,
+    replacementImageUrl: row.replacement_image_url,
+    replacementName: row.replacement_name,
+    replacementProviderItemId: row.replacement_provider_item_id,
+    replacementUrl: row.replacement_url,
+  };
 }
 
 function getIdentityKeys(identity: DiscoveryIdentityInput) {

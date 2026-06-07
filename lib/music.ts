@@ -38,6 +38,14 @@ export type SpotifyTrackSearchResult = {
   providerItemId: string;
 };
 
+export type SpotifyArtistSearchResult = {
+  externalUrl: string;
+  imageUrl: string | null;
+  name: string;
+  provider: "spotify";
+  providerItemId: string;
+};
+
 type MusicConnectionRow = {
   provider: MusicProvider;
   scopes: string[] | string | null;
@@ -115,6 +123,21 @@ type SpotifySearchTracksResponse = {
         spotify?: string;
       };
       id?: string;
+      name?: string;
+    } | null>;
+  };
+};
+
+type SpotifySearchArtistsResponse = {
+  artists?: {
+    items?: Array<{
+      external_urls?: {
+        spotify?: string;
+      };
+      id?: string;
+      images?: Array<{
+        url?: string;
+      }>;
       name?: string;
     } | null>;
   };
@@ -326,6 +349,53 @@ export async function searchSpotifyTracks(userId: string, queryText: string) {
         artistNames: item.artists?.map((artist) => artist.name).filter(isString) ?? [],
         externalUrl: item.external_urls.spotify,
         imageUrl: item.album?.images?.[0]?.url ?? null,
+        name: item.name,
+        provider: "spotify",
+        providerItemId: item.id,
+      },
+    ];
+  });
+}
+
+export async function searchSpotifyArtists(userId: string, queryText: string) {
+  const flags = getAuthFeatureFlags();
+  const normalizedQuery = queryText.trim().slice(0, 120);
+
+  if (!flags.spotify) {
+    throw new Error("Spotify auth is not enabled.");
+  }
+  if (normalizedQuery.length < 2) {
+    return [];
+  }
+
+  const account = await getSpotifyAccount(userId);
+  const accessToken = await getUsableSpotifyAccessToken(userId, account);
+  const url = new URL("https://api.spotify.com/v1/search");
+  url.searchParams.set("q", normalizedQuery);
+  url.searchParams.set("type", "artist");
+  url.searchParams.set("limit", "6");
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Could not search Spotify artists.");
+  }
+
+  const payload = (await response.json()) as SpotifySearchArtistsResponse;
+
+  return (payload.artists?.items ?? []).flatMap((item): SpotifyArtistSearchResult[] => {
+    if (!item?.id || !item.name || !item.external_urls?.spotify) {
+      return [];
+    }
+
+    return [
+      {
+        externalUrl: item.external_urls.spotify,
+        imageUrl: item.images?.[0]?.url ?? null,
         name: item.name,
         provider: "spotify",
         providerItemId: item.id,

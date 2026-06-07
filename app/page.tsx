@@ -10,7 +10,11 @@ import {
 import { getCommunityCountsByEvent } from "@/lib/community";
 import { getOptionalUserId } from "@/lib/current-user";
 import { scoreDiscoveryEvents } from "@/lib/discovery";
-import { listDiscoveryPreferenceSignals, listDiscoveryStates } from "@/lib/discovery-memory";
+import {
+  listDiscoveryPreferenceSignals,
+  listDiscoveryStates,
+  listSpotifyMatchCorrections,
+} from "@/lib/discovery-memory";
 import { getDateWindow, getUpcomingEvents } from "@/lib/events";
 import { formatWindow } from "@/lib/format";
 import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
@@ -42,13 +46,21 @@ export default async function HomePage() {
     cookieStore.get(ANONYMOUS_SESSION_COOKIE_NAME)?.value
   );
   const userId = await getOptionalUserId();
-  const [counts, musicConnections, musicProfileItems, discoveryStates, preferenceSignals] =
+  const [
+    counts,
+    musicConnections,
+    musicProfileItems,
+    discoveryStates,
+    preferenceSignals,
+    spotifyMatchCorrections,
+  ] =
     await Promise.all([
       getCommunityCountsByEvent(eventIds),
       userId ? listMusicConnections(userId) : Promise.resolve([]),
       userId ? listMusicProfileItems(userId) : Promise.resolve([]),
       listDiscoveryStates(eventIds, { sessionId, userId }),
       listDiscoveryPreferenceSignals({ sessionId, userId }),
+      listSpotifyMatchCorrections(eventIds, { sessionId, userId }),
     ]);
   const discoveryScores = scoreDiscoveryEvents({
     connections: musicConnections,
@@ -56,6 +68,7 @@ export default async function HomePage() {
     events,
     preferenceSignals,
     profileItems: musicProfileItems,
+    spotifyMatchCorrections,
   });
   const visibleEvents = events.filter((event) => !discoveryStates[event.id]?.removed);
   const hasTasteProfile =

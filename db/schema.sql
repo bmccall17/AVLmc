@@ -255,3 +255,28 @@ create index if not exists event_person_event_state_removed_idx
   where removed_at is not null;
 create index if not exists event_person_event_state_user_id_idx
   on public.event_person_event_state (user_id);
+
+create table if not exists public.spotify_event_match_corrections (
+  id text primary key,
+  event_id text not null,
+  event_title text not null,
+  provider text not null check (provider in ('spotify')),
+  matched_term text not null,
+  normalized_term text not null,
+  action text not null check (action in ('reject', 'replace')),
+  replacement_provider_item_id text,
+  replacement_name text,
+  replacement_url text,
+  replacement_image_url text,
+  session_id text not null,
+  user_id integer references public.users(id) on delete set null,
+  identity_key text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (event_id, identity_key, provider, normalized_term)
+);
+
+create index if not exists spotify_event_match_corrections_identity_idx
+  on public.spotify_event_match_corrections (identity_key, event_id);
+create index if not exists spotify_event_match_corrections_user_id_idx
+  on public.spotify_event_match_corrections (user_id);
