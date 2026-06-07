@@ -24,11 +24,14 @@ Updated: June 6, 2026
 ### Discovery Board
 
 - `lib/discovery.ts` scores events for anonymous Best Bets and optional Spotify-backed Best Match using public event/community signals plus normalized Spotify profile rows.
+- `lib/discovery-memory.ts` records per-person discovery state and recent interaction signals used by scoring.
 - `components/EventBoard.tsx` handles client-side search, ranked venue/tag chips, intent chips, long-tail venue/tag selects, and sorting.
 - Sort modes: Best Bets, Best Match when Spotify taste rows are available, soonest, hottest, most discussed, and venue.
 - Homepage cards show short recommendation reasons without exposing private profile item names.
+- Homepage cards can record impressions, planning, fire, remove, and AVLgo-click learning actions through `/api/discovery/event-action`.
 - Homepage cards show songs, notes, going, and fire counts.
 - The `AVLgo source` button opens AVLgo with the same Live Music rolling date window.
+- Hidden design sandbox: `/sandbox/discovery-actions`, unlinked and noindex.
 
 ### Community
 
@@ -53,6 +56,7 @@ Updated: June 6, 2026
 - Signed-in Spotify users can pause/resume Best Match, delete Spotify profile/token data, and search Spotify tracks for song recommendations.
 - Live Spotify verification completed June 6, 2026 on `https://avlmc.vercel.app/`: callback succeeds, `/api/me` returns the signed-in user and Spotify connection, and profile sync stores 20 top artists plus 20 top tracks.
 - Spotify scopes currently requested: `user-read-private`, `user-read-email`, and `user-top-read`.
+- Spotify concert-event save/write support is not treated as available in v1; the shared intent bridge stores AVLmc, Spotify-attributed, and ticket-click signals in AVLmc instead of promising true Spotify event sync.
 - Google/YouTube and Apple Music flags are reserved for later connector work and do not currently create music profiles.
 
 ### Voice Memos
@@ -78,6 +82,9 @@ The app now uses Aiven Postgres for production persistence.
 - `users`, `accounts`, `sessions`, `verification_token`: Auth.js-managed account/session data.
 - `contributions`: songs and notes with moderation `status`, anonymous `session_id`, optional `user_id`, and optional music-provider metadata for linked tracks.
 - `reactions`: anonymous session-based going/fire signals with optional `user_id`.
+- `event_intents`: shared saved/thinking-of-going intent rows keyed by event plus signed-in user or anonymous session, with source values `avlmc`, `spotify`, and `ticket_click`.
+- `event_interaction_events`: append-only per-person discovery learning stream for homepage impressions, detail opens, AVLgo clicks, planning, fire, remove, undo remove, and contribution actions.
+- `event_person_event_state`: current per-person event state for fire, planning, and removed listings.
 - `music_connections` and `music_profile_items`: optional provider connection state, `taste_opt_out_at`, and normalized taste data.
 - OAuth provider tokens are stored server-side in `accounts`; public/profile APIs must not return token values.
 - `ADMIN_PASSWORD`, `ADMIN_SESSION_TOKEN`, and `DATABASE_URL` are required in production.
@@ -90,6 +97,8 @@ Schema setup note:
 - Production auth requires the Auth.js tables and music tables from `db/schema.sql`.
 - If community tables already exist before auth is introduced, add nullable `user_id` columns and `contributions_user_id_idx` / `reactions_user_id_idx` after the Auth.js `users` table exists.
 - Personalized discovery adds `music_connections.taste_opt_out_at` and optional contribution metadata columns: `music_provider`, `music_provider_item_id`, and `music_provider_url`.
+- Shared event intent adds `event_intents` and backfills existing `going` reactions as `avlmc` source rows.
+- Personalized discovery V2 adds `event_interaction_events` and `event_person_event_state`.
 
 ## Acceptance Coverage
 
@@ -99,6 +108,7 @@ Schema setup note:
 - PRD 04: deferred for production until an object-storage path is selected.
 - PRD 05: `$0` deployment/auth decision memo in `docs/product/deployment-auth-investigation.md`, updated for Aiven.
 - Phase 5: anonymous Best Bets, Spotify-backed Best Match, ranked filters, recommendation reasons, privacy controls, and Spotify-linked song selection.
+- Phase 6: per-person learning actions, hidden card-action sandbox, removed-event memory, and account-plus-cookie discovery state.
 
 ## Known Follow-Up
 

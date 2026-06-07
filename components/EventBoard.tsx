@@ -1,22 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EventImage } from "@/components/EventImage";
 import type { CommunityCounts } from "@/lib/community";
 import type { DiscoveryScoresByEvent } from "@/lib/discovery";
+import type {
+  DiscoveryEventAction,
+  DiscoveryPersonEventState,
+  DiscoveryStateByEvent,
+} from "@/lib/discovery-memory";
 import type { EventRecord } from "@/lib/events";
 import { formatDate } from "@/lib/format";
 
 type SortMode = "best-bets" | "best-match" | "soonest" | "hottest" | "discussion" | "venue";
 type QuickFilterId = "tonight" | "weekend" | "free" | "dance" | "jazz" | "rock" | "local" | "outdoor";
+type CardAction = Extract<DiscoveryEventAction, "avlgo_click" | "fire" | "planning" | "remove">;
 
 type EventBoardProps = {
   counts: Record<string, CommunityCounts | undefined>;
   discoveryScores: DiscoveryScoresByEvent;
   events: EventRecord[];
   hasTasteProfile: boolean;
+  initialDiscoveryStates: DiscoveryStateByEvent;
   windowLabel: string;
+};
+
+type EventActionResponse = {
+  counts?: CommunityCounts;
+  error?: string;
+  state?: DiscoveryPersonEventState;
 };
 
 export function EventBoard({
@@ -24,6 +37,7 @@ export function EventBoard({
   discoveryScores,
   events,
   hasTasteProfile,
+  initialDiscoveryStates,
   windowLabel,
 }: EventBoardProps) {
   const [query, setQuery] = useState("");
@@ -31,13 +45,21 @@ export function EventBoard({
   const [tag, setTag] = useState("all");
   const [quickFilter, setQuickFilter] = useState<QuickFilterId | "all">("all");
   const [sortMode, setSortMode] = useState<SortMode>(hasTasteProfile ? "best-match" : "best-bets");
-  const rankedVenues = useMemo(() => rankValues(events.map((event) => event.venueName)).slice(0, 8), [events]);
-  const allVenues = useMemo(() => Array.from(new Set(events.map((event) => event.venueName))).sort(), [events]);
-  const rankedTags = useMemo(
-    () => rankValues(events.flatMap((event) => event.tags).filter(isUsefulTag)).slice(0, 10),
-    [events]
+  const [eventCounts, setEventCounts] = useState(counts);
+  const [discoveryStates, setDiscoveryStates] = useState(initialDiscoveryStates);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const trackedImpressions = useRef(new Set<string>());
+  const visibleEvents = useMemo(
+    () => events.filter((event) => !discoveryStates[event.id]?.removed),
+    [discoveryStates, events]
   );
-  const allTags = useMemo(() => Array.from(new Set(events.flatMap((event) => event.tags))).sort(), [events]);
+  const rankedVenues = useMemo(() => rankValues(visibleEvents.map((event) => event.venueName)).slice(0, 8), [visibleEvents]);
+  const allVenues = useMemo(() => Array.from(new Set(visibleEvents.map((event) => event.venueName))).sort(), [visibleEvents]);
+  const rankedTags = useMemo(
+    () => rankValues(visibleEvents.flatMap((event) => event.tags).filter(isUsefulTag)).slice(0, 10),
+    [visibleEvents]
+  );
+  const allTags = useMemo(() => Array.from(new Set(visibleEvents.flatMap((event) => event.tags))).sort(), [visibleEvents]);
 
   useEffect(() => {
     if (!hasTasteProfile && sortMode === "best-match") {
@@ -49,13 +71,13 @@ export function EventBoard({
     const normalizedQuery = query.trim().toLowerCase();
     const activeQuickFilter = quickFilters.find((filter) => filter.id === quickFilter);
 
-    return events
+    return visibleEvents
       .filter((event) => matchesSearch(event, normalizedQuery))
       .filter((event) => (venue === "all" ? true : event.venueName === venue))
       .filter((event) => (tag === "all" ? true : event.tags.includes(tag)))
       .filter((event) => (activeQuickFilter ? activeQuickFilter.matches(event) : true))
-      .sort((a, b) => compareEvents(a, b, counts, discoveryScores, sortMode));
-  }, [counts, discoveryScores, events, query, quickFilter, sortMode, tag, venue]);
+      .sort((a, b) => compareEvents(a, b, eventCounts, discoveryScores, sortMode));
+  }, [discoveryScores, eventCounts, query, quickFilter, sortMode, tag, venue, visibleEvents]);
 
   function clearFilters() {
     setQuery("");
@@ -63,6 +85,64 @@ export function EventBoard({
     setTag("all");
     setQuickFilter("all");
     setSortMode(hasTasteProfile ? "best-match" : "best-bets");
+  }
+
+  useEffect(() => {
+    for (const event of filteredEvents.slice(0, 12)) {
+      if (trackedImpressions.current.has(event.id)) {
+        continue;
+      }
+
+      trackedImpressions.current.add(event.id);
+      void fetch("/api/discovery/event-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "impression",
+          eventId: event.id,
+          surface: `homepage:${sortMode}:${quickFilter}`,
+        }),
+      }).catch(() => undefined);
+    }
+  }, [filteredEvents, quickFilter, sortMode]);
+
+  async function recordCardAction(event: EventRecord, action: CardAction) {
+    const pendingKey = `${event.id}:${action}`;
+    setPendingAction(pendingKey);
+
+    try {
+      const response = await fetch("/api/discovery/event-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          eventId: event.id,
+          surface: "homepage",
+        }),
+      });
+      const data = (await response.json()) as EventActionResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not save discovery action.");
+      }
+
+      if (data.counts) {
+        setEventCounts((current) => ({
+          ...current,
+          [event.id]: data.counts,
+        }));
+      }
+      if (data.state) {
+        setDiscoveryStates((current) => ({
+          ...current,
+          [event.id]: data.state,
+        }));
+      }
+    } catch {
+      // Keep cards stable if a background learning request fails.
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   return (
@@ -191,6 +271,10 @@ export function EventBoard({
           {filteredEvents.map((event) => {
             const score = discoveryScores[event.id];
             const reasons = score?.reasons ?? [];
+            const countsForEvent = eventCounts[event.id];
+            const state = discoveryStates[event.id];
+            const spotifySaves = countsForEvent?.goingSources.spotify ?? 0;
+            const ticketClicks = countsForEvent?.goingSources.ticket_click ?? 0;
 
             return (
               <article className="event-card" key={event.id}>
@@ -224,14 +308,56 @@ export function EventBoard({
                     ))}
                   </div>
                   <div className="signal-row" aria-label="Community signals">
-                    <span>{counts[event.id]?.going ?? 0} going</span>
-                    <span>{counts[event.id]?.notes ?? 0} notes</span>
-                    <span>{counts[event.id]?.songs ?? 0} songs</span>
-                    <span>{counts[event.id]?.fire ?? 0} hot</span>
+                    <span>{countsForEvent?.going ?? 0} planning</span>
+                    <span>{countsForEvent?.notes ?? 0} notes</span>
+                    <span>{countsForEvent?.songs ?? 0} songs</span>
+                    <span>{countsForEvent?.fire ?? 0} fire</span>
+                  </div>
+                  {spotifySaves > 0 || ticketClicks > 0 ? (
+                    <div className="intent-mini-row" aria-label="Saved signal sources">
+                      {spotifySaves > 0 ? <span className="spotify-source">Spotify {spotifySaves}</span> : null}
+                      {ticketClicks > 0 ? <span>Tickets {ticketClicks}</span> : null}
+                    </div>
+                  ) : null}
+                  <div className="card-learning-actions" aria-label="Personal discovery actions">
+                    <button
+                      aria-pressed={state?.planning ?? false}
+                      className={`learning-action planning ${state?.planning ? "is-active" : ""}`}
+                      disabled={pendingAction === `${event.id}:planning`}
+                      onClick={() => recordCardAction(event, "planning")}
+                      type="button"
+                    >
+                      <span>I&apos;m planning to go</span>
+                      <strong>{countsForEvent?.going ?? 0}</strong>
+                    </button>
+                    <button
+                      aria-pressed={state?.fire ?? false}
+                      className={`learning-action fire ${state?.fire ? "is-active" : ""}`}
+                      disabled={pendingAction === `${event.id}:fire`}
+                      onClick={() => recordCardAction(event, "fire")}
+                      type="button"
+                    >
+                      <span>Fire</span>
+                      <strong>{countsForEvent?.fire ?? 0}</strong>
+                    </button>
+                    <button
+                      className="learning-action remove"
+                      disabled={pendingAction === `${event.id}:remove`}
+                      onClick={() => recordCardAction(event, "remove")}
+                      type="button"
+                    >
+                      Remove
+                    </button>
                   </div>
                   <div className="card-actions">
                     <Link href={`/event/${event.id}`}>View details</Link>
-                    <a href={event.eventUrl} target="_blank">
+                    <a
+                      href={event.eventUrl}
+                      onClick={() => {
+                        void recordCardAction(event, "avlgo_click");
+                      }}
+                      target="_blank"
+                    >
                       AVLgo listing
                     </a>
                   </div>

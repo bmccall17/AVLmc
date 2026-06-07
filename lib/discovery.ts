@@ -1,4 +1,5 @@
 import type { CommunityCounts } from "@/lib/community";
+import type { DiscoveryPreferenceSignal } from "@/lib/discovery-memory";
 import type { EventRecord } from "@/lib/events";
 import type { MusicConnection, MusicProfileItem } from "@/lib/music";
 
@@ -17,6 +18,7 @@ type ScoreDiscoveryEventsInput = {
   counts: Record<string, CommunityCounts | undefined>;
   events: EventRecord[];
   now?: Date;
+  preferenceSignals?: DiscoveryPreferenceSignal[];
   profileItems?: MusicProfileItem[];
 };
 
@@ -32,6 +34,7 @@ export function scoreDiscoveryEvents({
   counts,
   events,
   now = new Date(),
+  preferenceSignals = [],
   profileItems = [],
 }: ScoreDiscoveryEventsInput): DiscoveryScoresByEvent {
   const spotifyEnabled = connections.some(
@@ -47,7 +50,9 @@ export function scoreDiscoveryEvents({
       const eventCounts = counts[event.id];
       const publicScore = scorePublicSignals(event, eventCounts, now);
       const profileScore = scoreSpotifyMatch(event, profileTerms);
+      const personalScore = scorePersonalSignals(event, preferenceSignals);
       const reasons = compactReasons([
+        ...personalScore.reasons,
         ...publicScore.reasons,
         ...(profileScore.score > 0 ? ["Spotify artist match"] : []),
       ]);
@@ -55,8 +60,8 @@ export function scoreDiscoveryEvents({
       return [
         event.id,
         {
-          bestBetsScore: publicScore.score,
-          bestMatchScore: publicScore.score + profileScore.score,
+          bestBetsScore: publicScore.score + personalScore.score,
+          bestMatchScore: publicScore.score + profileScore.score + personalScore.score,
           eventId: event.id,
           reasons,
           spotifyMatched: profileScore.score > 0,
@@ -99,6 +104,94 @@ function scorePublicSignals(event: EventRecord, counts: CommunityCounts | undefi
     reasons,
     score: timingScore + communityScore,
   };
+}
+
+function scorePersonalSignals(event: EventRecord, signals: DiscoveryPreferenceSignal[]) {
+  let positiveScore = 0;
+  let negativeScore = 0;
+
+  for (const signal of signals) {
+    const similarity = scoreSignalSimilarity(event, signal);
+
+    if (similarity === 0) {
+      continue;
+    }
+
+    if (signal.action === "remove") {
+      negativeScore += Math.min(56, similarity * 8);
+      continue;
+    }
+
+    const actionWeight = getPositiveActionWeight(signal.action);
+    if (actionWeight > 0) {
+      positiveScore += Math.min(actionWeight, similarity * actionWeight * 0.12);
+    }
+  }
+
+  const score = Math.max(-80, Math.min(70, positiveScore - negativeScore));
+  const reasons = [];
+
+  if (positiveScore >= 24) {
+    reasons.push("matches your recent picks");
+  } else if (positiveScore >= 10) {
+    reasons.push("learned from your clicks");
+  }
+
+  return { reasons, score };
+}
+
+function scoreSignalSimilarity(event: EventRecord, signal: DiscoveryPreferenceSignal) {
+  let score = 0;
+  const eventArtist = normalizeText(event.artistName);
+  const signalArtist = normalizeText(signal.artistName);
+  const eventVenue = normalizeText(event.venueName);
+  const signalVenue = normalizeText(signal.venueName);
+  const eventTitle = normalizeText(event.eventTitle);
+  const signalTitle = normalizeText(signal.eventTitle);
+
+  if (signal.eventId === event.id) {
+    score += 10;
+  }
+  if (eventArtist && signalArtist && eventArtist === signalArtist) {
+    score += 8;
+  }
+  if (eventTitle && signalTitle && eventTitle === signalTitle) {
+    score += 6;
+  }
+  if (eventVenue && signalVenue && eventVenue === signalVenue) {
+    score += 4;
+  }
+
+  const eventTags = new Set(event.tags.map(normalizeText).filter(Boolean));
+  for (const tag of signal.tags.map(normalizeText)) {
+    if (tag && eventTags.has(tag) && !isGenericTerm(tag)) {
+      score += 2;
+    }
+  }
+
+  return Math.min(score, 12);
+}
+
+function getPositiveActionWeight(action: DiscoveryPreferenceSignal["action"]) {
+  if (action === "planning") {
+    return 34;
+  }
+  if (action === "fire") {
+    return 28;
+  }
+  if (action === "song_contribution") {
+    return 26;
+  }
+  if (action === "note_contribution") {
+    return 20;
+  }
+  if (action === "avlgo_click") {
+    return 16;
+  }
+  if (action === "detail_open") {
+    return 8;
+  }
+  return 0;
 }
 
 function scoreSpotifyMatch(event: EventRecord, terms: ProfileTerm[]) {

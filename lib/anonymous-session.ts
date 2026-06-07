@@ -16,6 +16,10 @@ export function getOrCreateAnonymousSessionId(request: Request) {
   return randomUUID();
 }
 
+export function getAnonymousSessionIdFromCookieValue(value: string | undefined) {
+  return value && UUID_PATTERN.test(value) ? value : null;
+}
+
 export function setAnonymousSessionCookie(response: NextResponse, sessionId: string) {
   response.cookies.set({
     name: ANONYMOUS_SESSION_COOKIE_NAME,

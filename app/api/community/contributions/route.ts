@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createContribution, getCommunityForEvent, publicContribution } from "@/lib/community";
 import type { ContributionType } from "@/lib/community";
+import { recordDiscoveryEventAction } from "@/lib/discovery-memory";
+import { getEventById } from "@/lib/events";
 import {
   getOrCreateAnonymousSessionId,
   setAnonymousSessionCookie,
@@ -54,6 +56,16 @@ export async function POST(request: Request) {
       sessionId,
       userId,
     });
+    const event = await getEventById(input.eventId);
+    if (event) {
+      await recordDiscoveryEventAction({
+        action: input.type === "song" ? "song_contribution" : "note_contribution",
+        event,
+        sessionId,
+        source: "community-form",
+        userId,
+      });
+    }
     const community = await getCommunityForEvent(input.eventId);
 
     const response = NextResponse.json({

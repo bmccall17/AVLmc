@@ -1,10 +1,16 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { EventBoard } from "@/components/EventBoard";
 import { EventImage } from "@/components/EventImage";
 import { MusicAccountPanel } from "@/components/MusicAccountPanel";
+import {
+  ANONYMOUS_SESSION_COOKIE_NAME,
+  getAnonymousSessionIdFromCookieValue,
+} from "@/lib/anonymous-session";
 import { getCommunityCountsByEvent } from "@/lib/community";
 import { getOptionalUserId } from "@/lib/current-user";
 import { scoreDiscoveryEvents } from "@/lib/discovery";
+import { listDiscoveryPreferenceSignals, listDiscoveryStates } from "@/lib/discovery-memory";
 import { getDateWindow, getUpcomingEvents } from "@/lib/events";
 import { formatWindow } from "@/lib/format";
 import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
@@ -30,17 +36,28 @@ function buildAvlgoSourceUrl(start: Date, end: Date) {
 
 export default async function HomePage() {
   const events = await getUpcomingEvents();
-  const counts = await getCommunityCountsByEvent(events.map((event) => event.id));
+  const eventIds = events.map((event) => event.id);
+  const cookieStore = await cookies();
+  const sessionId = getAnonymousSessionIdFromCookieValue(
+    cookieStore.get(ANONYMOUS_SESSION_COOKIE_NAME)?.value
+  );
   const userId = await getOptionalUserId();
-  const [musicConnections, musicProfileItems] = userId
-    ? await Promise.all([listMusicConnections(userId), listMusicProfileItems(userId)])
-    : [[], []];
+  const [counts, musicConnections, musicProfileItems, discoveryStates, preferenceSignals] =
+    await Promise.all([
+      getCommunityCountsByEvent(eventIds),
+      userId ? listMusicConnections(userId) : Promise.resolve([]),
+      userId ? listMusicProfileItems(userId) : Promise.resolve([]),
+      listDiscoveryStates(eventIds, { sessionId, userId }),
+      listDiscoveryPreferenceSignals({ sessionId, userId }),
+    ]);
   const discoveryScores = scoreDiscoveryEvents({
     connections: musicConnections,
     counts,
     events,
+    preferenceSignals,
     profileItems: musicProfileItems,
   });
+  const visibleEvents = events.filter((event) => !discoveryStates[event.id]?.removed);
   const hasTasteProfile =
     musicProfileItems.length > 0 &&
     musicConnections.some(
@@ -51,7 +68,7 @@ export default async function HomePage() {
     );
   const { start, end } = getDateWindow();
   const avlgoSourceUrl = buildAvlgoSourceUrl(start, end);
-  const featured = events[0] ?? null;
+  const featured = visibleEvents[0] ?? null;
 
   return (
     <main className="shell">
@@ -124,8 +141,9 @@ export default async function HomePage() {
         <EventBoard
           counts={counts}
           discoveryScores={discoveryScores}
-          events={events}
+          events={visibleEvents}
           hasTasteProfile={hasTasteProfile}
+          initialDiscoveryStates={discoveryStates}
           windowLabel={formatWindow(start, end)}
         />
       )}

@@ -1,23 +1,27 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CommunityCounts,
   ContributionType,
+  EventIntentSource,
   PublicContribution,
   PublicEventCommunity,
   ReactionType,
 } from "@/lib/community";
+import type { DiscoveryPersonEventState } from "@/lib/discovery-memory";
 import type { SpotifyTrackSearchResult } from "@/lib/music";
 
 type EventSummary = {
   id: string;
   eventTitle: string;
   artistName: string;
+  eventUrl: string;
 };
 
 type CommunityPanelProps = {
   event: EventSummary;
+  initialDiscoveryState?: DiscoveryPersonEventState;
   initialCommunity: PublicEventCommunity;
   spotifySearchEnabled: boolean;
 };
@@ -29,12 +33,27 @@ type FormState = {
 
 const emptyFormState: FormState = { kind: "idle", message: "" };
 
-export function CommunityPanel({ event, initialCommunity, spotifySearchEnabled }: CommunityPanelProps) {
+type EventActionResponse = {
+  counts?: CommunityCounts;
+  error?: string;
+  state?: DiscoveryPersonEventState;
+};
+
+export function CommunityPanel({
+  event,
+  initialDiscoveryState,
+  initialCommunity,
+  spotifySearchEnabled,
+}: CommunityPanelProps) {
   const [community, setCommunity] = useState(initialCommunity);
+  const [discoveryState, setDiscoveryState] = useState(
+    initialDiscoveryState ?? emptyDiscoveryState(event.id)
+  );
   const [songState, setSongState] = useState<FormState>(emptyFormState);
   const [noteState, setNoteState] = useState<FormState>(emptyFormState);
   const [reactionState, setReactionState] = useState<FormState>(emptyFormState);
-  const [reactionPending, setReactionPending] = useState<ReactionType | null>(null);
+  const [reactionPending, setReactionPending] =
+    useState<ReactionType | EventIntentSource | "remove" | "unremove" | null>(null);
   const [songTitle, setSongTitle] = useState("");
   const [songArtist, setSongArtist] = useState(event.artistName);
   const [songUrl, setSongUrl] = useState("");
@@ -42,6 +61,7 @@ export function CommunityPanel({ event, initialCommunity, spotifySearchEnabled }
   const [spotifyResults, setSpotifyResults] = useState<SpotifyTrackSearchResult[]>([]);
   const [spotifyPending, setSpotifyPending] = useState(false);
   const [selectedSpotifyTrack, setSelectedSpotifyTrack] = useState<SpotifyTrackSearchResult | null>(null);
+  const detailTracked = useRef(false);
 
   const grouped = useMemo(
     () => ({
@@ -51,26 +71,51 @@ export function CommunityPanel({ event, initialCommunity, spotifySearchEnabled }
     [community.contributions]
   );
 
-  async function react(type: ReactionType) {
-    setReactionPending(type);
+  useEffect(() => {
+    if (detailTracked.current) {
+      return;
+    }
+
+    detailTracked.current = true;
+    void fetch("/api/discovery/event-action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "detail_open",
+        eventId: event.id,
+        surface: "detail",
+      }),
+    }).catch(() => undefined);
+  }, [event.id]);
+
+  async function react(type: ReactionType, source: EventIntentSource = "avlmc") {
+    setReactionPending(source === "avlmc" ? type : source);
 
     try {
-      const response = await fetch("/api/community/reactions", {
+      const response = await fetch("/api/discovery/event-action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: type === "fire" ? "fire" : "planning",
           eventId: event.id,
-          eventTitle: event.eventTitle,
-          type,
+          intentSource: source,
+          surface: "detail",
         }),
       });
-      const data = (await response.json()) as { counts?: CommunityCounts; error?: string };
+      const data = (await response.json()) as EventActionResponse;
 
       if (!response.ok || !data.counts) {
         throw new Error(data.error ?? "Could not save reaction.");
       }
 
       setCommunity((current) => ({ ...current, ...data.counts }));
+      if (data.state) {
+        setDiscoveryState(data.state);
+      }
+      setReactionState({
+        kind: "success",
+        message: getIntentMessage(type, source),
+      });
     } catch (error) {
       setReactionState({
         kind: "error",
@@ -79,6 +124,62 @@ export function CommunityPanel({ event, initialCommunity, spotifySearchEnabled }
     } finally {
       setReactionPending(null);
     }
+  }
+
+  async function toggleRemoved() {
+    const action = discoveryState.removed ? "unremove" : "remove";
+    setReactionPending(action);
+
+    try {
+      const response = await fetch("/api/discovery/event-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          eventId: event.id,
+          surface: "detail",
+        }),
+      });
+      const data = (await response.json()) as EventActionResponse;
+
+      if (!response.ok || !data.state) {
+        throw new Error(data.error ?? "Could not update this listing.");
+      }
+
+      setDiscoveryState(data.state);
+      if (data.counts) {
+        setCommunity((current) => ({ ...current, ...data.counts }));
+      }
+      setReactionState({
+        kind: "success",
+        message: data.state.removed ? "Removed from your homepage." : "Restored to your homepage.",
+      });
+    } catch (error) {
+      setReactionState({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Could not update this listing.",
+      });
+    } finally {
+      setReactionPending(null);
+    }
+  }
+
+  function recordTicketClick() {
+    void fetch("/api/community/ticket-intents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventId: event.id,
+        eventTitle: event.eventTitle,
+      }),
+    })
+      .then(async (response) => {
+        const data = (await response.json()) as { counts?: CommunityCounts };
+        if (response.ok && data.counts) {
+          setCommunity((current) => ({ ...current, ...data.counts }));
+        }
+      })
+      .catch(() => undefined);
   }
 
   async function submitSong(formEvent: FormEvent<HTMLFormElement>) {
@@ -221,6 +322,16 @@ export function CommunityPanel({ event, initialCommunity, spotifySearchEnabled }
         >
           {community.going} thinking of going
         </button>
+        {spotifySearchEnabled ? (
+          <button
+            className="reaction-button spotify-intent"
+            disabled={reactionPending === "spotify"}
+            onClick={() => react("going", "spotify")}
+            type="button"
+          >
+            Save via Spotify
+          </button>
+        ) : null}
         <button
           className="reaction-button hot"
           disabled={reactionPending === "fire"}
@@ -229,6 +340,27 @@ export function CommunityPanel({ event, initialCommunity, spotifySearchEnabled }
         >
           {community.fire} fire
         </button>
+        <button
+          className={`reaction-button remove ${discoveryState.removed ? "is-active" : ""}`}
+          disabled={reactionPending === "remove" || reactionPending === "unremove"}
+          onClick={toggleRemoved}
+          type="button"
+        >
+          {discoveryState.removed ? "Show on my list" : "Remove from my list"}
+        </button>
+      </div>
+
+      <div className="intent-source-row" aria-label="Saved signal sources">
+        <span>{community.goingSources.avlmc} AVLmc</span>
+        {community.goingSources.spotify > 0 ? (
+          <span className="spotify-source">{community.goingSources.spotify} Spotify</span>
+        ) : null}
+        {community.goingSources.ticket_click > 0 ? (
+          <span>{community.goingSources.ticket_click} ticket clicks</span>
+        ) : null}
+        <a className="intent-ticket-link" href={event.eventUrl} onClick={recordTicketClick} target="_blank">
+          Find tickets / source listing
+        </a>
       </div>
 
       <FormMessage state={reactionState} />
@@ -396,6 +528,31 @@ function FormMessage({ state }: { state: FormState }) {
   }
 
   return <p className={`form-message ${state.kind}`}>{state.message}</p>;
+}
+
+function emptyDiscoveryState(eventId: string): DiscoveryPersonEventState {
+  return {
+    eventId,
+    fire: false,
+    fireAt: null,
+    planning: false,
+    planningAt: null,
+    removed: false,
+    removedAt: null,
+  };
+}
+
+function getIntentMessage(type: ReactionType, source: EventIntentSource) {
+  if (type === "fire") {
+    return "Added fire.";
+  }
+  if (source === "spotify") {
+    return "Saved via Spotify signal.";
+  }
+  if (source === "ticket_click") {
+    return "Ticket interest saved.";
+  }
+  return "Thinking of going saved.";
 }
 
 function getFormValue(data: FormData, key: string) {

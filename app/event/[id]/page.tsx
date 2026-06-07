@@ -1,9 +1,16 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { CommunityPanel } from "@/components/CommunityPanel";
 import { EventImage } from "@/components/EventImage";
+import { TicketIntentLink } from "@/components/TicketIntentLink";
+import {
+  ANONYMOUS_SESSION_COOKIE_NAME,
+  getAnonymousSessionIdFromCookieValue,
+} from "@/lib/anonymous-session";
 import { getCommunityForEvent, publicContribution } from "@/lib/community";
 import { getOptionalUserId } from "@/lib/current-user";
+import { listDiscoveryStates } from "@/lib/discovery-memory";
 import { getEventById } from "@/lib/events";
 import { formatLongDate } from "@/lib/format";
 import { listMusicConnections } from "@/lib/music";
@@ -26,7 +33,14 @@ export default async function EventPage({ params }: EventPageProps) {
 
   const community = await getCommunityForEvent(event.id);
   const userId = await getOptionalUserId();
-  const musicConnections = userId ? await listMusicConnections(userId) : [];
+  const cookieStore = await cookies();
+  const sessionId = getAnonymousSessionIdFromCookieValue(
+    cookieStore.get(ANONYMOUS_SESSION_COOKIE_NAME)?.value
+  );
+  const [musicConnections, discoveryStates] = await Promise.all([
+    userId ? listMusicConnections(userId) : Promise.resolve([]),
+    listDiscoveryStates([event.id], { sessionId, userId }),
+  ]);
   const spotifySearchEnabled = musicConnections.some(
     (connection) => connection.provider === "spotify" && !connection.disconnectedAt
   );
@@ -70,9 +84,14 @@ export default async function EventPage({ params }: EventPageProps) {
               <dd>{event.source}</dd>
             </div>
           </dl>
-          <a className="primary-action" href={event.eventUrl} target="_blank">
+          <TicketIntentLink
+            className="primary-action"
+            eventId={event.id}
+            eventTitle={event.eventTitle}
+            href={event.eventUrl}
+          >
             View original AVLgo listing
-          </a>
+          </TicketIntentLink>
         </div>
       </article>
 
@@ -80,8 +99,10 @@ export default async function EventPage({ params }: EventPageProps) {
         event={{
           id: event.id,
           artistName: event.artistName,
+          eventUrl: event.eventUrl,
           eventTitle: event.eventTitle,
         }}
+        initialDiscoveryState={discoveryStates[event.id]}
         initialCommunity={publicCommunity}
         spotifySearchEnabled={spotifySearchEnabled}
       />

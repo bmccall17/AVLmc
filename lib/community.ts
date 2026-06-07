@@ -4,6 +4,7 @@ import { query } from "@/lib/db";
 export type ContributionType = "song" | "comment" | "voice";
 export type ContributionStatus = "visible" | "hidden" | "pending";
 export type ReactionType = "going" | "fire";
+export type EventIntentSource = "avlmc" | "spotify" | "ticket_click";
 
 export type Contribution = {
   id: string;
@@ -42,6 +43,7 @@ export type CommunityCounts = {
   voices: number;
   going: number;
   fire: number;
+  goingSources: Record<EventIntentSource, number>;
 };
 
 export type EventCommunity = CommunityCounts & {
@@ -82,7 +84,12 @@ type CountRow = {
   voices: number | string | null;
   going: number | string | null;
   fire: number | string | null;
+  going_avlmc?: number | string | null;
+  going_spotify?: number | string | null;
+  going_ticket_click?: number | string | null;
 };
+
+const INTENT_SOURCES = new Set<EventIntentSource>(["avlmc", "spotify", "ticket_click"]);
 
 const MAX_RECENT_CONTRIBUTIONS = 5;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
@@ -97,6 +104,10 @@ export async function getCommunityForEvent(eventId: string): Promise<EventCommun
     ...counts,
     contributions,
   };
+}
+
+export async function getCommunityCountsForEvent(eventId: string) {
+  return getCountsForEvent(eventId);
 }
 
 export async function getCommunityCountsByEvent(eventIds: string[]) {
@@ -139,32 +150,157 @@ export async function getCommunityCountsByEvent(eventIds: string[]) {
     };
   }
 
-  const reactionCounts = await query<{
-    event_id: string;
-    going: number | string;
-    fire: number | string;
-  }>(
-    `
-      select
-        event_id,
-        count(*) filter (where type = 'going')::int as going,
-        count(*) filter (where type = 'fire')::int as fire
-      from public.reactions
-      where event_id = any($1::text[])
-      group by event_id
-    `,
-    [uniqueEventIds]
-  );
+  const reactionCounts = await queryIntentCountsByEvent(uniqueEventIds);
 
   for (const row of reactionCounts.rows) {
+    if (!row.event_id || !countsByEvent[row.event_id]) {
+      continue;
+    }
+
     countsByEvent[row.event_id] = {
       ...countsByEvent[row.event_id],
-      going: toNumber(row.going),
+      ...mapReactionCountRow(row),
+    };
+  }
+
+  const fireCounts = await queryFireCountsByEvent(uniqueEventIds);
+  for (const row of fireCounts.rows) {
+    if (!countsByEvent[row.event_id]) {
+      continue;
+    }
+
+    countsByEvent[row.event_id] = {
+      ...countsByEvent[row.event_id],
       fire: toNumber(row.fire),
     };
   }
 
   return countsByEvent;
+}
+
+export async function recordEventIntent(input: {
+  eventId: string;
+  eventTitle: string;
+  source: EventIntentSource;
+  sessionId: string;
+  userId?: string | null;
+}) {
+  if (!INTENT_SOURCES.has(input.source)) {
+    throw new Error("Unsupported intent source.");
+  }
+
+  const databaseUserId = toNullableUserId(input.userId);
+  const identityKey = databaseUserId ? `user:${databaseUserId}` : `session:${input.sessionId}`;
+  const insertSql = `
+    insert into public.event_intents (
+      id,
+      event_id,
+      event_title,
+      source,
+      session_id,
+      user_id,
+      identity_key
+    )
+    values ($1, $2, $3, $4, $5, $6, $7)
+    on conflict (event_id, identity_key) do update
+      set event_title = excluded.event_title,
+        source = excluded.source,
+        session_id = excluded.session_id,
+        user_id = excluded.user_id,
+        updated_at = now()
+  `;
+  const values = [
+    randomUUID(),
+    input.eventId,
+    input.eventTitle,
+    input.source,
+    input.sessionId,
+    databaseUserId,
+    identityKey,
+  ];
+
+  try {
+    await query(insertSql, values);
+  } catch (error) {
+    if (!isMissingRelationError(error)) {
+      throw error;
+    }
+
+    if (input.source === "avlmc") {
+      await insertLegacyReaction({
+        eventId: input.eventId,
+        eventTitle: input.eventTitle,
+        sessionId: input.sessionId,
+        type: "going",
+        userId: input.userId,
+      });
+    }
+  }
+
+  return getCountsForEvent(input.eventId);
+}
+
+export async function recordTicketIntent(input: {
+  eventId: string;
+  eventTitle: string;
+  sessionId: string;
+  userId?: string | null;
+}) {
+  return recordEventIntent({ ...input, source: "ticket_click" });
+}
+
+async function queryIntentCountsByEvent(eventIds: string[]) {
+  try {
+    return await query<CountRow>(
+      `
+        select
+          event_id,
+          count(*)::int as going,
+          count(*) filter (where source = 'avlmc')::int as going_avlmc,
+          count(*) filter (where source = 'spotify')::int as going_spotify,
+          count(*) filter (where source = 'ticket_click')::int as going_ticket_click,
+          0::int as fire
+        from public.event_intents
+        where event_id = any($1::text[])
+        group by event_id
+      `,
+      [eventIds]
+    );
+  } catch (error) {
+    if (!isMissingRelationError(error)) {
+      throw error;
+    }
+
+    return query<CountRow>(
+      `
+        select
+          event_id,
+          count(*) filter (where type = 'going')::int as going,
+          count(*) filter (where type = 'going')::int as going_avlmc,
+          0::int as going_spotify,
+          0::int as going_ticket_click,
+          count(*) filter (where type = 'fire')::int as fire
+        from public.reactions
+        where event_id = any($1::text[])
+        group by event_id
+      `,
+      [eventIds]
+    );
+  }
+}
+
+async function queryFireCountsByEvent(eventIds: string[]) {
+  return query<{ event_id: string; fire: number | string }>(
+    `
+      select
+        event_id,
+        count(*) filter (where type = 'fire')::int as fire
+      from public.reactions
+      where event_id = any($1::text[])
+      group by event_id
+    `,
+    [eventIds]
+  );
 }
 
 export async function listContributions(status?: ContributionStatus) {
@@ -273,21 +409,11 @@ export async function toggleReaction(input: {
   sessionId: string;
   userId?: string | null;
 }) {
-  await query(
-    `
-      insert into public.reactions (id, event_id, event_title, type, session_id, user_id)
-      values ($1, $2, $3, $4, $5, $6)
-      on conflict (event_id, type, session_id) do nothing
-    `,
-    [
-      randomUUID(),
-      input.eventId,
-      input.eventTitle,
-      input.type,
-      input.sessionId,
-      toNullableUserId(input.userId),
-    ]
-  );
+  if (input.type === "going") {
+    return recordEventIntent({ ...input, source: "avlmc" });
+  }
+
+  await insertLegacyReaction(input);
 
   return getCountsForEvent(input.eventId);
 }
@@ -407,37 +533,57 @@ async function queryContributionInsert(sql: string, legacySql: string, values: u
 }
 
 async function getCountsForEvent(eventId: string): Promise<CommunityCounts> {
-  const result = await query<CountRow>(
-    `
-      with contribution_counts as (
+  const [contributionCounts, intentCounts, fireCounts] = await Promise.all([
+    query<CountRow>(
+      `
         select
           count(*) filter (where type = 'song')::int as songs,
           count(*) filter (where type = 'comment')::int as notes,
-          count(*) filter (where type = 'voice')::int as voices
+          count(*) filter (where type = 'voice')::int as voices,
+          0::int as going,
+          0::int as fire
         from public.contributions
         where event_id = $1
           and status = 'visible'
-      ),
-      reaction_counts as (
-        select
-          count(*) filter (where type = 'going')::int as going,
-          count(*) filter (where type = 'fire')::int as fire
-        from public.reactions
-        where event_id = $1
-      )
-      select
-        contribution_counts.songs,
-        contribution_counts.notes,
-        contribution_counts.voices,
-        reaction_counts.going,
-        reaction_counts.fire
-      from contribution_counts
-      cross join reaction_counts
-    `,
-    [eventId]
-  );
+      `,
+      [eventId]
+    ),
+    queryIntentCountsByEvent([eventId]),
+    queryFireCountsByEvent([eventId]),
+  ]);
+  const counts = {
+    ...mapCountRow(contributionCounts.rows[0]),
+    ...mapReactionCountRow(intentCounts.rows[0]),
+  };
 
-  return mapCountRow(result.rows[0]);
+  return {
+    ...counts,
+    fire: toNumber(fireCounts.rows[0]?.fire),
+  };
+}
+
+async function insertLegacyReaction(input: {
+  eventId: string;
+  eventTitle: string;
+  type: ReactionType;
+  sessionId: string;
+  userId?: string | null;
+}) {
+  await query(
+    `
+      insert into public.reactions (id, event_id, event_title, type, session_id, user_id)
+      values ($1, $2, $3, $4, $5, $6)
+      on conflict (event_id, type, session_id) do nothing
+    `,
+    [
+      randomUUID(),
+      input.eventId,
+      input.eventTitle,
+      input.type,
+      input.sessionId,
+      toNullableUserId(input.userId),
+    ]
+  );
 }
 
 async function assertRateLimit(sessionId: string) {
@@ -491,6 +637,29 @@ function mapCountRow(row: CountRow | undefined): CommunityCounts {
     voices: toNumber(row.voices),
     going: toNumber(row.going),
     fire: toNumber(row.fire),
+    goingSources: {
+      avlmc: toNumber(row.going_avlmc),
+      spotify: toNumber(row.going_spotify),
+      ticket_click: toNumber(row.going_ticket_click),
+    },
+  };
+}
+
+function mapReactionCountRow(row: CountRow | undefined): Pick<CommunityCounts, "going" | "goingSources"> {
+  if (!row) {
+    return {
+      going: 0,
+      goingSources: emptyGoingSources(),
+    };
+  }
+
+  return {
+    going: toNumber(row.going),
+    goingSources: {
+      avlmc: toNumber(row.going_avlmc),
+      spotify: toNumber(row.going_spotify),
+      ticket_click: toNumber(row.going_ticket_click),
+    },
   };
 }
 
@@ -503,6 +672,15 @@ function isMissingColumnError(error: unknown) {
   );
 }
 
+function isMissingRelationError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "42P01"
+  );
+}
+
 function emptyCounts(): CommunityCounts {
   return {
     songs: 0,
@@ -510,6 +688,15 @@ function emptyCounts(): CommunityCounts {
     voices: 0,
     going: 0,
     fire: 0,
+    goingSources: emptyGoingSources(),
+  };
+}
+
+function emptyGoingSources(): Record<EventIntentSource, number> {
+  return {
+    avlmc: 0,
+    spotify: 0,
+    ticket_click: 0,
   };
 }
 

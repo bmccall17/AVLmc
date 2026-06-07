@@ -50,6 +50,22 @@ Implemented in this pass:
 - Event detail song recommendations support Spotify track search/select while preserving manual URL submission.
 - Contribution rows can store optional provider metadata for linked tracks.
 
+## Personalized Discovery V2
+
+Goal to achieve: make Personalized Discovery feel like the app knows the person using it. The homepage should surface the most likely best bets, learn from every meaningful interaction, and let a person remove events from their listings in a way that improves future matchmaking.
+
+Implemented in this pass:
+
+- Hidden design sandbox at `/sandbox/discovery-actions` compares primary inline homepage actions with a compact icon-row treatment. The route is intentionally unlinked and noindex.
+- Homepage cards expose first-class `I'm planning to go`, `Fire`, and `Remove` controls.
+- `Remove` hides the exact event from that person's homepage and records a negative learning signal from the event artist, venue, tags, timing, and recommendation context.
+- Anonymous and signed-in personalization use a merged memory model: cookie-backed session signals continue to work without login, while signed-in users also read and write account-backed signals.
+- `event_interaction_events` stores an append-only learning stream for homepage impressions, detail opens, AVLgo clicks, planning, fire, remove, undo remove, and contribution actions.
+- `event_person_event_state` stores the current per-person fire, planning, and removed state for each event.
+- `POST /api/discovery/event-action` centralizes homepage/detail learning actions and returns updated public counts plus the person's current event state.
+- Discovery scoring now uses recent personal signals in addition to public community signals and optional Spotify taste rows. Positive interactions can boost similar shows; removed-event patterns can downrank similar future shows without hiding them automatically.
+- Direct event URLs remain accessible after removal and include a restore affordance.
+
 ## Product Direction
 
 Build personalized discovery as an optional layer over the public board, not as an account gate.
