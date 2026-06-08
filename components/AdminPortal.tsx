@@ -96,15 +96,15 @@ export function AdminPortal({
               </div>
               <div className="admin-mini-row">
                 <span>Open Graph (og:image)</span>
-                <span className="admin-badge stale">Missing</span>
+                <span className="admin-badge active">Connected</span>
               </div>
               <div className="admin-mini-row">
                 <span>Twitter Image</span>
-                <span className="admin-badge stale">Missing</span>
+                <span className="admin-badge active">Connected</span>
               </div>
               <div className="admin-mini-row highlight">
                 <span>Share Preview Validation</span>
-                <strong>Needs Action</strong>
+                <strong style={{ color: '#22c55e' }}>Valid</strong>
               </div>
             </div>
           </div>
