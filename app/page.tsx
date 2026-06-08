@@ -19,6 +19,7 @@ import {
 import { getDateWindow, getUpcomingEvents } from "@/lib/events";
 import { formatWindow } from "@/lib/format";
 import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
+import { SPOTIFY_LIMITED_BETA_CODE } from "@/lib/spotify-limited-access";
 
 function formatDateParam(date: Date) {
   return [
@@ -39,7 +40,15 @@ function buildAvlgoSourceUrl(start: Date, end: Date) {
   return url.toString();
 }
 
-export default async function HomePage() {
+type HomePageProps = {
+  searchParams?: Promise<{
+    spotify?: string;
+  }>;
+};
+
+export default async function HomePage({ searchParams }: HomePageProps) {
+  const params = await searchParams;
+  const spotifyLimitedBetaNotice = params?.spotify === SPOTIFY_LIMITED_BETA_CODE;
   const events = await getUpcomingEvents();
   const eventIds = events.map((event) => event.id);
   const cookieStore = await cookies();
@@ -83,9 +92,11 @@ export default async function HomePage() {
   const { start, end } = getDateWindow();
   const avlgoSourceUrl = buildAvlgoSourceUrl(start, end);
   const profileLabel = userId ? "Signed in listener" : "Guest listener";
-  const profileDetail = hasTasteProfile
-    ? `${musicProfileItems.length} taste signals`
-    : `${visibleEvents.length} live picks`;
+  const profileDetail = userId
+    ? hasTasteProfile
+      ? `${musicProfileItems.length} taste signals`
+      : "Manage discovery"
+    : "Connect Spotify";
 
   return (
     <main className="sandbox-shell">
@@ -114,17 +125,21 @@ export default async function HomePage() {
           <a className="sandbox-source-link" href={avlgoSourceUrl} rel="noreferrer" target="_blank">
             AVLgo source
           </a>
-          <button className="sandbox-profile" type="button">
+          <a
+            aria-label={userId ? "Manage personalized discovery" : "Connect Spotify for personalized discovery"}
+            className="sandbox-profile"
+            href="#personalized-discovery"
+          >
             <UserCircle aria-hidden="true" size={22} strokeWidth={2.2} />
             <span>
               <strong>{profileLabel}</strong>
               <small>{profileDetail}</small>
             </span>
-          </button>
+          </a>
         </div>
       </header>
 
-      <MusicAccountPanel />
+      <MusicAccountPanel spotifyLimitedBetaNotice={spotifyLimitedBetaNotice} />
 
       {events.length === 0 ? (
         <section className="empty-state">

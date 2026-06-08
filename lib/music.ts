@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { query } from "@/lib/db";
+import { SpotifyLimitedBetaAccessError } from "@/lib/spotify-limited-access";
 
 export type MusicProvider = "spotify" | "google_youtube" | "apple_music";
 export type MusicProfileItemType = "top_artist" | "top_track";
@@ -339,7 +340,7 @@ export async function searchSpotifyTracks(userId: string, queryText: string) {
   });
 
   if (!response.ok) {
-    throw new Error("Could not search Spotify tracks.");
+    await throwSpotifyApiError(response, "Could not search Spotify tracks.");
   }
 
   const payload = (await response.json()) as SpotifySearchTracksResponse;
@@ -388,7 +389,7 @@ export async function searchSpotifyArtists(userId: string, queryText: string) {
   });
 
   if (!response.ok) {
-    throw new Error("Could not search Spotify artists.");
+    await throwSpotifyApiError(response, "Could not search Spotify artists.");
   }
 
   const payload = (await response.json()) as SpotifySearchArtistsResponse;
@@ -570,10 +571,19 @@ async function fetchSpotifyTopItems<ResponseBody>(accessToken: string, type: "ar
   });
 
   if (!response.ok) {
-    throw new Error("Could not sync Spotify taste data.");
+    await throwSpotifyApiError(response, "Could not sync Spotify taste data.");
   }
 
   return (await response.json()) as ResponseBody;
+}
+
+async function throwSpotifyApiError(response: Response, fallbackMessage: string): Promise<never> {
+  if (response.status === 403) {
+    await response.text().catch(() => "");
+    throw new SpotifyLimitedBetaAccessError();
+  }
+
+  throw new Error(fallbackMessage);
 }
 
 function normalizeArtists(response: SpotifyTopArtistsResponse) {

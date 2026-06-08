@@ -27,6 +27,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
     session: {
       strategy: "database",
     },
+    pages: {
+      error: "/auth/error",
+    },
     trustHost: true,
     callbacks: {
       session({ session, user }) {

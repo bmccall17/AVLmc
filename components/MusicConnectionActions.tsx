@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { SPOTIFY_LIMITED_BETA_CODE } from "@/lib/spotify-limited-access";
 
 type ActionState = {
-  kind: "idle" | "success" | "error";
+  kind: "idle" | "success" | "notice" | "error";
   message: string;
 };
 
@@ -27,10 +28,14 @@ export function MusicConnectionActions({ tasteOptedOut }: MusicConnectionActions
         headers: { "Content-Type": "application/json" },
         method: "POST",
       });
-      const data = (await response.json()) as { error?: string };
+      const data = (await response.json()) as { code?: string; error?: string };
 
       if (!response.ok) {
-        throw new Error(data.error ?? "Could not sync Spotify.");
+        setState({
+          kind: data.code === SPOTIFY_LIMITED_BETA_CODE ? "notice" : "error",
+          message: data.error ?? "Could not sync Spotify.",
+        });
+        return;
       }
 
       setState({ kind: "success", message: "Spotify taste synced." });

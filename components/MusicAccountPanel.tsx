@@ -2,11 +2,16 @@ import { auth, signIn, signOut } from "@/auth";
 import { MusicConnectionActions } from "@/components/MusicConnectionActions";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
+import { SPOTIFY_LIMITED_BETA_MESSAGE } from "@/lib/spotify-limited-access";
 
-export async function MusicAccountPanel() {
+type MusicAccountPanelProps = {
+  spotifyLimitedBetaNotice?: boolean;
+};
+
+export async function MusicAccountPanel({ spotifyLimitedBetaNotice = false }: MusicAccountPanelProps) {
   const features = getAuthFeatureFlags();
 
-  if (!features.auth) {
+  if (!features.auth && !spotifyLimitedBetaNotice) {
     return null;
   }
 
@@ -15,13 +20,22 @@ export async function MusicAccountPanel() {
 
   if (!user?.id) {
     return (
-      <section className="music-account-panel" aria-label="Music account">
+      <section
+        className="music-account-panel"
+        id="personalized-discovery"
+        aria-label="Personalized discovery account"
+      >
         <div>
           <p className="eyebrow">Personalized discovery</p>
-          <h2>Connect your music taste</h2>
-          <p>Optional sign-in can shape future recommendations. Browsing and community posts stay open without an account.</p>
+          <h2>{spotifyLimitedBetaNotice ? "Spotify beta access is limited" : "Connect your music taste"}</h2>
+          <p>
+            Optional sign-in can shape future recommendations. Browsing and community posts stay open without an
+            account.
+          </p>
         </div>
-        {features.spotify ? (
+        {spotifyLimitedBetaNotice ? (
+          <p className="form-message notice">{SPOTIFY_LIMITED_BETA_MESSAGE}</p>
+        ) : features.spotify ? (
           <form action={connectSpotify}>
             <button className="primary-action" type="submit">
               Connect Spotify
@@ -45,7 +59,11 @@ export async function MusicAccountPanel() {
   const previewItems = profileItems.slice(0, 4);
 
   return (
-    <section className="music-account-panel" aria-label="Music account">
+    <section
+      className="music-account-panel"
+      id="personalized-discovery"
+      aria-label="Personalized discovery account"
+    >
       <div>
         <p className="eyebrow">Personalized discovery</p>
         <h2>{user.name ?? "Signed in"}</h2>
@@ -90,7 +108,7 @@ export async function MusicAccountPanel() {
 async function connectSpotify() {
   "use server";
 
-  await signIn("spotify", { redirectTo: "/" });
+  await signIn("spotify", { redirectTo: "/#personalized-discovery" });
 }
 
 async function signOutOfApp() {

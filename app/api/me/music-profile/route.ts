@@ -6,6 +6,11 @@ import {
   listMusicProfileItems,
   syncSpotifyMusicProfile,
 } from "@/lib/music";
+import {
+  SPOTIFY_LIMITED_BETA_CODE,
+  SPOTIFY_LIMITED_BETA_MESSAGE,
+  isSpotifyLimitedBetaAccessError,
+} from "@/lib/spotify-limited-access";
 
 export const runtime = "nodejs";
 
@@ -40,6 +45,16 @@ export async function POST(request: Request) {
       musicProfile: await syncSpotifyMusicProfile(userId),
     });
   } catch (error) {
+    if (isSpotifyLimitedBetaAccessError(error)) {
+      return NextResponse.json(
+        {
+          code: SPOTIFY_LIMITED_BETA_CODE,
+          error: SPOTIFY_LIMITED_BETA_MESSAGE,
+        },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not sync music profile." },
       { status: 400 }

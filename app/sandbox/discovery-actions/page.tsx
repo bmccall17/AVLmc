@@ -72,11 +72,13 @@ export default async function DiscoveryActionSandboxPage() {
       goingSelected: Boolean(discoveryStates[event.id]?.planning),
     })
   );
-  const profileLabel = userId ? `Listener ${userId}` : "Guest listener";
+  const profileLabel = userId ? "Signed in listener" : "Guest listener";
   const profileDetail =
     musicProfileItems.length > 0
       ? `${musicProfileItems.length} taste signals`
-      : `${cards.length} live picks`;
+      : userId
+        ? "Manage discovery"
+        : "Connect Spotify";
 
   return (
     <main className="sandbox-shell">
@@ -93,13 +95,17 @@ export default async function DiscoveryActionSandboxPage() {
           <a href="#beats">Beats</a>
           <a href="#cards">Cards</a>
         </nav>
-        <button className="sandbox-profile" type="button">
+        <Link
+          aria-label={userId ? "Manage personalized discovery" : "Connect Spotify for personalized discovery"}
+          className="sandbox-profile"
+          href="/#personalized-discovery"
+        >
           <UserCircle aria-hidden="true" size={22} strokeWidth={2.2} />
           <span>
             <strong>{profileLabel}</strong>
             <small>{profileDetail}</small>
           </span>
-        </button>
+        </Link>
       </header>
 
       <FreshDiscoveryExperience events={cards} />
