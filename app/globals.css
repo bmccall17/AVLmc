@@ -1067,18 +1067,11 @@ body {
   text-decoration: none;
 }
 
-.sandbox-brand span {
-  align-items: center;
-  background: #f4f4f5;
+.sandbox-brand-mark {
   border-radius: 999px;
-  color: #09090b;
-  display: inline-flex;
-  font-size: 0.72rem;
-  font-weight: 950;
   height: 34px;
-  justify-content: center;
-  letter-spacing: 0.1em;
-  width: 58px;
+  width: 34px;
+  object-fit: cover;
 }
 
 .sandbox-brand strong {

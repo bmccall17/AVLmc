@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { cookies } from "next/headers";
 import { UserCircle } from "lucide-react";
 import { EventBoard } from "@/components/EventBoard";
@@ -90,7 +91,7 @@ export default async function HomePage() {
     <main className="sandbox-shell">
       <header className="sandbox-topbar">
         <Link className="sandbox-brand" href="/">
-          <span>AVLmc</span>
+          <Image src="/icon.png" alt="AVLmc logo" width={34} height={34} className="sandbox-brand-mark" />
           <strong>Asheville Music Connection</strong>
         </Link>
         <nav className="sandbox-tabs" aria-label="Primary">
