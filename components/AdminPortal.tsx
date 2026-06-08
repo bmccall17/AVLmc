@@ -88,19 +88,27 @@ export function AdminPortal({
               </div>
               <div className="admin-mini-row">
                 <span>Favicon</span>
-                <span className="admin-badge active">Connected</span>
+                <a href="/icon.png" target="_blank" rel="noreferrer" style={{ display: 'flex', borderRadius: 4, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <Image src="/icon.png" alt="Favicon preview" width={24} height={24} style={{ objectFit: 'cover' }} />
+                </a>
               </div>
               <div className="admin-mini-row">
                 <span>App Icon</span>
-                <span className="admin-badge active">Connected</span>
+                <a href="/icon.png" target="_blank" rel="noreferrer" style={{ display: 'flex', borderRadius: 4, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <Image src="/icon.png" alt="App Icon preview" width={24} height={24} style={{ objectFit: 'cover' }} />
+                </a>
               </div>
               <div className="admin-mini-row">
                 <span>Open Graph (og:image)</span>
-                <span className="admin-badge active">Connected</span>
+                <a href="/opengraph-image.png" target="_blank" rel="noreferrer" style={{ display: 'flex', borderRadius: 4, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <Image src="/opengraph-image.png" alt="OG Image preview" width={42} height={24} style={{ objectFit: 'cover' }} />
+                </a>
               </div>
               <div className="admin-mini-row">
                 <span>Twitter Image</span>
-                <span className="admin-badge active">Connected</span>
+                <a href="/twitter-image.png" target="_blank" rel="noreferrer" style={{ display: 'flex', borderRadius: 4, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <Image src="/twitter-image.png" alt="Twitter Image preview" width={42} height={24} style={{ objectFit: 'cover' }} />
+                </a>
               </div>
               <div className="admin-mini-row highlight">
                 <span>Share Preview Validation</span>
