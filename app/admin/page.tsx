@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { AdminModeration } from "@/components/AdminModeration";
+import { AdminPortal } from "@/components/AdminPortal";
 import { ADMIN_COOKIE_NAME, isAdminSession } from "@/lib/admin";
+import { loadAdminDashboardData } from "@/lib/admin-data";
 import {
   listContributions,
   publicContribution,
@@ -22,37 +23,43 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   if (!isAuthed) {
     return (
-      <main className="shell detail-shell">
-        <Link className="back-link" href="/">
-          Back to shows
-        </Link>
-        <section className="login-panel">
-          <p className="eyebrow">Admin</p>
-          <h1>Moderation login</h1>
+      <main className="admin-login-shell">
+        <div className="admin-login-card">
+          <div className="admin-login-header">
+            <span className="admin-brand-mark">AVLmc</span>
+            <div>
+              <strong>Admin Portal</strong>
+              <small>AVL Music Companion</small>
+            </div>
+          </div>
           <form action="/api/admin/login" method="post">
             <label>
-              Admin password
-              <input name="password" required type="password" />
+              <span>Admin password</span>
+              <input name="password" required type="password" autoComplete="current-password" />
             </label>
-            <button className="primary-action" type="submit">
+            <button className="admin-login-button" type="submit">
               Log in
             </button>
           </form>
-        </section>
+          <Link className="admin-login-back" href="/">
+            ← Back to shows
+          </Link>
+        </div>
       </main>
     );
   }
 
   const params = await searchParams;
   const status = getStatus(params.status);
-  const contributions = await listContributions(status === "all" ? undefined : status);
+  const [data, contributions] = await Promise.all([
+    loadAdminDashboardData(),
+    listContributions(status === "all" ? undefined : status),
+  ]);
 
   return (
-    <main className="shell detail-shell">
-      <Link className="back-link" href="/">
-        Back to shows
-      </Link>
-      <AdminModeration
+    <main className="admin-shell">
+      <AdminPortal
+        data={data}
         contributions={contributions.map(publicContribution)}
         currentStatus={status}
       />
