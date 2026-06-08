@@ -1047,7 +1047,6 @@ body {
   margin-bottom: 34px;
 }
 
-.sandbox-brand,
 .sandbox-profile,
 .sandbox-source-link,
 .sandbox-tabs {
@@ -1061,22 +1060,29 @@ body {
   align-items: center;
   color: #fafafa;
   display: inline-flex;
-  gap: 10px;
+  gap: 12px;
   justify-self: start;
-  padding: 7px 13px 7px 7px;
   text-decoration: none;
 }
 
 .sandbox-brand-mark {
-  border-radius: 999px;
-  height: 34px;
-  width: 34px;
+  border-radius: 10px;
+  height: 42px;
+  width: 42px;
   object-fit: cover;
 }
 
 .sandbox-brand strong {
-  font-size: 0.78rem;
-  font-weight: 900;
+  display: block;
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.sandbox-brand small {
+  color: #71717a;
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 800;
 }
 
 .sandbox-tabs {

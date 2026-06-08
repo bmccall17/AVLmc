@@ -82,8 +82,11 @@ export default async function DiscoveryActionSandboxPage() {
     <main className="sandbox-shell">
       <header className="sandbox-topbar">
         <Link className="sandbox-brand" href="/">
-          <Image src="/icon.png" alt="AVLmc logo" width={34} height={34} className="sandbox-brand-mark" />
-          <strong>Asheville Music Connection</strong>
+          <Image src="/icon.png" alt="AVLmc logo" width={42} height={42} className="sandbox-brand-mark" />
+          <div>
+            <strong>AVLmc</strong>
+            <small>Asheville Music Companion</small>
+          </div>
         </Link>
         <nav className="sandbox-tabs" aria-label="Sandbox sections">
           <a href="#discover" aria-current="page">Discover</a>
