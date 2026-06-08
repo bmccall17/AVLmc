@@ -225,11 +225,17 @@ export async function disconnectMusicProvider(userId: string, provider: MusicPro
 export async function deleteMusicProviderData(userId: string, provider: MusicProvider) {
   const databaseUserId = toDatabaseUserId(userId);
 
-  await query(
+  await updateMusicConnectionWithLegacyFallback(
     `
       update public.music_connections
       set disconnected_at = now(),
         taste_opt_out_at = null
+      where user_id = $1
+        and provider = $2
+    `,
+    `
+      update public.music_connections
+      set disconnected_at = now()
       where user_id = $1
         and provider = $2
     `,
@@ -422,7 +428,6 @@ async function upsertMusicConnection(input: {
       on conflict (user_id, provider)
       do update set
         scopes = excluded.scopes,
-        taste_opt_out_at = null,
         disconnected_at = null
     `,
     [randomUUID(), toDatabaseUserId(input.userId), input.provider, input.scopes]
@@ -691,6 +696,18 @@ async function queryMusicConnections(sql: string, legacySql: string, values: unk
     }
 
     return query<MusicConnectionRow>(legacySql, values);
+  }
+}
+
+async function updateMusicConnectionWithLegacyFallback(sql: string, legacySql: string, values: unknown[]) {
+  try {
+    await query(sql, values);
+  } catch (error) {
+    if (!isMissingColumnError(error)) {
+      throw error;
+    }
+
+    await query(legacySql, values);
   }
 }
 
