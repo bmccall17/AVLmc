@@ -131,6 +131,7 @@ See [Architecture Reference](architecture-reference.md) for current routes, comp
 ## Key Risks
 
 - AVLgo API may not expose enough reliable music-event fields.
+- AVLgo images hosted on Facebook CDNs expire and break. A lightweight ingestion or proxy solution is needed in the future.
 - AVLgo may not provide auth or may not support third-party identity flows.
 - Spotify is working as the first optional music identity/taste connector, but it should not become a required account gate.
 - Apple Music auth may not work as general-purpose user identity.

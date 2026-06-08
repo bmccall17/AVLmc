@@ -4,6 +4,7 @@ import {
   getCanonicalEvents,
   type EventDuplicateAuditGroup,
 } from "@/lib/event-dedupe";
+import { ingestImageToBlob, deleteImageBlob } from "@/lib/blob-storage";
 
 export type EventRecord = {
   id: string;
@@ -177,6 +178,7 @@ export async function syncUpcomingEvents(now = new Date()): Promise<EventRecord[
   const normalized = normalizeEvents(rawEvents, now);
 
   if (shouldPersist && normalized.length > 0) {
+    await ingestImagesForEvents(normalized);
     await upsertEvents(normalized);
     return listUpcomingEventsFromDatabase(now);
   }
@@ -193,6 +195,7 @@ export async function syncUpcomingEventsWithDuplicateAudit(
   const normalized = getCanonicalEvents(normalizedCandidates).sort(compareByDateTime);
 
   if (shouldPersist && normalized.length > 0) {
+    await ingestImagesForEvents(normalized);
     await upsertEvents(normalized);
 
     const storedCandidates = await listUpcomingEventsFromDatabase(now, { dedupe: false });
@@ -216,6 +219,43 @@ export async function syncUpcomingEventsWithDuplicateAudit(
 
 export function getEmptyUpcomingEventsForPreview(): EventRecord[] {
   return [];
+}
+
+export async function cleanupOldEventImages(daysOld = 7) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - daysOld);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+  const result = await query(
+    `
+      SELECT id, image_url
+      FROM public.events
+      WHERE event_date < $1
+        AND image_url LIKE '%public.blob.vercel-storage.com%'
+    `,
+    [cutoffStr]
+  );
+
+  const deletedIds: string[] = [];
+
+  // Delete blobs in parallel, but DB updates sequentially or in a batch.
+  // We'll just do them sequentially to be safe and simple.
+  for (const row of result.rows) {
+    if (row.image_url) {
+      await deleteImageBlob(row.image_url);
+      await query(
+        `
+          UPDATE public.events
+          SET image_url = NULL
+          WHERE id = $1
+        `,
+        [row.id]
+      );
+      deletedIds.push(row.id);
+    }
+  }
+
+  return { deletedCount: deletedIds.length, deletedIds };
 }
 
 export function getAvlgoFeedSource(now = new Date()) {
@@ -317,6 +357,18 @@ async function getEventByIdFromDatabase(id: string) {
   );
 
   return result.rows[0] ? mapEventRow(result.rows[0]) : null;
+}
+
+async function ingestImagesForEvents(events: EventRecord[]) {
+  const promises = events.map(async (event) => {
+    if (event.imageUrl && event.imageUrl.includes("fbcdn.net")) {
+      const blobUrl = await ingestImageToBlob(event.imageUrl, event.id);
+      if (blobUrl) {
+        event.imageUrl = blobUrl;
+      }
+    }
+  });
+  await Promise.allSettled(promises);
 }
 
 async function upsertEvents(events: EventRecord[]) {
