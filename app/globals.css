@@ -2691,17 +2691,10 @@ button.primary-action {
 }
 
 .admin-brand-mark {
-  align-items: center;
-  background: linear-gradient(145deg, #0f8e9d, #087f8c);
   border-radius: 10px;
-  color: white;
-  display: inline-flex;
-  font-size: 0.72rem;
-  font-weight: 950;
   height: 42px;
-  justify-content: center;
-  letter-spacing: 0.1em;
-  min-width: 56px;
+  width: 42px;
+  object-fit: cover;
 }
 
 .admin-portal-brand strong {

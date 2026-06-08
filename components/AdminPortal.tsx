@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 
 import { useState } from "react";
 import type { AdminDashboardData } from "@/lib/admin-data";
@@ -42,7 +43,7 @@ export function AdminPortal({
     <div className="admin-portal">
       <header className="admin-portal-header">
         <div className="admin-portal-brand">
-          <span className="admin-brand-mark">AVLmc</span>
+          <Image src="/icon.png" alt="AVLmc logo" width={42} height={42} className="admin-brand-mark" />
           <div>
             <strong>Admin Portal</strong>
             <small>AVL Music Companion</small>
@@ -87,11 +88,11 @@ export function AdminPortal({
               </div>
               <div className="admin-mini-row">
                 <span>Favicon</span>
-                <span className="admin-badge stale">Missing</span>
+                <span className="admin-badge active">Connected</span>
               </div>
               <div className="admin-mini-row">
                 <span>App Icon</span>
-                <span className="admin-badge stale">Missing</span>
+                <span className="admin-badge active">Connected</span>
               </div>
               <div className="admin-mini-row">
                 <span>Open Graph (og:image)</span>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import Image from "next/image";
 import { AdminPortal } from "@/components/AdminPortal";
 import { ADMIN_COOKIE_NAME, isAdminSession } from "@/lib/admin";
 import { loadAdminDashboardData } from "@/lib/admin-data";
@@ -26,7 +27,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       <main className="admin-login-shell">
         <div className="admin-login-card">
           <div className="admin-login-header">
-            <span className="admin-brand-mark">AVLmc</span>
+            <Image src="/icon.png" alt="AVLmc logo" width={42} height={42} className="admin-brand-mark" />
             <div>
               <strong>Admin Portal</strong>
               <small>AVL Music Companion</small>
