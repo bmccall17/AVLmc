@@ -563,6 +563,44 @@ body {
   min-width: 0;
 }
 
+.filter-panel-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.filter-panel-head > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.filter-panel-head strong {
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.filter-panel-kicker,
+.filter-section-label,
+.filter-field > span:first-child {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.filter-section {
+  align-items: start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 86px minmax(0, 1fr);
+  min-width: 0;
+}
+
 .filter-group {
   display: flex;
   flex-wrap: wrap;
@@ -570,10 +608,15 @@ body {
   min-width: 0;
 }
 
+.filter-group-search {
+  align-items: center;
+}
+
 .filter-row span,
 .filter-chip,
 .filter-control,
-.filter-reset {
+.filter-reset,
+.filter-search-control {
   border: 1px solid #89d7df;
   border-radius: 8px;
   color: #035c68;
@@ -584,7 +627,8 @@ body {
 
 .filter-control,
 .filter-chip,
-.filter-reset {
+.filter-reset,
+.filter-search-control {
   background: white;
   min-height: 42px;
 }
@@ -600,11 +644,80 @@ body {
 .filter-chip[aria-pressed="true"] {
   background: #035c68;
   border-color: #035c68;
+  box-shadow: 0 0 0 2px rgba(3, 92, 104, 0.18);
   color: white;
 }
 
 .filter-reset {
+  align-items: center;
   cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.filter-chip-removable {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.filter-search-control {
+  align-items: center;
+  display: inline-flex;
+  flex: 1 1 220px;
+  gap: 8px;
+  max-width: 360px;
+  min-width: 180px;
+}
+
+.filter-search-control input {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  flex: 1 1 auto;
+  font: inherit;
+  font-weight: 850;
+  min-width: 0;
+  outline: 0;
+}
+
+.filter-search-control input::placeholder {
+  color: currentColor;
+  opacity: 0.62;
+}
+
+.filter-more {
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+}
+
+.filter-more summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  list-style-position: inside;
+  text-transform: uppercase;
+}
+
+.filter-more-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px);
+  margin-top: 10px;
+}
+
+.filter-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.filter-field .filter-search-control,
+.filter-field .filter-control {
+  max-width: none;
+  width: 100%;
 }
 
 .reason-row {
@@ -2359,9 +2472,16 @@ body {
   color: #a1a1aa;
 }
 
+.sandbox-shell .filter-panel-kicker,
+.sandbox-shell .filter-section-label,
+.sandbox-shell .filter-field > span:first-child {
+  color: #a1a1aa;
+}
+
 .sandbox-shell .filter-chip,
 .sandbox-shell .filter-control,
-.sandbox-shell .filter-reset {
+.sandbox-shell .filter-reset,
+.sandbox-shell .filter-search-control {
   background: rgba(39, 39, 42, 0.68);
   border-color: rgba(82, 82, 91, 0.88);
   color: #d4d4d8;
@@ -2374,7 +2494,22 @@ body {
 .sandbox-shell .filter-reset:focus-visible {
   background: #f4f4f5;
   border-color: #f4f4f5;
+  box-shadow: 0 0 0 2px rgba(244, 244, 245, 0.18);
   color: #09090b;
+}
+
+.sandbox-shell .filter-chip[aria-pressed="true"] {
+  box-shadow:
+    inset 0 0 0 1px rgba(9, 9, 11, 0.3),
+    0 0 0 2px rgba(244, 244, 245, 0.24);
+}
+
+.sandbox-shell .filter-more {
+  border-color: rgba(63, 63, 70, 0.72);
+}
+
+.sandbox-shell .filter-more summary {
+  color: #d4d4d8;
 }
 
 .sandbox-card-disclosure .card-reason-row {
@@ -2708,6 +2843,29 @@ button.primary-action {
   .hero-copy h1 {
     font-size: 2.3rem;
     line-height: 1.04;
+  }
+
+  .filter-panel-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .filter-panel-head .filter-reset {
+    align-self: flex-start;
+  }
+
+  .filter-section {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-search-control {
+    flex-basis: 100%;
+    max-width: none;
+    width: 100%;
+  }
+
+  .filter-more-grid {
+    grid-template-columns: 1fr;
   }
 
   .filter-control,

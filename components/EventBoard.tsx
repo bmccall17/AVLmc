@@ -23,7 +23,9 @@ import {
 import type { MusicConnection, MusicProfileItem } from "@/lib/music";
 
 type SortMode = "best-bets" | "best-match" | "soonest" | "hottest" | "discussion" | "venue";
-type QuickFilterId = "tonight" | "weekend" | "free" | "dance" | "jazz" | "rock" | "local" | "outdoor";
+type QuickFilterId = "tonight" | "weekend" | "free" | "dance" | "rock" | "local" | "outdoor";
+type QuickFilterCategory = "when" | "genre" | "vibe";
+type QuickFilterSelections = Record<QuickFilterCategory, QuickFilterId | "all">;
 type CardAction = Extract<DiscoveryEventAction, "avlgo_click" | "fire" | "planning" | "remove" | "unremove">;
 type ActionKind = "fire" | "going" | "remove";
 
@@ -116,9 +118,13 @@ export function EventBoard({
   windowLabel,
 }: EventBoardProps) {
   const [query, setQuery] = useState("");
-  const [venue, setVenue] = useState("all");
+  const [selectedVenues, setSelectedVenues] = useState<string[]>([]);
+  const [venueQuery, setVenueQuery] = useState("");
   const [tag, setTag] = useState("all");
-  const [quickFilter, setQuickFilter] = useState<QuickFilterId | "all">("all");
+  const [tagQuery, setTagQuery] = useState("");
+  const [quickFiltersByCategory, setQuickFiltersByCategory] = useState<QuickFilterSelections>(
+    getDefaultQuickFilters
+  );
   const [sortMode, setSortMode] = useState<SortMode>(hasTasteProfile ? "best-match" : "best-bets");
   const [eventCounts, setEventCounts] = useState(counts);
   const [eventScores, setEventScores] = useState(discoveryScores);
@@ -140,13 +146,33 @@ export function EventBoard({
     () => events.filter((event) => !discoveryStates[event.id]?.removed),
     [discoveryStates, events]
   );
-  const rankedVenues = useMemo(() => rankValues(visibleEvents.map((event) => event.venueName)).slice(0, 8), [visibleEvents]);
   const allVenues = useMemo(() => Array.from(new Set(visibleEvents.map((event) => event.venueName))).sort(), [visibleEvents]);
-  const rankedTags = useMemo(
-    () => rankValues(visibleEvents.flatMap((event) => event.tags).filter(isUsefulTag)).slice(0, 10),
+  const allTags = useMemo(
+    () => Array.from(new Set(visibleEvents.flatMap((event) => event.tags).filter(isUsefulTag))).sort(),
     [visibleEvents]
   );
-  const allTags = useMemo(() => Array.from(new Set(visibleEvents.flatMap((event) => event.tags))).sort(), [visibleEvents]);
+  const activeQuickFilters = useMemo(
+    () =>
+      quickFilterGroups.flatMap((group) => {
+        const activeId = quickFiltersByCategory[group.id];
+
+        if (activeId === "all") {
+          return [];
+        }
+
+        const filter = group.filters.find((item) => item.id === activeId);
+        return filter ? [filter] : [];
+      }),
+    [quickFiltersByCategory]
+  );
+  const defaultSortMode = hasTasteProfile ? "best-match" : "best-bets";
+  const activeFilterSurface = activeQuickFilters.map((filter) => filter.id).join("+") || "all";
+  const hasActiveFilters =
+    query.trim().length > 0 ||
+    selectedVenues.length > 0 ||
+    tag !== "all" ||
+    activeQuickFilters.length > 0 ||
+    sortMode !== defaultSortMode;
 
   useEffect(() => {
     if (!hasTasteProfile && sortMode === "best-match") {
@@ -226,22 +252,61 @@ export function EventBoard({
 
   const filteredEvents = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    const activeQuickFilter = quickFilters.find((filter) => filter.id === quickFilter);
 
     return visibleEvents
       .filter((event) => matchesSearch(event, normalizedQuery))
-      .filter((event) => (venue === "all" ? true : event.venueName === venue))
+      .filter((event) => (selectedVenues.length === 0 ? true : selectedVenues.includes(event.venueName)))
       .filter((event) => (tag === "all" ? true : event.tags.includes(tag)))
-      .filter((event) => (activeQuickFilter ? activeQuickFilter.matches(event) : true))
+      .filter((event) => activeQuickFilters.every((filter) => filter.matches(event)))
       .sort((a, b) => compareEvents(a, b, eventCounts, eventScores, sortMode));
-  }, [eventCounts, eventScores, query, quickFilter, sortMode, tag, venue, visibleEvents]);
+  }, [activeQuickFilters, eventCounts, eventScores, query, selectedVenues, sortMode, tag, visibleEvents]);
 
   function clearFilters() {
     setQuery("");
-    setVenue("all");
+    setSelectedVenues([]);
+    setVenueQuery("");
     setTag("all");
-    setQuickFilter("all");
-    setSortMode(hasTasteProfile ? "best-match" : "best-bets");
+    setTagQuery("");
+    setQuickFiltersByCategory(getDefaultQuickFilters());
+    setSortMode(defaultSortMode);
+  }
+
+  function toggleQuickFilter(category: QuickFilterCategory, filterId: QuickFilterId) {
+    setQuickFiltersByCategory((current) => ({
+      ...current,
+      [category]: current[category] === filterId ? "all" : filterId,
+    }));
+  }
+
+  function addVenueFilter(value: string) {
+    const venueName = findExactOption(allVenues, value);
+
+    if (!venueName) {
+      return;
+    }
+
+    setSelectedVenues((current) => (current.includes(venueName) ? current : [...current, venueName]));
+    setVenueQuery("");
+  }
+
+  function removeVenueFilter(venueName: string) {
+    setSelectedVenues((current) => current.filter((item) => item !== venueName));
+  }
+
+  function addTagFilter(value: string) {
+    const tagName = findExactOption(allTags, value);
+
+    if (!tagName) {
+      return;
+    }
+
+    setTag(tagName);
+    setTagQuery("");
+  }
+
+  function removeTagFilter() {
+    setTag("all");
+    setTagQuery("");
   }
 
   useEffect(() => {
@@ -257,11 +322,11 @@ export function EventBoard({
         body: JSON.stringify({
           action: "impression",
           eventId: event.id,
-          surface: `homepage:${sortMode}:${quickFilter}`,
+          surface: `homepage:${sortMode}:${activeFilterSurface}`,
         }),
       }).catch(() => undefined);
     }
-  }, [filteredEvents, quickFilter, sortMode]);
+  }, [activeFilterSurface, filteredEvents, sortMode]);
 
   function clearTooltipTimer() {
     if (tooltipTimer.current) {
@@ -421,92 +486,162 @@ export function EventBoard({
       </section>
 
       <section className="search-panel discovery-filter-panel" aria-label="Discovery controls">
-        <div className="filter-group" aria-label="Intent filters">
-          {quickFilters.map((filter) => (
-            <button
-              aria-pressed={quickFilter === filter.id}
-              className="filter-chip"
-              key={filter.id}
-              onClick={() => setQuickFilter(quickFilter === filter.id ? "all" : filter.id)}
-              type="button"
-            >
-              {filter.label}
+        <div className="filter-panel-head">
+          <div>
+            <span className="filter-panel-kicker">Filters</span>
+            <strong>
+              {filteredEvents.length} of {visibleEvents.length} showing
+            </strong>
+          </div>
+          {hasActiveFilters ? (
+            <button className="filter-reset" onClick={clearFilters} type="button">
+              <X aria-hidden="true" size={15} strokeWidth={2.6} />
+              Reset
             </button>
-          ))}
+          ) : null}
         </div>
 
-        <div className="filter-group" aria-label="Popular venue filters">
-          {rankedVenues.map((venueName) => (
-            <button
-              aria-pressed={venue === venueName}
-              className="filter-chip"
-              key={venueName}
-              onClick={() => setVenue(venue === venueName ? "all" : venueName)}
-              type="button"
-            >
-              {venueName}
-            </button>
-          ))}
-        </div>
+        {quickFilterGroups.slice(0, 2).map((group) => (
+          <div className="filter-section" key={group.id}>
+            <span className="filter-section-label">{group.label}</span>
+            <div className="filter-group" aria-label={`${group.label} filters`}>
+              {group.filters.map((filter) => (
+                <button
+                  aria-pressed={quickFiltersByCategory[group.id] === filter.id}
+                  className="filter-chip"
+                  key={filter.id}
+                  onClick={() => toggleQuickFilter(group.id, filter.id)}
+                  type="button"
+                >
+                  {filter.label}
+                </button>
+              ))}
+              {group.id === "genre" && tag !== "all" ? (
+                <button
+                  aria-label={`Remove ${tag} tag filter`}
+                  aria-pressed="true"
+                  className="filter-chip filter-chip-removable"
+                  onClick={removeTagFilter}
+                  type="button"
+                >
+                  {tag}
+                  <X aria-hidden="true" size={14} strokeWidth={2.7} />
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ))}
 
-        <div className="filter-group" aria-label="Popular tag filters">
-          {rankedTags.map((tagName) => (
-            <button
-              aria-pressed={tag === tagName}
-              className="filter-chip"
-              key={tagName}
-              onClick={() => setTag(tag === tagName ? "all" : tagName)}
-              type="button"
-            >
-              {tagName}
-            </button>
-          ))}
-        </div>
-
-        <div className="filter-row">
-          <select
-            aria-label="Filter by venue"
-            className="filter-control"
-            onChange={(event) => setVenue(event.target.value)}
-            value={venue}
-          >
-            <option value="all">All venues</option>
-            {allVenues.map((venueName) => (
-              <option key={venueName} value={venueName}>
+        <div className="filter-section">
+          <span className="filter-section-label">Venue</span>
+          <div className="filter-group filter-group-search" aria-label="Venue filters">
+            {selectedVenues.map((venueName) => (
+              <button
+                aria-label={`Remove ${venueName} venue filter`}
+                aria-pressed="true"
+                className="filter-chip filter-chip-removable"
+                key={venueName}
+                onClick={() => removeVenueFilter(venueName)}
+                type="button"
+              >
                 {venueName}
-              </option>
+                <X aria-hidden="true" size={14} strokeWidth={2.7} />
+              </button>
             ))}
-          </select>
-          <select
-            aria-label="Filter by tag"
-            className="filter-control"
-            onChange={(event) => setTag(event.target.value)}
-            value={tag}
-          >
-            <option value="all">All tags</option>
-            {allTags.map((tagName) => (
-              <option key={tagName} value={tagName}>
-                {tagName}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Sort events"
-            className="filter-control"
-            onChange={(event) => setSortMode(event.target.value as SortMode)}
-            value={sortMode}
-          >
-            <option value="best-bets">Best Bets</option>
-            {hasTasteProfile ? <option value="best-match">Best Match</option> : null}
-            <option value="soonest">Soonest first</option>
-            <option value="hottest">Hottest</option>
-            <option value="discussion">Most discussed</option>
-            <option value="venue">Venue A-Z</option>
-          </select>
-          <button className="filter-reset" onClick={clearFilters} type="button">
-            Reset
-          </button>
+            <label className="filter-search-control">
+              <Search aria-hidden="true" size={15} strokeWidth={2.5} />
+              <input
+                aria-label="Search venues"
+                list="venue-filter-options"
+                onChange={(event) => {
+                  setVenueQuery(event.target.value);
+                  addVenueFilter(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addVenueFilter(venueQuery);
+                  }
+                }}
+                placeholder="Search venues"
+                type="search"
+                value={venueQuery}
+              />
+            </label>
+            <datalist id="venue-filter-options">
+              {allVenues.map((venueName) => (
+                <option key={venueName} value={venueName} />
+              ))}
+            </datalist>
+          </div>
         </div>
+
+        <div className="filter-section">
+          <span className="filter-section-label">Vibe</span>
+          <div className="filter-group" aria-label="Vibe filters">
+            {quickFilterGroups[2].filters.map((filter) => (
+              <button
+                aria-pressed={quickFiltersByCategory.vibe === filter.id}
+                className="filter-chip"
+                key={filter.id}
+                onClick={() => toggleQuickFilter("vibe", filter.id)}
+                type="button"
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <details className="filter-more">
+          <summary>More filters</summary>
+          <div className="filter-more-grid">
+            <label className="filter-field">
+              <span>Tag</span>
+              <span className="filter-search-control">
+                <Search aria-hidden="true" size={15} strokeWidth={2.5} />
+                <input
+                  aria-label="Search tags"
+                  list="tag-filter-options"
+                  onChange={(event) => {
+                    setTagQuery(event.target.value);
+                    addTagFilter(event.target.value);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addTagFilter(tagQuery);
+                    }
+                  }}
+                  placeholder="Search tags"
+                  type="search"
+                  value={tagQuery}
+                />
+              </span>
+            </label>
+            <label className="filter-field">
+              <span>Sort</span>
+              <select
+                aria-label="Sort events"
+                className="filter-control"
+                onChange={(event) => setSortMode(event.target.value as SortMode)}
+                value={sortMode}
+              >
+                <option value="best-bets">Best Bets</option>
+                {hasTasteProfile ? <option value="best-match">Best Match</option> : null}
+                <option value="soonest">Soonest first</option>
+                <option value="hottest">Hottest</option>
+                <option value="discussion">Most discussed</option>
+                <option value="venue">Venue A-Z</option>
+              </select>
+            </label>
+            <datalist id="tag-filter-options">
+              {allTags.map((tagName) => (
+                <option key={tagName} value={tagName} />
+              ))}
+            </datalist>
+          </div>
+        </details>
       </section>
 
       <section className="toolbar" aria-label="Event list summary">
@@ -1345,20 +1480,61 @@ const sortLabels: Record<SortMode, string> = {
   venue: "Venue A-Z",
 };
 
-const quickFilters: Array<{
+type QuickFilterDefinition = {
   id: QuickFilterId;
   label: string;
   matches: (event: EventRecord) => boolean;
+};
+
+const quickFilterGroups: Array<{
+  filters: QuickFilterDefinition[];
+  id: QuickFilterCategory;
+  label: string;
 }> = [
-  { id: "tonight", label: "Tonight", matches: isTonight },
-  { id: "weekend", label: "This weekend", matches: isThisWeekend },
-  { id: "free", label: "Free", matches: (event) => eventContains(event, ["free", "no cover"]) },
-  { id: "dance", label: "Dance", matches: (event) => eventContains(event, ["dance", "dj"]) },
-  { id: "jazz", label: "Jazz", matches: (event) => eventContains(event, ["jazz"]) },
-  { id: "rock", label: "Rock", matches: (event) => eventContains(event, ["rock", "indie"]) },
-  { id: "local", label: "Local", matches: (event) => eventContains(event, ["local", "asheville"]) },
-  { id: "outdoor", label: "Outdoor", matches: (event) => eventContains(event, ["outdoor", "patio"]) },
+  {
+    filters: [
+      { id: "tonight", label: "Tonight", matches: isTonight },
+      { id: "weekend", label: "This weekend", matches: isThisWeekend },
+    ],
+    id: "when",
+    label: "When",
+  },
+  {
+    filters: [
+      { id: "dance", label: "Dance", matches: (event) => eventContains(event, ["dance", "dj"]) },
+      { id: "rock", label: "Rock", matches: (event) => eventContains(event, ["rock", "indie"]) },
+    ],
+    id: "genre",
+    label: "Genre",
+  },
+  {
+    filters: [
+      { id: "free", label: "Free", matches: (event) => eventContains(event, ["free", "no cover"]) },
+      { id: "local", label: "Local", matches: (event) => eventContains(event, ["local", "asheville"]) },
+      { id: "outdoor", label: "Outdoor", matches: (event) => eventContains(event, ["outdoor", "patio"]) },
+    ],
+    id: "vibe",
+    label: "Vibe",
+  },
 ];
+
+function getDefaultQuickFilters(): QuickFilterSelections {
+  return {
+    genre: "all",
+    vibe: "all",
+    when: "all",
+  };
+}
+
+function findExactOption(options: string[], value: string) {
+  const normalizedValue = value.trim().toLowerCase();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  return options.find((option) => option.toLowerCase() === normalizedValue) ?? null;
+}
 
 function compareEvents(
   a: EventRecord,
@@ -1441,18 +1617,6 @@ function eventContains(event: EventRecord, terms: string[]) {
     .toLowerCase();
 
   return terms.some((term) => haystack.includes(term.toLowerCase()));
-}
-
-function rankValues(values: string[]) {
-  const counts = new Map<string, number>();
-
-  for (const value of values) {
-    counts.set(value, (counts.get(value) ?? 0) + 1);
-  }
-
-  return Array.from(counts)
-    .sort(([aName, aCount], [bName, bCount]) => bCount - aCount || aName.localeCompare(bName))
-    .map(([value]) => value);
 }
 
 function isUsefulTag(tagName: string) {
