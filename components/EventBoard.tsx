@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
-import { CalendarCheck, ChevronRight, ExternalLink, Flame, Headphones, Search, X } from "lucide-react";
+import { Bell, CalendarCheck, ChevronRight, ExternalLink, Flame, Headphones, Search, Star, UserPlus, X } from "lucide-react";
 import type { CommunityCounts } from "@/lib/community";
 import { scoreDiscoveryEvents, type DiscoveryReason, type DiscoveryScore, type DiscoveryScoresByEvent } from "@/lib/discovery";
 import type {
@@ -46,6 +46,8 @@ type EventBoardProps = {
   musicProfileItems: MusicProfileItem[];
   preferenceSignals: DiscoveryPreferenceSignal[];
   spotifyMatchCorrections: SpotifyMatchCorrection[];
+  top30EventIds: string[];
+  top30SourceUrl: string;
   windowLabel: string;
 };
 
@@ -79,6 +81,7 @@ type SpotifyMatchCorrectionResponse = {
 
 const TOOLTIP_DELAY_MS = 1500;
 const SKIP_REMOVE_CONFIRM_KEY = "avlmc:homepage:skip-remove-confirm";
+const RYAN_PLAYLIST_URL = "https://open.spotify.com/playlist/4fcdaCe97lEeEMe8rOhuSM?si=BcTWAtvxQqu3kRlZDlIuBQ";
 
 const actionHelp: Record<ActionKind, { body: string; impact: string; title: string }> = {
   going: {
@@ -115,6 +118,8 @@ export function EventBoard({
   musicProfileItems,
   preferenceSignals,
   spotifyMatchCorrections,
+  top30EventIds,
+  top30SourceUrl,
   windowLabel,
 }: EventBoardProps) {
   const [query, setQuery] = useState("");
@@ -139,6 +144,7 @@ export function EventBoard({
   const [revealedEventId, setRevealedEventId] = useState<string | null>(events[0]?.id ?? null);
   const [skipConfirm, setSkipConfirm] = useState(false);
   const [skipFutureConfirm, setSkipFutureConfirm] = useState(false);
+  const top30EventIdSet = useMemo(() => new Set(top30EventIds), [top30EventIds]);
   const [toastEvent, setToastEvent] = useState<EventRecord | null>(null);
   const tooltipTimer = useRef<number | null>(null);
   const trackedImpressions = useRef(new Set<string>());
@@ -460,12 +466,12 @@ export function EventBoard({
 
   return (
     <>
-      <section className="sandbox-hero" id="discover">
+      <section className="sandbox-hero" id="for-you">
         <div className="sandbox-header">
-          <p className="eyebrow">Community pulse</p>
+          <p className="eyebrow">For You</p>
           <h1>Find the Asheville show worth talking about.</h1>
           <p className="lede">
-            A rolling {windowLabel} live music board, ranked into match cards and live social beats.
+            A rolling {windowLabel} live music board, ranked by your taste, local pulse, and curator signals.
           </p>
           <label className="sandbox-search">
             <Search aria-hidden="true" size={17} strokeWidth={2.4} />
@@ -482,8 +488,12 @@ export function EventBoard({
           counts={eventCounts}
           events={filteredEvents.slice(0, 6)}
           scores={eventScores}
+          top30EventIds={top30EventIdSet}
+          top30SourceUrl={top30SourceUrl}
         />
       </section>
+
+      <CuratorComingSoon />
 
       <section className="search-panel discovery-filter-panel" aria-label="Discovery controls">
         <div className="filter-panel-head">
@@ -684,6 +694,7 @@ export function EventBoard({
                 index={index}
                 isPending={pendingAction?.startsWith(`${event.id}:`) ?? false}
                 isRevealed={revealedEventId === event.id}
+                isTop30={top30EventIdSet.has(event.id)}
                 key={event.id}
                 onClearTooltip={clearTooltip}
                 onQueueTooltip={queueTooltip}
@@ -737,6 +748,7 @@ function DiscoveryEventCard({
   index,
   isPending,
   isRevealed,
+  isTop30,
   onClearTooltip,
   onQueueTooltip,
   onRemove,
@@ -754,6 +766,7 @@ function DiscoveryEventCard({
   index: number;
   isPending: boolean;
   isRevealed: boolean;
+  isTop30: boolean;
   onClearTooltip: () => void;
   onQueueTooltip: (eventId: string, action: ActionKind) => void;
   onRemove: (event: EventRecord) => void;
@@ -805,8 +818,16 @@ function DiscoveryEventCard({
       <EventPoster event={event} />
 
       <div className="sandbox-card-top">
-        <span>{tag}</span>
-        <strong>{match}% match</strong>
+        <div className="sandbox-card-tags">
+          <span className="sandbox-card-tag">{tag}</span>
+          {isTop30 ? (
+            <span className="sandbox-top30-badge">
+              <Star aria-hidden="true" size={12} strokeWidth={2.6} />
+              Top 30
+            </span>
+          ) : null}
+        </div>
+        <strong className="sandbox-match-pill">{match}% match</strong>
       </div>
 
       <div className="sandbox-card-body">
@@ -830,7 +851,7 @@ function DiscoveryEventCard({
           </span>
         </div>
         <div className="sandbox-card-disclosure">
-          <p className="sandbox-note">{buildNote({ counts, event, score, tag })}</p>
+          <p className="sandbox-note">{buildNote({ counts, event, isTop30, score, tag })}</p>
           {reasons.length > 0 ? (
             <div className="reason-row card-reason-row" aria-label="Recommendation reasons">
               {reasons.map((reason) => (
@@ -1100,24 +1121,38 @@ function SocialDiscoveryBeats({
   counts,
   events,
   scores,
+  top30EventIds,
+  top30SourceUrl,
 }: {
   counts: EventBoardProps["counts"];
   events: EventRecord[];
   scores: DiscoveryScoresByEvent;
+  top30EventIds: Set<string>;
+  top30SourceUrl: string;
 }) {
+  const top30Count = events.filter((event) => top30EventIds.has(event.id)).length;
+
   return (
-    <aside className="sandbox-beats" id="beats" aria-label="Social Discovery Beats">
+    <aside className="sandbox-beats" id="local-pulse" aria-label="Local Pulse">
       <div className="sandbox-beats-header">
         <span className="sandbox-beats-title">
           <Headphones aria-hidden="true" size={15} strokeWidth={2.4} />
-          <p className="eyebrow">Social Discovery Beats</p>
+          <p className="eyebrow">Local Pulse</p>
         </span>
-        <strong>{events.length} live rows</strong>
+        <strong>{top30Count > 0 ? `${top30Count} Top 30` : `${events.length} live rows`}</strong>
+      </div>
+      <div className="local-pulse-source-row">
+        <a href={top30SourceUrl} rel="noreferrer" target="_blank">
+          <Star aria-hidden="true" size={13} strokeWidth={2.6} />
+          AVLgo Top 30 seed
+        </a>
+        <span>Community planning, fire, songs, and notes keep this moving.</span>
       </div>
       <div className="sandbox-beat-list">
         {events.map((event, index) => {
           const eventCounts = counts[event.id];
           const date = parseEventDate(event);
+          const isTop30 = top30EventIds.has(event.id);
 
           return (
             <Link className="sandbox-beat-tile" href={`/event/${event.id}`} key={event.id}>
@@ -1127,7 +1162,7 @@ function SocialDiscoveryBeats({
                   <img alt="" decoding="async" loading="lazy" src={event.imageUrl} />
                 ) : null}
                 <i>{getInitials(event.artistName || event.eventTitle)}</i>
-                <em>{index === 0 || (eventCounts?.fire ?? 0) > 0 ? "HOT" : "NEW"}</em>
+                <em>{isTop30 ? "TOP 30" : index === 0 || (eventCounts?.fire ?? 0) > 0 ? "HOT" : "NEW"}</em>
               </span>
               <span className="sandbox-beat-copy">
                 <strong>{event.eventTitle}</strong>
@@ -1135,6 +1170,12 @@ function SocialDiscoveryBeats({
                   {formatWeekday(date)} {formatMonthDay(date)} · {event.venueName}
                 </small>
                 <span>
+                  {isTop30 ? (
+                    <i className="local-pulse-inline-badge">
+                      <Star aria-hidden="true" size={10} strokeWidth={2.8} />
+                      Top 30
+                    </i>
+                  ) : null}
                   {formatMatchScore(scores[event.id], index)}% match · {eventCounts?.going ?? 0} planning ·{" "}
                   {eventCounts?.fire ?? 0} fire
                 </span>
@@ -1148,20 +1189,61 @@ function SocialDiscoveryBeats({
   );
 }
 
+function CuratorComingSoon() {
+  const signupHref =
+    "mailto:?subject=AVLmc%20curator%20signup&body=I%27d%20like%20to%20be%20considered%20as%20an%20AVLmc%20curator.%0A%0AName%3A%0AMusic%20lane%3A%0ALinks%3A";
+  const recommendHref =
+    "mailto:?subject=AVLmc%20curator%20recommendation&body=I%27d%20like%20to%20recommend%20a%20curator%20for%20AVLmc.%0A%0AName%3A%0ALinks%3A%0AWhy%20they%20matter%3A";
+
+  return (
+    <section className="curator-callout" id="curators" aria-label="Curators coming soon">
+      <div className="curator-callout-copy">
+        <span className="curator-status">
+          <Bell aria-hidden="true" size={14} strokeWidth={2.6} />
+          Coming soon
+        </span>
+        <h2>Curators</h2>
+        <p>
+          Follow local tastemakers, friends, and music circles so their show signals can carry more weight in your discovery feed.
+        </p>
+      </div>
+      <div className="curator-actions">
+        <a className="curator-action is-playlist" href={RYAN_PLAYLIST_URL} rel="noreferrer" target="_blank">
+          Ryan&apos;s playlist
+          <ExternalLink aria-hidden="true" size={13} strokeWidth={2.4} />
+        </a>
+        <a className="curator-action" href={signupHref}>
+          <UserPlus aria-hidden="true" size={14} strokeWidth={2.6} />
+          Sign up
+        </a>
+        <a className="curator-action" href={recommendHref}>
+          Recommend a curator
+        </a>
+      </div>
+    </section>
+  );
+}
+
 function buildNote({
   counts,
   event,
+  isTop30,
   score,
   tag,
 }: {
   counts: CommunityCounts | undefined;
   event: EventRecord;
+  isTop30: boolean;
   score: DiscoveryScore | undefined;
   tag: string;
 }) {
   const reason = score?.reasons[0]?.label ?? `${tag.toLowerCase()} signal`;
   const notes = counts?.notes ?? 0;
   const songs = counts?.songs ?? 0;
+
+  if (isTop30) {
+    return `AVLgo Top 30 seed: ${event.artistName} is also showing up in AVLgo's popularity list.`;
+  }
 
   if (notes > 0 || songs > 0) {
     return `${reason}: ${notes} notes and ${songs} songs are already attached to this listing.`;

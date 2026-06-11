@@ -1584,6 +1584,90 @@ body {
   color: #09090b;
 }
 
+.curator-callout {
+  align-items: center;
+  background: rgba(24, 24, 27, 0.4);
+  border: 1px solid rgba(63, 63, 70, 0.72);
+  border-radius: 8px;
+  color: #fafafa;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 28px;
+  padding: 16px;
+}
+
+.curator-callout-copy {
+  min-width: 0;
+}
+
+.curator-status {
+  align-items: center;
+  color: #d9f99d;
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 950;
+  gap: 6px;
+  letter-spacing: 0.12em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.curator-callout h2 {
+  color: #fafafa;
+  font-size: 1.08rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1.1;
+  margin: 0 0 7px;
+}
+
+.curator-callout p {
+  color: #a1a1aa;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin: 0;
+  max-width: 680px;
+}
+
+.curator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.curator-action {
+  align-items: center;
+  background: rgba(39, 39, 42, 0.68);
+  border: 1px solid rgba(82, 82, 91, 0.88);
+  border-radius: 999px;
+  color: #fafafa;
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 950;
+  gap: 6px;
+  justify-content: center;
+  letter-spacing: 0.08em;
+  min-height: 38px;
+  padding: 0 12px;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.curator-action:hover,
+.curator-action:focus-visible {
+  background: #f4f4f5;
+  border-color: #f4f4f5;
+  color: #09090b;
+}
+
+.curator-action.is-playlist {
+  background: #f4f4f5;
+  color: #09090b;
+}
+
 .sandbox-hero {
   align-items: end;
   display: grid;
@@ -1689,6 +1773,41 @@ body {
 .sandbox-beat-list {
   display: grid;
   gap: 8px;
+}
+
+.local-pulse-source-row {
+  align-items: center;
+  color: #a1a1aa;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  font-weight: 800;
+  gap: 8px 10px;
+  line-height: 1.3;
+  margin: 0 0 10px;
+}
+
+.local-pulse-source-row a {
+  align-items: center;
+  background: rgba(217, 249, 157, 0.12);
+  border: 1px solid rgba(217, 249, 157, 0.28);
+  border-radius: 999px;
+  color: #ecfccb;
+  display: inline-flex;
+  font-size: 0.64rem;
+  font-weight: 950;
+  gap: 5px;
+  letter-spacing: 0.08em;
+  min-height: 28px;
+  padding: 0 9px;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.local-pulse-source-row a:hover,
+.local-pulse-source-row a:focus-visible {
+  background: #ecfccb;
+  color: #09090b;
 }
 
 .sandbox-beat-tile {
@@ -1802,6 +1921,17 @@ body {
   color: #a1a1aa;
   font-size: 0.68rem;
   font-weight: 850;
+}
+
+.local-pulse-inline-badge {
+  align-items: center;
+  color: #d9f99d;
+  display: inline-flex;
+  font-style: normal;
+  font-weight: 950;
+  gap: 4px;
+  margin-right: 6px;
+  text-transform: uppercase;
 }
 
 .sandbox-layout {
@@ -2002,14 +2132,24 @@ body {
 .sandbox-card-top {
   align-items: center;
   display: flex;
+  gap: 10px;
   inset: 14px 14px auto;
   justify-content: space-between;
   position: absolute;
   z-index: 3;
 }
 
-.sandbox-card-top span,
-.sandbox-card-top strong {
+.sandbox-card-tags {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sandbox-card-tag,
+.sandbox-match-pill,
+.sandbox-top30-badge {
   border-radius: 999px;
   font-size: 0.62rem;
   font-weight: 950;
@@ -2018,16 +2158,26 @@ body {
   text-transform: uppercase;
 }
 
-.sandbox-card-top span {
+.sandbox-card-tag {
   backdrop-filter: blur(12px);
   background: rgba(24, 24, 27, 0.48);
   border: 1px solid rgba(212, 212, 216, 0.18);
   color: #fafafa;
 }
 
-.sandbox-card-top strong {
+.sandbox-top30-badge {
+  align-items: center;
+  background: #d9f99d;
+  color: #09090b;
+  display: inline-flex;
+  gap: 5px;
+  letter-spacing: 0.08em;
+}
+
+.sandbox-match-pill {
   background: #f4f4f5;
   color: #09090b;
+  flex: 0 0 auto;
 }
 
 .sandbox-pulse {
@@ -2901,6 +3051,19 @@ button.primary-action {
     justify-content: stretch;
   }
 
+  .curator-callout {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .curator-actions {
+    justify-content: stretch;
+  }
+
+  .curator-action {
+    flex: 1 1 100%;
+  }
+
   .sandbox-source-link,
   .sandbox-profile {
     flex: 1 1 auto;
@@ -3014,6 +3177,14 @@ button.primary-action {
   .sandbox-topbar-actions,
   .sandbox-profile {
     justify-self: start;
+  }
+
+  .curator-callout {
+    grid-template-columns: 1fr;
+  }
+
+  .curator-actions {
+    justify-content: flex-start;
   }
 
   .sandbox-layout {

@@ -18,6 +18,7 @@ import {
 } from "@/lib/discovery-memory";
 import { getDateWindow, getUpcomingEvents } from "@/lib/events";
 import { formatWindow } from "@/lib/format";
+import { AVLGO_TOP_30_URL, getAvlgoTop30EventIds } from "@/lib/local-pulse";
 import { DEFAULT_LISTENER_DISCOVERY_PREFERENCES } from "@/lib/listener-preferences";
 import { getListenerDiscoveryPreferences } from "@/lib/listener-preferences-store";
 import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
@@ -76,6 +77,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     preferenceSignals,
     spotifyMatchCorrections,
     listenerPreferences,
+    avlgoTop30EventIds,
   ] =
     await Promise.all([
       getCommunityCountsByEvent(eventIds),
@@ -85,6 +87,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       listDiscoveryPreferenceSignals({ sessionId, userId }),
       listSpotifyMatchCorrections(eventIds, { sessionId, userId }),
       userId ? getListenerDiscoveryPreferences(userId) : Promise.resolve(undefined),
+      getAvlgoTop30EventIds(events),
     ]);
   const activeListenerPreferences = listenerPreferences ?? DEFAULT_LISTENER_DISCOVERY_PREFERENCES;
   const discoveryScores = scoreDiscoveryEvents({
@@ -119,22 +122,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <small>Asheville Music Companion</small>
           </div>
         </Link>
-        <nav className="sandbox-tabs" aria-label="Primary">
-          <a href="#discover" aria-current="page">Discover</a>
-          <a href="#beats">Beats</a>
-          <a href="#cards">Cards</a>
+        <nav className="sandbox-tabs" aria-label="Discovery views">
+          <a href="#for-you" aria-current="page">For You</a>
+          <a href="#local-pulse">Local Pulse</a>
+          <a href="#curators">Curators</a>
         </nav>
         <div className="sandbox-topbar-actions">
-          <a
-            className="sandbox-source-link is-playlist"
-            href="https://open.spotify.com/playlist/4fcdaCe97lEeEMe8rOhuSM?si=BcTWAtvxQqu3kRlZDlIuBQ"
-            rel="noreferrer"
-            target="_blank"
-          >
-            Ryan&apos;s playlist
+          <a className="sandbox-source-link" href={AVLGO_TOP_30_URL} rel="noreferrer" target="_blank">
+            Top 30 source
           </a>
           <a className="sandbox-source-link" href={avlgoSourceUrl} rel="noreferrer" target="_blank">
-            AVLgo source
+            AVLgo feed
           </a>
           <ListenerProfileButton
             features={features}
@@ -170,6 +168,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           musicProfileItems={musicProfileItems}
           preferenceSignals={preferenceSignals}
           spotifyMatchCorrections={spotifyMatchCorrections}
+          top30EventIds={avlgoTop30EventIds}
+          top30SourceUrl={AVLGO_TOP_30_URL}
           windowLabel={formatWindow(start, end)}
         />
       )}
