@@ -4,6 +4,13 @@ import type {
   SpotifyMatchCorrection,
 } from "@/lib/discovery-memory";
 import type { EventRecord } from "@/lib/events";
+import {
+  LISTENER_PREFERENCE_CONTROLS,
+  normalizeListenerPreferences,
+  type ListenerCustomSignal,
+  type ListenerDiscoveryPreferences,
+  type ListenerPreferenceKey,
+} from "./listener-preferences";
 import type { MusicConnection, MusicProfileItem } from "@/lib/music";
 
 export type DiscoveryReason =
@@ -29,17 +36,33 @@ export type DiscoveryReason =
 export type DiscoveryScore = {
   bestBetsScore: number;
   bestMatchScore: number;
+  components: DiscoveryScoreComponents;
   eventId: string;
+  preferenceAdjustment: number;
   reasons: DiscoveryReason[];
   spotifyMatched: boolean;
 };
 
 export type DiscoveryScoresByEvent = Record<string, DiscoveryScore>;
 
+export type DiscoveryScoreComponent = {
+  adjustment: number;
+  base: number;
+  label: string;
+  total: number;
+  weight: number;
+};
+
+export type DiscoveryScoreComponents = Record<ListenerPreferenceKey, DiscoveryScoreComponent> & {
+  customSignals: DiscoveryScoreComponent;
+  learnedBehavior: DiscoveryScoreComponent;
+};
+
 type ScoreDiscoveryEventsInput = {
   connections?: MusicConnection[];
   counts: Record<string, CommunityCounts | undefined>;
   events: EventRecord[];
+  listenerPreferences?: unknown;
   now?: Date;
   preferenceSignals?: DiscoveryPreferenceSignal[];
   profileItems?: MusicProfileItem[];
@@ -59,6 +82,16 @@ type SpotifyEventField = {
   value: string;
 };
 
+type PreferenceComponentBases = Record<ListenerPreferenceKey, number> & {
+  learnedBehavior: number;
+};
+
+type PreferenceTuningResult = {
+  adjustment: number;
+  components: DiscoveryScoreComponents;
+  customSignalScore: number;
+};
+
 const MAX_REASONS = 3;
 const MAX_SPOTIFY_SCORE = 80;
 
@@ -66,6 +99,7 @@ export function scoreDiscoveryEvents({
   connections = [],
   counts,
   events,
+  listenerPreferences,
   now = new Date(),
   preferenceSignals = [],
   profileItems = [],
@@ -78,6 +112,7 @@ export function scoreDiscoveryEvents({
       !connection.tasteOptOutAt
   );
   const profileTerms = spotifyEnabled ? buildProfileTerms(profileItems) : [];
+  const preferences = normalizeListenerPreferences(listenerPreferences);
 
   return Object.fromEntries(
     events.map((event) => {
@@ -89,18 +124,35 @@ export function scoreDiscoveryEvents({
         spotifyMatchCorrections.filter((correction) => correction.eventId === event.id)
       );
       const personalScore = scorePersonalSignals(event, preferenceSignals);
+      const componentBases = getPreferenceComponentBases({
+        counts: eventCounts,
+        event,
+        personalScore,
+        profileScore,
+        publicScore,
+      });
+      const bestBetsTuning = scorePreferenceTuning(event, preferences, componentBases, {
+        includeArtistAffinity: false,
+      });
+      const bestMatchTuning = scorePreferenceTuning(event, preferences, componentBases, {
+        includeArtistAffinity: true,
+      });
       const reasons = compactReasons([
         ...personalScore.reasons,
         ...publicScore.reasons,
         ...profileScore.reasons,
+        ...getPreferenceReasons(bestMatchTuning),
       ]);
 
       return [
         event.id,
         {
-          bestBetsScore: publicScore.score + personalScore.score,
-          bestMatchScore: publicScore.score + profileScore.score + personalScore.score,
+          bestBetsScore: publicScore.score + personalScore.score + bestBetsTuning.adjustment,
+          bestMatchScore:
+            publicScore.score + profileScore.score + personalScore.score + bestMatchTuning.adjustment,
+          components: bestMatchTuning.components,
           eventId: event.id,
+          preferenceAdjustment: bestMatchTuning.adjustment,
           reasons,
           spotifyMatched: profileScore.score > 0,
         },
@@ -123,6 +175,10 @@ function scorePublicSignals(event: EventRecord, counts: CommunityCounts | undefi
   const songs = counts?.songs ?? 0;
   const voices = counts?.voices ?? 0;
   const communityScore = Math.min(42, fire * 7 + going * 5 + notes * 4 + songs * 3 + voices * 3);
+  const localContextScore = Math.min(
+    18,
+    notes * 4 + songs * 3 + voices * 3 + (eventContainsAny(event, ["asheville", "local", "828"]) ? 6 : 0)
+  );
   const reasons: DiscoveryReason[] = [];
 
   if (hoursUntil <= 48) {
@@ -139,6 +195,11 @@ function scorePublicSignals(event: EventRecord, counts: CommunityCounts | undefi
   }
 
   return {
+    components: {
+      dateAvailability: timingScore,
+      localRelevance: localContextScore,
+      socialHeat: communityScore,
+    },
     reasons,
     score: timingScore + communityScore,
   };
@@ -147,6 +208,7 @@ function scorePublicSignals(event: EventRecord, counts: CommunityCounts | undefi
 function scorePersonalSignals(event: EventRecord, signals: DiscoveryPreferenceSignal[]) {
   let positiveScore = 0;
   let negativeScore = 0;
+  let venuePreferenceScore = 0;
 
   for (const signal of signals) {
     const similarity = scoreSignalSimilarity(event, signal);
@@ -163,6 +225,9 @@ function scorePersonalSignals(event: EventRecord, signals: DiscoveryPreferenceSi
     const actionWeight = getPositiveActionWeight(signal.action);
     if (actionWeight > 0) {
       positiveScore += Math.min(actionWeight, similarity * actionWeight * 0.12);
+      if (isSameNormalizedValue(event.venueName, signal.venueName)) {
+        venuePreferenceScore += Math.min(18, actionWeight * 0.22);
+      }
     }
   }
 
@@ -175,7 +240,198 @@ function scorePersonalSignals(event: EventRecord, signals: DiscoveryPreferenceSi
     reasons.push(simpleReason("learned from your clicks"));
   }
 
-  return { reasons, score };
+  return {
+    learnedBehaviorScore: score,
+    reasons,
+    score,
+    venuePreferenceScore: Math.min(36, venuePreferenceScore),
+  };
+}
+
+function getPreferenceComponentBases({
+  counts,
+  event,
+  personalScore,
+  profileScore,
+  publicScore,
+}: {
+  counts: CommunityCounts | undefined;
+  event: EventRecord;
+  personalScore: ReturnType<typeof scorePersonalSignals>;
+  profileScore: ReturnType<typeof scoreSpotifyMatch>;
+  publicScore: ReturnType<typeof scorePublicSignals>;
+}): PreferenceComponentBases {
+  return {
+    artistAffinity: profileScore.score,
+    dateAvailability: publicScore.components.dateAvailability,
+    freePaidPreference: eventContainsAny(event, ["free", "no cover", "suggested donation"]) ? 12 : 0,
+    genreMatch: scoreGenreMatch(event),
+    learnedBehavior: personalScore.learnedBehaviorScore,
+    localRelevance: publicScore.components.localRelevance,
+    novelty: scoreNovelty(counts, profileScore.score, personalScore.score),
+    outdoorIndoorPreference: eventContainsAny(event, ["outdoor", "outside", "patio", "indoor", "listening room"])
+      ? 12
+      : 0,
+    socialHeat: publicScore.components.socialHeat,
+    venuePreference: personalScore.venuePreferenceScore,
+  };
+}
+
+function scorePreferenceTuning(
+  event: EventRecord,
+  preferences: ListenerDiscoveryPreferences,
+  bases: PreferenceComponentBases,
+  options: { includeArtistAffinity: boolean }
+): PreferenceTuningResult {
+  let adjustment = 0;
+  const components = {} as DiscoveryScoreComponents;
+
+  for (const control of LISTENER_PREFERENCE_CONTROLS) {
+    const base = !options.includeArtistAffinity && control.key === "artistAffinity" ? 0 : bases[control.key];
+    const weight = preferences.weights[control.key];
+    const componentAdjustment = base * ((weight - 100) / 100);
+
+    adjustment += componentAdjustment;
+    components[control.key] = {
+      adjustment: roundScore(componentAdjustment),
+      base: roundScore(base),
+      label: control.label,
+      total: roundScore(base + componentAdjustment),
+      weight,
+    };
+  }
+
+  const customSignalScore = scoreCustomSignals(event, preferences.customSignals);
+  adjustment += customSignalScore;
+  components.customSignals = {
+    adjustment: roundScore(customSignalScore),
+    base: 0,
+    label: "Custom signals",
+    total: roundScore(customSignalScore),
+    weight: 100,
+  };
+  components.learnedBehavior = {
+    adjustment: 0,
+    base: roundScore(bases.learnedBehavior),
+    label: "Learned behavior",
+    total: roundScore(bases.learnedBehavior),
+    weight: 100,
+  };
+
+  return {
+    adjustment: roundScore(adjustment),
+    components,
+    customSignalScore: roundScore(customSignalScore),
+  };
+}
+
+function getPreferenceReasons(tuning: PreferenceTuningResult): DiscoveryReason[] {
+  if (tuning.customSignalScore >= 8) {
+    return [simpleReason("matches your tuned preferences")];
+  }
+  if (tuning.customSignalScore <= -8) {
+    return [simpleReason("lowered by your tuned preferences")];
+  }
+  if (tuning.adjustment >= 18) {
+    return [simpleReason("boosted by your listener dials")];
+  }
+  if (tuning.adjustment <= -18) {
+    return [simpleReason("dialed down for you")];
+  }
+
+  return [];
+}
+
+function scoreGenreMatch(event: EventRecord) {
+  const usefulTagCount = event.tags.filter((tag) => !isGenericTerm(normalizeText(tag))).length;
+  const genreTerms = [
+    "americana",
+    "bluegrass",
+    "country",
+    "dance",
+    "dj",
+    "folk",
+    "funk",
+    "hip hop",
+    "indie",
+    "jazz",
+    "metal",
+    "punk",
+    "r b",
+    "rock",
+    "soul",
+  ];
+  const genreTermScore = genreTerms.some((term) => getEventHaystack(event).includes(term)) ? 8 : 0;
+
+  return Math.min(24, usefulTagCount * 6 + genreTermScore);
+}
+
+function scoreNovelty(
+  counts: CommunityCounts | undefined,
+  profileScore: number,
+  personalScore: number
+) {
+  const socialTotal =
+    (counts?.fire ?? 0) +
+    (counts?.going ?? 0) +
+    (counts?.notes ?? 0) +
+    (counts?.songs ?? 0) +
+    (counts?.voices ?? 0);
+
+  if (socialTotal > 2 || profileScore > 0 || personalScore > 10) {
+    return 0;
+  }
+
+  return 12;
+}
+
+function scoreCustomSignals(event: EventRecord, signals: ListenerCustomSignal[]) {
+  return signals.reduce((total, signal) => {
+    const matchStrength = getCustomSignalMatchStrength(event, signal);
+
+    if (matchStrength === 0) {
+      return total;
+    }
+
+    const contribution = signal.weight * matchStrength;
+    return total + (signal.direction === "boost" ? contribution : -contribution);
+  }, 0);
+}
+
+function getCustomSignalMatchStrength(event: EventRecord, signal: ListenerCustomSignal) {
+  const term = normalizeText(signal.label);
+
+  if (!term) {
+    return 0;
+  }
+
+  if (signal.kind === "artist") {
+    return fieldMatchStrength(event.artistName, term);
+  }
+  if (signal.kind === "venue") {
+    return fieldMatchStrength(event.venueName, term);
+  }
+  if (signal.kind === "tag") {
+    return event.tags.some((tag) => fieldMatchStrength(tag, term) > 0) ? 0.8 : 0;
+  }
+
+  return getEventHaystack(event).includes(term) ? 0.6 : 0;
+}
+
+function fieldMatchStrength(value: string, normalizedTerm: string) {
+  const normalizedValue = normalizeText(value);
+
+  if (!normalizedValue) {
+    return 0;
+  }
+  if (normalizedValue === normalizedTerm) {
+    return 1;
+  }
+  if (normalizedValue.includes(normalizedTerm) || normalizedTerm.includes(normalizedValue)) {
+    return 0.75;
+  }
+
+  return 0;
 }
 
 function scoreSignalSimilarity(event: EventRecord, signal: DiscoveryPreferenceSignal) {
@@ -392,6 +648,35 @@ function normalizeText(value: string) {
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function isSameNormalizedValue(left: string, right: string) {
+  const normalizedLeft = normalizeText(left);
+  const normalizedRight = normalizeText(right);
+
+  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
+}
+
+function eventContainsAny(event: EventRecord, terms: string[]) {
+  const haystack = getEventHaystack(event);
+  return terms.some((term) => haystack.includes(normalizeText(term)));
+}
+
+function getEventHaystack(event: EventRecord) {
+  return normalizeText(
+    [
+      event.eventTitle,
+      event.artistName,
+      event.venueName,
+      event.eventDate,
+      event.eventTime ?? "",
+      ...event.tags,
+    ].join(" ")
+  );
+}
+
+function roundScore(value: number) {
+  return Math.round(value * 10) / 10;
 }
 
 function isGenericTerm(value: string) {

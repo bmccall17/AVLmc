@@ -16,7 +16,8 @@ type MusicConnectionActionsProps = {
 export function MusicConnectionActions({ tasteOptedOut }: MusicConnectionActionsProps) {
   const router = useRouter();
   const [state, setState] = useState<ActionState>({ kind: "idle", message: "" });
-  const [pendingAction, setPendingAction] = useState<"sync" | "toggle" | "delete" | null>(null);
+  const [pendingAction, setPendingAction] =
+    useState<"sync" | "toggle" | "disconnect" | "delete" | null>(null);
 
   async function syncSpotify() {
     setPendingAction("sync");
@@ -109,6 +110,34 @@ export function MusicConnectionActions({ tasteOptedOut }: MusicConnectionActions
     }
   }
 
+  async function disconnectSpotify() {
+    setPendingAction("disconnect");
+    setState({ kind: "idle", message: "Disconnecting Spotify..." });
+
+    try {
+      const response = await fetch("/api/me/music-connections", {
+        body: JSON.stringify({ provider: "spotify" }),
+        headers: { "Content-Type": "application/json" },
+        method: "DELETE",
+      });
+      const data = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not disconnect Spotify.");
+      }
+
+      setState({ kind: "success", message: "Spotify disconnected." });
+      router.refresh();
+    } catch (error) {
+      setState({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Could not disconnect Spotify.",
+      });
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
   return (
     <div className="music-actions">
       <button disabled={pendingAction === "sync"} onClick={syncSpotify} type="button">
@@ -116,6 +145,9 @@ export function MusicConnectionActions({ tasteOptedOut }: MusicConnectionActions
       </button>
       <button disabled={pendingAction === "toggle"} onClick={toggleSpotifyBestMatch} type="button">
         {tasteOptedOut ? "Use for Best Match" : "Pause Best Match"}
+      </button>
+      <button disabled={pendingAction === "disconnect"} onClick={disconnectSpotify} type="button">
+        Disconnect Spotify
       </button>
       <button disabled={pendingAction === "delete"} onClick={deleteSpotifyData} type="button">
         Delete Spotify data

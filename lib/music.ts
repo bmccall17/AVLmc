@@ -220,7 +220,25 @@ export async function listMusicProfileItems(userId: string): Promise<MusicProfil
 }
 
 export async function disconnectMusicProvider(userId: string, provider: MusicProvider) {
-  await deleteMusicProviderData(userId, provider);
+  const databaseUserId = toDatabaseUserId(userId);
+
+  await updateMusicConnectionWithLegacyFallback(
+    `
+      update public.music_connections
+      set disconnected_at = now(),
+        taste_opt_out_at = null
+      where user_id = $1
+        and provider = $2
+    `,
+    `
+      update public.music_connections
+      set disconnected_at = now()
+      where user_id = $1
+        and provider = $2
+    `,
+    [databaseUserId, provider]
+  );
+  await clearProviderTokens(databaseUserId, provider);
 }
 
 export async function deleteMusicProviderData(userId: string, provider: MusicProvider) {
@@ -250,19 +268,7 @@ export async function deleteMusicProviderData(userId: string, provider: MusicPro
     `,
     [databaseUserId, provider]
   );
-  await query(
-    `
-      update public.accounts
-      set access_token = null,
-        refresh_token = null,
-        expires_at = null,
-        token_type = null,
-        scope = null
-      where "userId" = $1
-        and provider = $2
-    `,
-    [databaseUserId, provider]
-  );
+  await clearProviderTokens(databaseUserId, provider);
 }
 
 export async function setMusicTasteOptOut(userId: string, provider: MusicProvider, optedOut: boolean) {
@@ -468,6 +474,22 @@ async function updateStoredProviderTokens(input: {
       input.scope ?? null,
       input.tokenType ?? null,
     ]
+  );
+}
+
+async function clearProviderTokens(databaseUserId: number, provider: MusicProvider) {
+  await query(
+    `
+      update public.accounts
+      set access_token = null,
+        refresh_token = null,
+        expires_at = null,
+        token_type = null,
+        scope = null
+      where "userId" = $1
+        and provider = $2
+    `,
+    [databaseUserId, provider]
   );
 }
 

@@ -1,16 +1,16 @@
 import Link from "next/link";
 import Image from "next/image";
 import { cookies } from "next/headers";
-import { UserCircle } from "lucide-react";
+import { auth } from "@/auth";
 import { EventBoard } from "@/components/EventBoard";
-import { MusicAccountPanel } from "@/components/MusicAccountPanel";
+import { ListenerProfileButton, type ListenerScorePreview } from "@/components/ListenerProfileButton";
 import {
   ANONYMOUS_SESSION_COOKIE_NAME,
   getAnonymousSessionIdFromCookieValue,
 } from "@/lib/anonymous-session";
+import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { getCommunityCountsByEvent } from "@/lib/community";
-import { getOptionalUserId } from "@/lib/current-user";
-import { scoreDiscoveryEvents } from "@/lib/discovery";
+import { scoreDiscoveryEvents, type DiscoveryScore } from "@/lib/discovery";
 import {
   listDiscoveryPreferenceSignals,
   listDiscoveryStates,
@@ -18,6 +18,8 @@ import {
 } from "@/lib/discovery-memory";
 import { getDateWindow, getUpcomingEvents } from "@/lib/events";
 import { formatWindow } from "@/lib/format";
+import { DEFAULT_LISTENER_DISCOVERY_PREFERENCES } from "@/lib/listener-preferences";
+import { getListenerDiscoveryPreferences } from "@/lib/listener-preferences-store";
 import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
 import { SPOTIFY_LIMITED_BETA_CODE } from "@/lib/spotify-limited-access";
 
@@ -55,7 +57,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const sessionId = getAnonymousSessionIdFromCookieValue(
     cookieStore.get(ANONYMOUS_SESSION_COOKIE_NAME)?.value
   );
-  const userId = await getOptionalUserId();
+  const features = getAuthFeatureFlags();
+  const session = features.auth ? await auth().catch(() => null) : null;
+  const user = session?.user?.id
+    ? {
+        email: session.user.email,
+        id: session.user.id,
+        image: session.user.image,
+        name: session.user.name,
+      }
+    : null;
+  const userId = user?.id ?? null;
   const [
     counts,
     musicConnections,
@@ -63,6 +75,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     discoveryStates,
     preferenceSignals,
     spotifyMatchCorrections,
+    listenerPreferences,
   ] =
     await Promise.all([
       getCommunityCountsByEvent(eventIds),
@@ -71,11 +84,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       listDiscoveryStates(eventIds, { sessionId, userId }),
       listDiscoveryPreferenceSignals({ sessionId, userId }),
       listSpotifyMatchCorrections(eventIds, { sessionId, userId }),
+      userId ? getListenerDiscoveryPreferences(userId) : Promise.resolve(undefined),
     ]);
+  const activeListenerPreferences = listenerPreferences ?? DEFAULT_LISTENER_DISCOVERY_PREFERENCES;
   const discoveryScores = scoreDiscoveryEvents({
     connections: musicConnections,
     counts,
     events,
+    listenerPreferences: activeListenerPreferences,
     preferenceSignals,
     profileItems: musicProfileItems,
     spotifyMatchCorrections,
@@ -91,12 +107,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     );
   const { start, end } = getDateWindow();
   const avlgoSourceUrl = buildAvlgoSourceUrl(start, end);
-  const profileLabel = userId ? "Signed in listener" : "Guest listener";
-  const profileDetail = userId
-    ? hasTasteProfile
-      ? `${musicProfileItems.length} taste signals`
-      : "Manage discovery"
-    : "Connect Spotify";
+  const scorePreview = getScorePreview(visibleEvents, discoveryScores);
 
   return (
     <main className="sandbox-shell">
@@ -125,21 +136,18 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <a className="sandbox-source-link" href={avlgoSourceUrl} rel="noreferrer" target="_blank">
             AVLgo source
           </a>
-          <a
-            aria-label={userId ? "Manage personalized discovery" : "Connect Spotify for personalized discovery"}
-            className="sandbox-profile"
-            href="#personalized-discovery"
-          >
-            <UserCircle aria-hidden="true" size={22} strokeWidth={2.2} />
-            <span>
-              <strong>{profileLabel}</strong>
-              <small>{profileDetail}</small>
-            </span>
-          </a>
+          <ListenerProfileButton
+            features={features}
+            hasTasteProfile={hasTasteProfile}
+            initialPreferences={activeListenerPreferences}
+            musicConnections={musicConnections}
+            musicProfileItems={musicProfileItems}
+            scorePreview={scorePreview}
+            spotifyLimitedBetaNotice={spotifyLimitedBetaNotice}
+            user={user}
+          />
         </div>
       </header>
-
-      <MusicAccountPanel spotifyLimitedBetaNotice={spotifyLimitedBetaNotice} />
 
       {events.length === 0 ? (
         <section className="empty-state">
@@ -156,9 +164,43 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           events={visibleEvents}
           hasTasteProfile={hasTasteProfile}
           initialDiscoveryStates={discoveryStates}
+          initialListenerPreferences={activeListenerPreferences}
+          isSignedIn={Boolean(userId)}
+          musicConnections={musicConnections}
+          musicProfileItems={musicProfileItems}
+          preferenceSignals={preferenceSignals}
+          spotifyMatchCorrections={spotifyMatchCorrections}
           windowLabel={formatWindow(start, end)}
         />
       )}
     </main>
   );
+}
+
+function getScorePreview(
+  events: Awaited<ReturnType<typeof getUpcomingEvents>>,
+  discoveryScores: Record<string, DiscoveryScore | undefined>
+): ListenerScorePreview | null {
+  const topEvent = [...events].sort((left, right) => {
+    const leftScore = discoveryScores[left.id]?.bestMatchScore ?? discoveryScores[left.id]?.bestBetsScore ?? 0;
+    const rightScore = discoveryScores[right.id]?.bestMatchScore ?? discoveryScores[right.id]?.bestBetsScore ?? 0;
+    return rightScore - leftScore;
+  })[0];
+
+  if (!topEvent) {
+    return null;
+  }
+
+  const score = discoveryScores[topEvent.id];
+
+  if (!score) {
+    return null;
+  }
+
+  return {
+    components: score.components,
+    eventTitle: topEvent.eventTitle,
+    matchPercent: Math.max(70, Math.min(98, Math.round(70 + score.bestMatchScore / 3))),
+    reasons: score.reasons.map((reason) => reason.label),
+  };
 }

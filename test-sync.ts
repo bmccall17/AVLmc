@@ -1,5 +1,4 @@
 import { syncUpcomingEvents } from "./lib/events";
-import { ingestImageToBlob } from "./lib/blob-storage";
 import { put } from "@vercel/blob";
 
 async function runTest() {
@@ -8,9 +7,9 @@ async function runTest() {
     const testBlob = await put("test-connection.txt", "Hello Vercel Blob!", { access: "public" });
     console.log("✅ Successfully connected to Vercel Blob!");
     console.log("   Test blob URL:", testBlob.url);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("❌ Failed to connect to Vercel Blob.");
-    console.error("   Error:", err.message);
+    console.error("   Error:", getErrorMessage(err));
     return;
   }
 
@@ -18,9 +17,9 @@ async function runTest() {
   try {
     const events = await syncUpcomingEvents();
     console.log(`✅ Sync complete! Processed ${events.length} events.`);
-    
+
     // Check if Modest Mouse is in the list
-    const modestMouse = events.find((e: any) => e.title.toLowerCase().includes("modest mouse"));
+    const modestMouse = events.find((event) => event.eventTitle.toLowerCase().includes("modest mouse"));
     if (modestMouse) {
       console.log("\nFound Modest Mouse event:");
       console.log("ID:", modestMouse.id);
@@ -33,10 +32,14 @@ async function runTest() {
     } else {
       console.log("\n⚠️ Modest Mouse event not found in the upcoming sync window.");
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("❌ Failed to run sync.");
     console.error(err);
   }
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 runTest();

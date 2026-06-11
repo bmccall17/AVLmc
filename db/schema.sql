@@ -104,6 +104,19 @@ create table if not exists public.music_profile_items (
 create index if not exists music_profile_items_user_provider_idx
   on public.music_profile_items (user_id, provider, item_type, rank);
 
+create table if not exists public.listener_discovery_preferences (
+  id text primary key,
+  user_id integer not null references public.users(id) on delete cascade,
+  weights jsonb not null default '{}'::jsonb,
+  custom_signals jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id)
+);
+
+create index if not exists listener_discovery_preferences_user_id_idx
+  on public.listener_discovery_preferences (user_id);
+
 create table if not exists public.contributions (
   id text primary key,
   event_id text not null,

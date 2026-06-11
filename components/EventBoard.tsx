@@ -5,13 +5,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { CalendarCheck, ChevronRight, ExternalLink, Flame, Headphones, Search, X } from "lucide-react";
 import type { CommunityCounts } from "@/lib/community";
-import type { DiscoveryReason, DiscoveryScore, DiscoveryScoresByEvent } from "@/lib/discovery";
+import { scoreDiscoveryEvents, type DiscoveryReason, type DiscoveryScore, type DiscoveryScoresByEvent } from "@/lib/discovery";
 import type {
   DiscoveryEventAction,
   DiscoveryPersonEventState,
+  DiscoveryPreferenceSignal,
   DiscoveryStateByEvent,
+  SpotifyMatchCorrection,
 } from "@/lib/discovery-memory";
 import type { EventRecord } from "@/lib/events";
+import {
+  LISTENER_PREFERENCE_CHANGE_EVENT,
+  LISTENER_PREFERENCE_STORAGE_KEY,
+  normalizeListenerPreferences,
+  type ListenerDiscoveryPreferences,
+} from "@/lib/listener-preferences";
+import type { MusicConnection, MusicProfileItem } from "@/lib/music";
 
 type SortMode = "best-bets" | "best-match" | "soonest" | "hottest" | "discussion" | "venue";
 type QuickFilterId = "tonight" | "weekend" | "free" | "dance" | "jazz" | "rock" | "local" | "outdoor";
@@ -29,6 +38,12 @@ type EventBoardProps = {
   events: EventRecord[];
   hasTasteProfile: boolean;
   initialDiscoveryStates: DiscoveryStateByEvent;
+  initialListenerPreferences: ListenerDiscoveryPreferences;
+  isSignedIn: boolean;
+  musicConnections: MusicConnection[];
+  musicProfileItems: MusicProfileItem[];
+  preferenceSignals: DiscoveryPreferenceSignal[];
+  spotifyMatchCorrections: SpotifyMatchCorrection[];
   windowLabel: string;
 };
 
@@ -92,6 +107,12 @@ export function EventBoard({
   events,
   hasTasteProfile,
   initialDiscoveryStates,
+  initialListenerPreferences,
+  isSignedIn,
+  musicConnections,
+  musicProfileItems,
+  preferenceSignals,
+  spotifyMatchCorrections,
   windowLabel,
 }: EventBoardProps) {
   const [query, setQuery] = useState("");
@@ -101,6 +122,9 @@ export function EventBoard({
   const [sortMode, setSortMode] = useState<SortMode>(hasTasteProfile ? "best-match" : "best-bets");
   const [eventCounts, setEventCounts] = useState(counts);
   const [eventScores, setEventScores] = useState(discoveryScores);
+  const [listenerPreferences, setListenerPreferences] = useState(() =>
+    normalizeListenerPreferences(initialListenerPreferences)
+  );
   const [discoveryStates, setDiscoveryStates] = useState(initialDiscoveryStates);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
@@ -129,6 +153,60 @@ export function EventBoard({
       setSortMode("best-bets");
     }
   }, [hasTasteProfile, sortMode]);
+
+  useEffect(() => {
+    function applyPreferences(value: unknown) {
+      setListenerPreferences(normalizeListenerPreferences(value));
+    }
+
+    if (!isSignedIn) {
+      const storedPreferences = window.localStorage.getItem(LISTENER_PREFERENCE_STORAGE_KEY);
+
+      if (storedPreferences) {
+        try {
+          applyPreferences(JSON.parse(storedPreferences));
+        } catch {
+          window.localStorage.removeItem(LISTENER_PREFERENCE_STORAGE_KEY);
+        }
+      }
+    }
+
+    function handlePreferenceChange(event: Event) {
+      const detail = (event as CustomEvent<{ preferences?: unknown }>).detail;
+
+      if (detail?.preferences) {
+        applyPreferences(detail.preferences);
+      }
+    }
+
+    window.addEventListener(LISTENER_PREFERENCE_CHANGE_EVENT, handlePreferenceChange);
+
+    return () => {
+      window.removeEventListener(LISTENER_PREFERENCE_CHANGE_EVENT, handlePreferenceChange);
+    };
+  }, [isSignedIn]);
+
+  useEffect(() => {
+    setEventScores(
+      scoreDiscoveryEvents({
+        connections: musicConnections,
+        counts: eventCounts,
+        events,
+        listenerPreferences,
+        preferenceSignals,
+        profileItems: musicProfileItems,
+        spotifyMatchCorrections,
+      })
+    );
+  }, [
+    eventCounts,
+    events,
+    listenerPreferences,
+    musicConnections,
+    musicProfileItems,
+    preferenceSignals,
+    spotifyMatchCorrections,
+  ]);
 
   useEffect(() => {
     setSkipConfirm(window.localStorage.getItem(SKIP_REMOVE_CONFIRM_KEY) === "true");

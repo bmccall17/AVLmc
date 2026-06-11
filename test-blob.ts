@@ -6,9 +6,9 @@ async function run() {
   try {
     const testBlob = await put("test-connection.txt", "Hello Vercel Blob!", { access: "public" });
     console.log("✅ Successfully connected! Test file:", testBlob.url);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("❌ Failed to connect to Vercel Blob. Did you restart your dev server?");
-    console.error(err.message);
+    console.error(getErrorMessage(err));
     return;
   }
 
@@ -23,10 +23,14 @@ async function run() {
     } else {
       console.log("❌ Failed to ingest image. (Check fetch logs)");
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("❌ Failed to ingest image.");
-    console.error(err.message);
+    console.error(getErrorMessage(err));
   }
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 run();
