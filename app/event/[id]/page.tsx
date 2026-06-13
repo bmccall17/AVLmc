@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
@@ -22,6 +23,36 @@ type EventPageProps = {
 };
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: EventPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const event = await getEventById(id);
+
+  if (!event) {
+    return { title: "Event Not Found — AVL Music Companion" };
+  }
+
+  const formattedDate = formatLongDate(event.eventDate);
+  const time = event.eventTime ?? "Time TBA";
+  const title = `${event.eventTitle} at ${event.venueName} — AVL Music Companion`;
+  const description = `${event.artistName} · ${formattedDate} · ${time} · ${event.venueName}`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title: event.eventTitle,
+      description,
+      type: "website",
+      siteName: "AVL Music Companion",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: event.eventTitle,
+      description,
+    },
+  };
+}
 
 export default async function EventPage({ params }: EventPageProps) {
   const { id } = await params;
