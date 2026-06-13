@@ -58,13 +58,13 @@ export async function renderOgImage(event: OgEventData) {
         {/* Show image section */}
         <div
           style={{
-            width: "400px",
+            width: "500px",
             height: "100%",
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "40px 10px 40px 40px",
+            alignItems: "stretch",
+            justifyContent: "stretch",
             flexShrink: 0,
+            borderRight: "1px solid rgba(255, 255, 255, 0.16)",
           }}
         >
           {event.imageUrl ? (
@@ -72,37 +72,33 @@ export async function renderOgImage(event: OgEventData) {
             <img
               src={event.imageUrl}
               alt={event.eventTitle}
-              width={340}
-              height={340}
               style={{
-                borderRadius: "8px",
+                width: "100%",
+                height: "100%",
                 objectFit: "cover",
-                border: "1px solid rgba(255, 255, 255, 0.16)",
               }}
             />
           ) : (
             <div
               style={{
-                width: "340px",
-                height: "340px",
-                borderRadius: "8px",
+                width: "100%",
+                height: "100%",
                 background:
                   "linear-gradient(135deg, rgba(8, 127, 140, 0.88), rgba(17, 32, 28, 0.92))",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: "48px",
+                fontSize: "64px",
                 fontWeight: 900,
                 textTransform: "uppercase" as const,
                 letterSpacing: "0.08em",
-                border: "1px solid rgba(255, 255, 255, 0.16)",
                 textAlign: "center" as const,
-                padding: "24px",
+                padding: "32px",
                 lineHeight: 1.1,
               }}
             >
-              {event.eventTitle.length > 30
-                ? event.eventTitle.slice(0, 27) + "…"
+              {event.eventTitle.length > 40
+                ? event.eventTitle.slice(0, 37) + "…"
                 : event.eventTitle}
             </div>
           )}
@@ -115,21 +111,21 @@ export async function renderOgImage(event: OgEventData) {
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            padding: "40px 40px 40px 24px",
+            padding: "40px 60px",
             gap: "2px",
             minWidth: 0,
           }}
         >
-          {/* Venue — eyebrow style: teal, extreme uppercase tracking */}
+          {/* Venue — eyebrow style: teal, extreme uppercase tracking, prominent */}
           <div
             style={{
               display: "flex",
-              fontSize: "13px",
-              fontWeight: 800,
+              fontSize: "18px",
+              fontWeight: 900,
               color: "#087f8c",
               textTransform: "uppercase" as const,
-              letterSpacing: "0.08em",
-              marginBottom: "10px",
+              letterSpacing: "0.1em",
+              marginBottom: "12px",
             }}
           >
             {event.venueName}
@@ -139,13 +135,14 @@ export async function renderOgImage(event: OgEventData) {
           <div
             style={{
               display: "flex",
-              fontSize: event.eventTitle.length > 50 ? "34px" : "42px",
+              fontSize: event.eventTitle.length > 50 ? "40px" : "48px",
               fontWeight: 900,
-              lineHeight: 1.0,
+              lineHeight: 1.05,
               letterSpacing: "-0.02em",
-              marginBottom: "10px",
+              marginBottom: "16px",
               overflow: "hidden",
               textOverflow: "ellipsis",
+              color: "#ffffff",
             }}
           >
             {event.eventTitle.length > 80
@@ -153,15 +150,15 @@ export async function renderOgImage(event: OgEventData) {
               : event.eventTitle}
           </div>
 
-          {/* Artist name (if different from title) — muted zinc */}
+          {/* Artist name (if different from title) — prominent light zinc */}
           {event.artistName !== event.eventTitle && (
             <div
               style={{
                 display: "flex",
-                fontSize: "20px",
-                fontWeight: 400,
-                color: "#a1a1aa",
-                marginBottom: "16px",
+                fontSize: "28px",
+                fontWeight: 700,
+                color: "#e4e4e7",
+                marginBottom: "20px",
               }}
             >
               {event.artistName}
