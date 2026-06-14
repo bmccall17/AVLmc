@@ -41,19 +41,7 @@ export async function renderOgImage(event: OgEventData) {
           overflow: "hidden",
         }}
       >
-        {/* Ambient teal/gold glow — matches the app radial gradients */}
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background:
-              "radial-gradient(ellipse at 15% 0%, rgba(8, 127, 140, 0.26) 0%, transparent 50%), radial-gradient(ellipse at 85% 100%, rgba(240, 169, 58, 0.09) 0%, transparent 40%)",
-            display: "flex",
-          }}
-        />
+
 
         {/* Show image section */}
         <div
@@ -138,8 +126,6 @@ export async function renderOgImage(event: OgEventData) {
                 lineHeight: 1.05,
                 letterSpacing: "-0.02em",
                 marginBottom: "16px",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
                 color: "#ffffff",
               }}
             >
@@ -197,7 +183,7 @@ export async function renderOgImage(event: OgEventData) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background: "linear-gradient(135deg, rgba(8, 127, 140, 0.15) 0%, rgba(8, 127, 140, 0.05) 100%)",
+                background: "rgba(8, 127, 140, 0.12)",
                 border: "1px solid rgba(8, 127, 140, 0.3)",
                 borderRadius: "999px",
                 padding: "16px",
