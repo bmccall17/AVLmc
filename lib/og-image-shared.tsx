@@ -7,7 +7,7 @@ export const OG_IMAGE_CONTENT_TYPE = "image/png";
 
 type OgEventData = Pick<
   EventRecord,
-  "eventTitle" | "artistName" | "venueName" | "eventDate" | "eventTime" | "imageUrl" | "tags"
+  "eventTitle" | "artistName" | "venueName" | "eventDate" | "eventTime" | "imageUrl" | "tags" | "source"
 >;
 
 export async function renderOgImage(event: OgEventData) {
@@ -25,7 +25,7 @@ export async function renderOgImage(event: OgEventData) {
 
   const formattedDate = formatLongDate(event.eventDate);
   const time = event.eventTime ?? "Time TBA";
-  const displayTags = event.tags.slice(0, 3);
+
 
   return new ImageResponse(
     (
@@ -110,171 +110,121 @@ export async function renderOgImage(event: OgEventData) {
             flex: 1,
             display: "flex",
             flexDirection: "column",
-            justifyContent: "center",
-            padding: "40px 60px",
-            gap: "2px",
+            padding: "40px 40px",
             minWidth: 0,
           }}
         >
-          {/* Venue — eyebrow style: teal, extreme uppercase tracking, prominent */}
-          <div
-            style={{
-              display: "flex",
-              fontSize: "18px",
-              fontWeight: 900,
-              color: "#087f8c",
-              textTransform: "uppercase" as const,
-              letterSpacing: "0.1em",
-              marginBottom: "12px",
-            }}
-          >
-            {event.venueName}
-          </div>
-
-          {/* Event title — heavy weight, tight tracking */}
-          <div
-            style={{
-              display: "flex",
-              fontSize: event.eventTitle.length > 50 ? "40px" : "48px",
-              fontWeight: 900,
-              lineHeight: 1.05,
-              letterSpacing: "-0.02em",
-              marginBottom: "16px",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              color: "#ffffff",
-            }}
-          >
-            {event.eventTitle.length > 80
-              ? event.eventTitle.slice(0, 77) + "…"
-              : event.eventTitle}
-          </div>
-
-          {/* Artist name (if different from title) — prominent light zinc */}
-          {event.artistName !== event.eventTitle && (
-            <div
-              style={{
-                display: "flex",
-                fontSize: "28px",
-                fontWeight: 700,
-                color: "#e4e4e7",
-                marginBottom: "20px",
-              }}
-            >
-              {event.artistName}
-            </div>
-          )}
-
-          {/* Date & Time — metadata style: uppercase, wide tracking */}
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "6px",
-              marginTop: "4px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "10px",
-                fontWeight: 900,
-                color: "#71717a",
-                textTransform: "uppercase" as const,
-                letterSpacing: "0.16em",
-              }}
-            >
-              DATE
-            </div>
+          {/* Top portion: Venue and Title */}
+          <div style={{ display: "flex", flexDirection: "column", marginBottom: "auto" }}>
             <div
               style={{
                 display: "flex",
                 fontSize: "18px",
-                fontWeight: 400,
-                color: "#fafafa",
-                marginBottom: "10px",
-              }}
-            >
-              {formattedDate}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "10px",
                 fontWeight: 900,
-                color: "#71717a",
+                color: "#087f8c",
                 textTransform: "uppercase" as const,
-                letterSpacing: "0.16em",
+                letterSpacing: "0.1em",
+                marginBottom: "12px",
               }}
             >
-              TIME
+              {event.venueName}
             </div>
+
             <div
               style={{
                 display: "flex",
-                fontSize: "18px",
-                fontWeight: 400,
-                color: "#fafafa",
+                fontSize: event.eventTitle.length > 50 ? "40px" : "48px",
+                fontWeight: 900,
+                lineHeight: 1.05,
+                letterSpacing: "-0.02em",
+                marginBottom: "16px",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                color: "#ffffff",
               }}
             >
-              {time}
+              {event.eventTitle.length > 80
+                ? event.eventTitle.slice(0, 77) + "…"
+                : event.eventTitle}
             </div>
           </div>
 
-          {/* Tags — pill-shaped badges */}
-          {displayTags.length > 0 && (
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "6px",
-                marginTop: "18px",
-              }}
-            >
-              {displayTags.map((tag) => (
-                <div
-                  key={tag}
-                  style={{
-                    display: "flex",
-                    padding: "4px 12px",
-                    borderRadius: "999px",
-                    fontSize: "11px",
-                    fontWeight: 800,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase" as const,
-                    background: "rgba(8, 127, 140, 0.15)",
-                    border: "1px solid rgba(8, 127, 140, 0.3)",
-                    color: "#5eead4",
-                  }}
-                >
-                  {tag}
+          {/* Bottom portion: 2x2 grid + Branding */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
+            {/* Row 1: Date & Time */}
+            <div style={{ display: "flex", gap: "12px", width: "100%" }}>
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.1)", borderRadius: "8px", padding: "16px" }}>
+                <div style={{ fontSize: "12px", fontWeight: 900, color: "#087f8c", textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: "8px" }}>
+                  DATE
                 </div>
-              ))}
+                <div style={{ fontSize: "16px", fontWeight: 400, color: "#fafafa" }}>
+                  {formattedDate}
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.1)", borderRadius: "8px", padding: "16px" }}>
+                <div style={{ fontSize: "12px", fontWeight: 900, color: "#087f8c", textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: "8px" }}>
+                  TIME
+                </div>
+                <div style={{ fontSize: "16px", fontWeight: 400, color: "#fafafa" }}>
+                  {time}
+                </div>
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* Bottom branding — editorial feel */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: "18px",
-            right: "40px",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            fontSize: "13px",
-            fontWeight: 800,
-            color: "#52525b",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase" as const,
-          }}
-        >
-          AVLmc
+            {/* Row 2: Artist & Source */}
+            <div style={{ display: "flex", gap: "12px", width: "100%" }}>
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.1)", borderRadius: "8px", padding: "16px" }}>
+                <div style={{ fontSize: "12px", fontWeight: 900, color: "#087f8c", textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: "8px" }}>
+                  ARTIST
+                </div>
+                <div style={{ fontSize: "16px", fontWeight: 400, color: "#fafafa" }}>
+                  {event.artistName.length > 30 ? event.artistName.slice(0, 27) + "…" : event.artistName}
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.1)", borderRadius: "8px", padding: "16px" }}>
+                <div style={{ fontSize: "12px", fontWeight: 900, color: "#087f8c", textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: "8px" }}>
+                  SOURCE
+                </div>
+                <div style={{ fontSize: "16px", fontWeight: 400, color: "#fafafa" }}>
+                  {event.source.length > 30 ? event.source.slice(0, 27) + "…" : event.source}
+                </div>
+              </div>
+            </div>
+
+            {/* Branding replacing the button */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "linear-gradient(135deg, rgba(8, 127, 140, 0.15) 0%, rgba(8, 127, 140, 0.05) 100%)",
+                border: "1px solid rgba(8, 127, 140, 0.3)",
+                borderRadius: "999px",
+                padding: "16px",
+                marginTop: "4px",
+                width: "100%",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  background: "#087f8c",
+                  borderRadius: "6px",
+                  padding: "4px 10px",
+                  fontWeight: 900,
+                  marginRight: "14px",
+                  color: "white",
+                  fontSize: "20px",
+                }}
+              >
+                AVLmc
+              </div>
+              <div style={{ display: "flex", fontSize: "20px", fontWeight: 800, color: "#ffffff", letterSpacing: "0.02em" }}>
+                Asheville Music Companion
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Top-right teal accent line */}
