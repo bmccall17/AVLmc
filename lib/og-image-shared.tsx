@@ -1,3 +1,4 @@
+import React from "react";
 import { ImageResponse } from "next/og";
 import type { EventRecord } from "@/lib/events";
 import { formatLongDate } from "@/lib/format";
@@ -53,8 +54,8 @@ export async function renderOgImage(event: OgEventData) {
             width: "500px",
             height: "100%",
             display: "flex",
-            alignItems: "stretch",
-            justifyContent: "stretch",
+            alignItems: "center",
+            justifyContent: "center",
             flexShrink: 0,
             borderRight: "1px solid rgba(255, 255, 255, 0.16)",
           }}
