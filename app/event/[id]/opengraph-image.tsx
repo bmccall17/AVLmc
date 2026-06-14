@@ -6,8 +6,9 @@ export const alt = "Event details";
 export const size = OG_IMAGE_SIZE;
 export const contentType = OG_IMAGE_CONTENT_TYPE;
 
-export default async function Image({ params }: { params: { id: string } }) {
-  const event = await getEventById(params.id);
+export default async function Image({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const event = await getEventById(id);
 
   if (!event) {
     return new Response("Not found", { status: 404 });
