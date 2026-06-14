@@ -14,5 +14,13 @@ export default async function Image({ params }: { params: Promise<{ id: string }
     return new Response("Not found", { status: 404 });
   }
 
-  return renderOgImage(event);
+  try {
+    return await renderOgImage(event);
+  } catch {
+    // If Satori rendering fails, redirect to the event's actual image
+    if (event.imageUrl) {
+      return Response.redirect(event.imageUrl, 302);
+    }
+    return new Response("Image generation failed", { status: 500 });
+  }
 }

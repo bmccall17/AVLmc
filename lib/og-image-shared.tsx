@@ -11,17 +11,21 @@ type OgEventData = Pick<
 >;
 
 export async function renderOgImage(event: OgEventData) {
-  const interBold = await fetch(
-    "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf"
-  ).then((res) => res.arrayBuffer());
-
-  const interRegular = await fetch(
-    "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
-  ).then((res) => res.arrayBuffer());
-
-  const interBlack = await fetch(
-    "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuDyYMZhrib2Bg-4.ttf"
-  ).then((res) => res.arrayBuffer());
+  // Load a single font weight — Satori will synthesize other weights from it.
+  // Wrapped in try/catch with AbortSignal timeout so a slow/failed Google Fonts
+  // response doesn't crash the entire serverless function.
+  let fontData: ArrayBuffer | null = null;
+  try {
+    const res = await fetch(
+      "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf",
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (res.ok) {
+      fontData = await res.arrayBuffer();
+    }
+  } catch {
+    // Font fetch failed — we'll render without custom fonts
+  }
 
   const formattedDate = formatLongDate(event.eventDate);
   const time = event.eventTime ?? "Time TBA";
@@ -229,26 +233,16 @@ export async function renderOgImage(event: OgEventData) {
     ),
     {
       ...OG_IMAGE_SIZE,
-      fonts: [
-        {
-          name: "Inter",
-          data: interRegular,
-          style: "normal",
-          weight: 400,
-        },
-        {
-          name: "Inter",
-          data: interBold,
-          style: "normal",
-          weight: 700,
-        },
-        {
-          name: "Inter",
-          data: interBlack,
-          style: "normal",
-          weight: 900,
-        },
-      ],
+      fonts: fontData
+        ? [
+            {
+              name: "Inter",
+              data: fontData,
+              style: "normal" as const,
+              weight: 700,
+            },
+          ]
+        : [],
     }
   );
 }
