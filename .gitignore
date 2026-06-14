@@ -8,3 +8,4 @@ npm-debug.log*
 public/uploads/voice/*
 !public/uploads/voice/.gitkeep
 tsconfig.tsbuildinfo
+.env*
