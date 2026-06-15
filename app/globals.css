@@ -3211,8 +3211,6 @@ button.primary-action {
 }
 
 .admin-portal {
-  margin: 0 auto;
-  max-width: 1320px;
   padding: 28px max(20px, calc((100vw - 1320px) / 2)) 64px;
 }
 
