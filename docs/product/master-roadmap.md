@@ -18,6 +18,9 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 3 | [Admin Moderation](prds/prd-03-admin-moderation.md) | Built | Let a trusted admin hide spam or bad submissions. |
 | 4 | [Voice Memos](prds/prd-04-voice-memos.md) | Deferred | Add short audio contributions after a $0 storage path is selected. |
 | 5 | [Personalized Discovery Backlog](personalized-discovery-backlog.md) | Built | Add best-bet filters, sorting, and optional Spotify taste-aware recommendations. |
+| 7 | [Admin Portal Initiative (Epic)](admin-portal-prd.md) | Planned | Turn `/admin` into a visual, live, explainable operating system; PRDs 06–11 across six cycles. |
+
+> Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
 ## Product Principles
 
@@ -116,6 +119,35 @@ Built outputs:
 - Google/YouTube and Apple Music remain later connectors.
 
 See [Personalized Discovery Backlog](personalized-discovery-backlog.md) for next-plan notes and acceptance targets.
+
+### Phase 7: Admin Portal & Operations
+
+Purpose: evolve the existing `/admin` dashboard from a static text/card view into a visual, live, explainable operating system for the whole product — usable by Brett (a visual learner) and by AI agents/developers.
+
+This is a multi-cycle initiative tracked by the [Admin Portal Initiative (Epic)](admin-portal-prd.md), which decomposes the seven desired outcomes in [`AdminPortal_desiredoutcomes.md`](AdminPortal_desiredoutcomes.md) into six dependency-sequenced cycles. Each cycle is an independently shippable PRD:
+
+| Cycle | PRD | Outcome(s) | Status |
+| --- | --- | --- | --- |
+| C1 | [PRD 06: Platform & Architecture Foundation](prds/prd-06-admin-portal-platform-and-architecture.md) | Living Architectural Reference; Shared Understanding for Humans and Agents | **Shipped** |
+| C2 | [PRD 07: System Health & Connection Visibility](prds/prd-07-system-health-and-connection-visibility.md) | System Health and Connection Visibility | **Shipped** |
+| C3 | [PRD 08: Content & Data Stewardship](prds/prd-08-content-and-data-stewardship.md) | Content and Data Stewardship | **Shipped** |
+| C4 | [PRD 09: Recommendation Quality & Listener Insight](prds/prd-09-recommendation-quality-and-listener-insight.md) | Recommendation Quality and Listener Insight | **Shipped** |
+| C5 | [PRD 10: Listener Taste Knowledge Graph](prds/prd-10-listener-taste-knowledge-graph.md) | Listener Taste Knowledge Graph | **Shipped** |
+| C6 | [PRD 11: Product Analytics & Usage Visibility (Umami)](prds/prd-11-product-analytics-umami.md) | Product Analytics and Usage Visibility | **Shipped** |
+
+C1 ships first (it provides the System Registry and visual graph engine every later cycle reuses); C2/C3/C4/C6 are largely independent and re-orderable by priority; C5 is last by dependency. The initiative stays at `$0` and follows security-at-inception (Snyk) because it now exposes system internals and listener-adjacent data.
+
+**C1 shipped:** typed System Registry (`lib/system-registry.ts`) as the architecture source of truth; an interactive, expandable architecture graph + Knowledge Graph re-pointed at it (`components/admin/`); an agent-readable JSON export (`GET /api/admin/system-map`) and generated [`system-map.generated.md`](system-map.generated.md); a registry drift-guard test (`npm run test:registry`); and the start of the `lib/admin/` service-layer split.
+
+**C2 shipped:** a live **Health** tab (`components/admin/HealthSection.tsx`) backed by nine time-boxed, individually-degrading probes (`lib/admin/health.ts`) — database, event-data freshness, AVLgo feed, auth/Spotify config + staleness, both cron jobs, blob, Umami; cron observability via a `system_job_runs` table and recording in the sync routes; config-conflict detection (env names only); and health badges overlaid on the architecture graph.
+
+**C3 shipped:** a **Stewardship** tab (`components/admin/StewardshipSection.tsx`, `lib/admin/stewardship.ts`) with record-level provenance/completeness/currency/connections for events, venues, artists, tags, and sources; a persisted, admin-managed partner/resource directory (`admin_resources` table, `lib/admin/resources.ts`, admin-gated `app/api/admin/resources`) replacing the placeholder partner slots; and a derived "should be connected but isn't" gap strip.
+
+**C4 shipped:** a **Recommendation Insight** tab (`components/admin/InsightSection.tsx`, `lib/admin/insight.ts`) that re-runs the live scoring engine to explain why each event ranks (weighted components + reasons), compares anonymous vs. signed-in ranking via a synthetic public-derived taste profile (with movers), and reports diversity / local-value / signal-mix / coverage metrics plus the behavioral-signal mix.
+
+**C6 shipped:** an **Analytics** tab (`components/admin/AnalyticsSection.tsx`, `lib/admin/analytics.ts`, `app/api/admin/analytics`) bringing Umami web traffic (visitors / pageviews / top pages / referrers, server-side, key never client-exposed) into the portal over a 24h/7d/30d range, joined with a first-party event funnel and conversions, plus a free-tier scaling-milestone indicator; degrades gracefully when Umami API access is absent.
+
+**C5 shipped:** a **Listener Trace** tab (`components/admin/ListenerGraphSection.tsx`, `lib/admin/listener-graph.ts`, admin-gated `app/api/admin/listener-trace`) — a privacy-first, six-stage per-listener trace (identity → connected data → preferences → signals → settings → surfaced events) that reuses the C1 staged layout and C4 scoring to attribute each surfaced event's ranking to this listener's inputs vs. the anonymous baseline. No tokens/secrets are read or shown. **The Admin Portal initiative (Phase 7, all seven outcomes / six cycles) is complete.**
 
 ## Scaling Milestones & Tracking
 

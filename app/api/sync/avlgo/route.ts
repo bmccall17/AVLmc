@@ -6,34 +6,61 @@ import {
   syncUpcomingEventsWithDuplicateAudit,
   type EventSyncWithDuplicateAudit,
 } from "@/lib/events";
+import { recordJobRun } from "@/lib/admin/job-runs";
 
 export async function GET(request: Request) {
+  const startedAt = new Date();
   const auditMode = new URL(request.url).searchParams.get("audit");
 
-  if (auditMode === "duplicates") {
-    const result = await syncUpcomingEventsWithDuplicateAudit();
-    const duplicateGroups = await attachHiddenActivity(result);
+  try {
+    if (auditMode === "duplicates") {
+      const result = await syncUpcomingEventsWithDuplicateAudit();
+      const duplicateGroups = await attachHiddenActivity(result);
+
+      await recordJobRun({
+        job: "avlgo_sync",
+        status: "success",
+        itemsProcessed: result.events.length,
+        detail: `audit mode · ${duplicateGroups.length} duplicate groups`,
+        startedAt,
+      });
+
+      return NextResponse.json({
+        ...baseSyncResponse(),
+        eventCount: result.events.length,
+        events: result.events,
+        duplicateAudit: {
+          duplicateGroupCount: duplicateGroups.length,
+          incomingDuplicateGroupCount: result.incomingDuplicateAudit.length,
+          storedDuplicateGroupCount: result.storedDuplicateAudit.length,
+          duplicateGroups,
+        },
+      });
+    }
+
+    const events = await syncUpcomingEvents();
+
+    await recordJobRun({
+      job: "avlgo_sync",
+      status: "success",
+      itemsProcessed: events.length,
+      startedAt,
+    });
 
     return NextResponse.json({
       ...baseSyncResponse(),
-      eventCount: result.events.length,
-      events: result.events,
-      duplicateAudit: {
-        duplicateGroupCount: duplicateGroups.length,
-        incomingDuplicateGroupCount: result.incomingDuplicateAudit.length,
-        storedDuplicateGroupCount: result.storedDuplicateAudit.length,
-        duplicateGroups,
-      },
+      eventCount: events.length,
+      events
     });
+  } catch (error) {
+    await recordJobRun({
+      job: "avlgo_sync",
+      status: "failure",
+      detail: error instanceof Error ? error.message : "Unknown error",
+      startedAt,
+    });
+    throw error;
   }
-
-  const events = await syncUpcomingEvents();
-
-  return NextResponse.json({
-    ...baseSyncResponse(),
-    eventCount: events.length,
-    events
-  });
 }
 
 function baseSyncResponse() {

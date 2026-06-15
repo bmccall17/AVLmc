@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp components/AdminPortal.tsx /tmp/AdminPortal.bak.tsx)",
+      "Bash(sed -i -e '280,780d' -e '1136,1187d' components/AdminPortal.tsx)",
+      "Bash(node_modules/.bin/tsx --version)",
+      "Bash(cp lib/system-registry.ts /tmp/sysreg.bak.ts)",
+      "Bash(sed -i 's#sourceOfTruth: \"lib/discovery.ts\"#sourceOfTruth: \"lib/discovery-DELETED.ts\"#' lib/system-registry.ts)",
+      "Bash(cp /tmp/sysreg.bak.ts lib/system-registry.ts)",
+      "Bash(rm /tmp/sysreg.bak.ts)",
+      "Bash(echo \"=== EXIT: $? ===\")",
+      "Bash(awk 'NR>=3213 && NR<=3260' app/globals.css)",
+      "Bash(sed 's/\\\\$$//')",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(awk '{print $2}')"
+    ]
+  }
+}

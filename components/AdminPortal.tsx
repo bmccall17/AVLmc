@@ -5,28 +5,58 @@ import Image from "next/image";
 
 import { useState } from "react";
 import type { AdminDashboardData } from "@/lib/admin-data";
+import type { SystemMap } from "@/lib/admin/registry";
+import type { SystemHealth } from "@/lib/admin/health";
+import type { StewardshipData } from "@/lib/admin/stewardship";
+import type { RecommendationInsight } from "@/lib/admin/insight";
+import type { SystemAnalytics } from "@/lib/admin/analytics";
+import type { ListenerSummary, ListenerTrace } from "@/lib/admin/listener-graph";
 import type { EventDuplicateAuditGroup } from "@/lib/event-dedupe";
 import type { PublicContribution, ContributionStatus } from "@/lib/community";
 import { AdminModeration } from "@/components/AdminModeration";
+import { ArchitectureSection } from "@/components/admin/ArchitectureSection";
+import { KnowledgeGraphSection } from "@/components/admin/KnowledgeGraphSection";
+import { HealthSection } from "@/components/admin/HealthSection";
+import { StewardshipSection } from "@/components/admin/StewardshipSection";
+import { InsightSection } from "@/components/admin/InsightSection";
+import { AnalyticsSection } from "@/components/admin/AnalyticsSection";
+import { ListenerGraphSection } from "@/components/admin/ListenerGraphSection";
 
 type AdminPortalProps = {
   data: AdminDashboardData;
+  systemMap: SystemMap;
+  health: SystemHealth;
+  stewardship: StewardshipData;
+  insight: RecommendationInsight;
+  analytics: SystemAnalytics;
+  listeners: ListenerSummary[];
+  listenerTrace: ListenerTrace | null;
   contributions: PublicContribution[];
   currentStatus: ContributionStatus | "all";
 };
 
 type TabId =
   | "overview"
+  | "health"
   | "architecture"
   | "knowledge"
+  | "insight"
+  | "listener"
+  | "stewardship"
+  | "analytics"
   | "gaps"
   | "resources"
   | "moderation";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "overview", label: "Overview" },
+  { id: "health", label: "Health" },
   { id: "architecture", label: "Architecture" },
   { id: "knowledge", label: "Knowledge Graph" },
+  { id: "insight", label: "Recommendation Insight" },
+  { id: "listener", label: "Listener Trace" },
+  { id: "stewardship", label: "Stewardship" },
+  { id: "analytics", label: "Analytics" },
   { id: "gaps", label: "Gaps" },
   { id: "resources", label: "Resources" },
   { id: "moderation", label: "Moderation" },
@@ -34,6 +64,13 @@ const TABS: Array<{ id: TabId; label: string }> = [
 
 export function AdminPortal({
   data,
+  systemMap,
+  health,
+  stewardship,
+  insight,
+  analytics,
+  listeners,
+  listenerTrace,
   contributions,
   currentStatus,
 }: AdminPortalProps) {
@@ -129,6 +166,9 @@ export function AdminPortal({
             aria-current={activeTab === tab.id ? "page" : undefined}
           >
             {tab.label}
+            {tab.id === "health" && health.attention.length > 0 ? (
+              <span className="admin-tab-badge alert">{health.attention.length}</span>
+            ) : null}
             {tab.id === "gaps" && data.weakEvents.length > 0 ? (
               <span className="admin-tab-badge">{data.weakEvents.length}</span>
             ) : null}
@@ -141,8 +181,19 @@ export function AdminPortal({
 
       <div className="admin-tab-content">
         {activeTab === "overview" && <OverviewSection data={data} />}
-        {activeTab === "architecture" && <ArchitectureSection data={data} />}
-        {activeTab === "knowledge" && <KnowledgeGraphSection data={data} />}
+        {activeTab === "health" && <HealthSection health={health} />}
+        {activeTab === "architecture" && (
+          <ArchitectureSection systemMap={systemMap} health={health} />
+        )}
+        {activeTab === "knowledge" && (
+          <KnowledgeGraphSection systemMap={systemMap} data={data} />
+        )}
+        {activeTab === "insight" && <InsightSection insight={insight} />}
+        {activeTab === "listener" && (
+          <ListenerGraphSection listeners={listeners} initialTrace={listenerTrace} />
+        )}
+        {activeTab === "stewardship" && <StewardshipSection stewardship={stewardship} />}
+        {activeTab === "analytics" && <AnalyticsSection initial={analytics} />}
         {activeTab === "gaps" && <GapsSection data={data} />}
         {activeTab === "resources" && <ResourcesSection data={data} />}
         {activeTab === "moderation" && (
@@ -263,507 +314,6 @@ function OverviewSection({ data }: { data: AdminDashboardData }) {
                 <strong>{action.count}</strong>
               </div>
             ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ================================================================== */
-/*  Architecture Section                                               */
-/* ================================================================== */
-
-function ArchitectureSection({ data }: { data: AdminDashboardData }) {
-  return (
-    <div className="admin-section">
-      <div className="admin-section-header">
-        <p className="admin-eyebrow">System Reference</p>
-        <h2>Architectural Overview</h2>
-        <p className="admin-lede">
-          How AVL Music Companion is wired together — from data sources through
-          processing into the public experience.
-        </p>
-      </div>
-
-      <div className="admin-arch-pipeline">
-        <PipelineStage
-          number={1}
-          title="Data Sources"
-          items={[
-            {
-              name: "AVLgo Export API",
-              detail: data.systemStatus.isCustomFeed ? "Custom feed URL" : "Live feed (avlgo.com/api/export/json)",
-              status: "active",
-            },
-            {
-              name: "Seed Events",
-              detail: "5 hardcoded fallback events when API is unavailable",
-              status: "fallback",
-            },
-            {
-              name: "Spotify Web API",
-              detail: data.systemStatus.spotifyEnabled ? "Enabled — top artists/tracks" : "Not configured",
-              status: data.systemStatus.spotifyEnabled ? "active" : "inactive",
-            },
-          ]}
-        />
-
-        <div className="admin-arch-arrow">→</div>
-
-        <PipelineStage
-          number={2}
-          title="Processing"
-          items={[
-            {
-              name: "Normalization",
-              detail: "Flexible field mapping, date/time parsing, URL normalization",
-              status: "auto",
-            },
-            {
-              name: "Music Filtering",
-              detail: "Only events tagged Live Music or matching music keywords",
-              status: "auto",
-            },
-            {
-              name: "Deduplication",
-              detail: `${data.duplicateGroups.length} duplicate groups detected`,
-              status: data.duplicateGroups.length > 0 ? "warning" : "active",
-            },
-            {
-              name: "21-day Window",
-              detail: "Rolling date filter from today + 21 days",
-              status: "auto",
-            },
-          ]}
-        />
-
-        <div className="admin-arch-arrow">→</div>
-
-        <PipelineStage
-          number={3}
-          title="Storage"
-          items={[
-            { name: "events", detail: `${data.eventStats.totalEvents} records`, status: "active" },
-            { name: "contributions", detail: `${data.contributionStats.total} records`, status: "active" },
-            { name: "reactions", detail: `${data.reactionStats.totalFire} fire reactions`, status: "active" },
-            { name: "event_intents", detail: `${data.reactionStats.totalGoing} going intents`, status: "active" },
-            { name: "music_connections", detail: `${data.musicConnectionStats.active} active`, status: "active" },
-            { name: "music_profile_items", detail: "Spotify taste data", status: "active" },
-            { name: "Admin Portal", detail: "Read-only system views", status: "fallback" },
-          ]}
-        />
-
-        <div className="admin-arch-arrow">→</div>
-
-        <PipelineStage
-          number={4}
-          title="Public Experience"
-          items={[
-            { name: "Event Board", detail: "Card grid with date/venue/tags", status: "active" },
-            { name: "Community Panel", detail: "Songs, notes, voices per event", status: "active" },
-            { name: "Discovery Scoring", detail: "Personalized ranking via taste + signals", status: "active" },
-            { name: "Match Cards", detail: "Spotify artist matching on event cards", status: data.systemStatus.spotifyEnabled ? "active" : "inactive" },
-          ]}
-        />
-      </div>
-
-      <div className="admin-subsection">
-        <h3>Dependency Map</h3>
-        <p className="admin-meta">What breaks if a source is unavailable</p>
-        <div className="admin-dep-table">
-          <div className="admin-dep-header">
-            <span>Feature</span>
-            <span>Depends On</span>
-            <span>Fallback</span>
-          </div>
-          <DepRow
-            feature="Event Board"
-            depends="AVLgo feed, PostgreSQL"
-            fallback="Seed events (5 hardcoded)"
-          />
-          <DepRow
-            feature="Community Notes"
-            depends="PostgreSQL contributions"
-            fallback="Empty state shown"
-          />
-          <DepRow
-            feature="Discovery Scoring"
-            depends="Spotify profile, interaction history"
-            fallback="Public signals only"
-          />
-          <DepRow
-            feature="Going / Fire"
-            depends="PostgreSQL intents + reactions"
-            fallback="Zero counts"
-          />
-          <DepRow
-            feature="Spotify Match"
-            depends="Spotify API, user auth, taste data"
-            fallback="No match badges shown"
-          />
-          <DepRow
-            feature="Duplicate Detection"
-            depends="Event normalization"
-            fallback="All variants shown"
-          />
-        </div>
-      </div>
-
-      <div className="admin-subsection">
-        <h3>Data Flow: Manual vs Automated</h3>
-        <div className="admin-mini-table">
-          <div className="admin-mini-row">
-            <span>🤖 AVLgo event sync</span>
-            <strong>Automated</strong>
-          </div>
-          <div className="admin-mini-row">
-            <span>🤖 Event normalization + dedup</span>
-            <strong>Automated</strong>
-          </div>
-          <div className="admin-mini-row">
-            <span>🤖 Spotify taste sync</span>
-            <strong>Automated (on auth)</strong>
-          </div>
-          <div className="admin-mini-row">
-            <span>🤖 Discovery scoring</span>
-            <strong>Automated (per request)</strong>
-          </div>
-          <div className="admin-mini-row">
-            <span>👤 Community contributions</span>
-            <strong>User-generated</strong>
-          </div>
-          <div className="admin-mini-row">
-            <span>👤 Content moderation</span>
-            <strong>Manual (admin)</strong>
-          </div>
-          <div className="admin-mini-row">
-            <span>👤 Spotify match corrections</span>
-            <strong>User-initiated</strong>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ================================================================== */
-/*  Knowledge Graph Section                                            */
-/* ================================================================== */
-
-function KnowledgeGraphSection({ data }: { data: AdminDashboardData }) {
-  const [expandedEntity, setExpandedEntity] = useState<string | null>(null);
-
-  const entityGroups = [
-    {
-      id: "events",
-      label: "Events",
-      icon: "📅",
-      count: data.eventStats.totalEvents,
-      detail: `${data.eventStats.upcomingCount} upcoming across ${data.venues.length} venues`,
-    },
-    {
-      id: "venues",
-      label: "Venues",
-      icon: "📍",
-      count: data.venues.length,
-      detail: `${data.venues.filter((v) => v.hasCommunity).length} with community activity`,
-    },
-    {
-      id: "contributions",
-      label: "Community Contributions",
-      icon: "💬",
-      count: data.contributionStats.total,
-      detail: `${data.contributionStats.songs} songs, ${data.contributionStats.notes} notes, ${data.contributionStats.voices} voices`,
-    },
-    {
-      id: "signals",
-      label: "Engagement Signals",
-      icon: "🔥",
-      count: data.reactionStats.totalGoing + data.reactionStats.totalFire + data.interactionStats.total,
-      detail: `${data.reactionStats.totalGoing} going, ${data.reactionStats.totalFire} fire, ${data.interactionStats.total} interactions`,
-    },
-    {
-      id: "artists",
-      label: "Artists",
-      icon: "🎸",
-      count: data.metadataStats.totalArtists,
-      detail: `Distinct artists across ${data.eventStats.totalEvents} events`,
-    },
-    {
-      id: "tags",
-      label: "Tags & Genres",
-      icon: "🏷️",
-      count: data.metadataStats.totalTags,
-      detail: `Distinct event tags and classifications`,
-    },
-    {
-      id: "playlists",
-      label: "Playlists",
-      icon: "🎧",
-      count: 1,
-      detail: "Ryan's local music discovery playlist",
-    },
-    {
-      id: "users",
-      label: "Users & Music Profiles",
-      icon: "👤",
-      count: data.userStats.totalUsers,
-      detail: `${data.userStats.usersWithMusicConnection} Spotify-connected, ${data.userStats.usersWithProfileItems} with taste profiles`,
-    },
-    {
-      id: "sources",
-      label: "External Sources",
-      icon: "🔗",
-      count: data.eventStats.eventsBySource.length,
-      detail: data.eventStats.eventsBySource.map((s) => s.source).join(", ") || "None",
-    },
-  ];
-
-  return (
-    <div className="admin-section">
-      <div className="admin-section-header">
-        <p className="admin-eyebrow">Living Map</p>
-        <h2>Knowledge Graph</h2>
-        <p className="admin-lede">
-          Entity relationships across the AVL Music Companion ecosystem. Click
-          an entity to explore its connections.
-        </p>
-      </div>
-
-      <div className="admin-kg-grid">
-        {entityGroups.map((entity) => (
-          <button
-            key={entity.id}
-            className={`admin-kg-node${expandedEntity === entity.id ? " expanded" : ""}`}
-            onClick={() =>
-              setExpandedEntity(expandedEntity === entity.id ? null : entity.id)
-            }
-            type="button"
-          >
-            <span className="admin-kg-icon">{entity.icon}</span>
-            <div className="admin-kg-info">
-              <strong>
-                {entity.label} <em>{entity.count}</em>
-              </strong>
-              <small>{entity.detail}</small>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {expandedEntity === "venues" && (
-        <div className="admin-kg-detail">
-          <h3>Venue → Event Chain</h3>
-          <p className="admin-meta">
-            Each venue and its connected events, community activity, and
-            relationship status.
-          </p>
-          <div className="admin-venue-list">
-            {data.venues.slice(0, 30).map((venue) => (
-              <div className="admin-venue-row" key={venue.venueName}>
-                <div className="admin-venue-info">
-                  <strong>{venue.venueName}</strong>
-                  <span>
-                    {venue.eventCount} event{venue.eventCount !== 1 ? "s" : ""}
-                    {venue.hasUpcoming ? " · upcoming" : ""}
-                    {venue.hasCommunity ? " · has community" : ""}
-                  </span>
-                </div>
-                <div className="admin-venue-status">
-                  {venue.hasUpcoming && (
-                    <span className="admin-badge active">Active</span>
-                  )}
-                  {venue.hasCommunity && (
-                    <span className="admin-badge community">Community</span>
-                  )}
-                  {!venue.hasUpcoming && (
-                    <span className="admin-badge stale">Past only</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {expandedEntity === "signals" && (
-        <div className="admin-kg-detail">
-          <h3>Signal Breakdown</h3>
-          <div className="admin-mini-table">
-            <div className="admin-mini-row">
-              <span>Going intents (total)</span>
-              <strong>{data.reactionStats.totalGoing}</strong>
-            </div>
-            {Object.entries(data.reactionStats.goingBySource).map(([source, count]) => (
-              <div className="admin-mini-row indent" key={source}>
-                <span>↳ via {source}</span>
-                <strong>{count}</strong>
-              </div>
-            ))}
-            <div className="admin-mini-row">
-              <span>Fire reactions</span>
-              <strong>{data.reactionStats.totalFire}</strong>
-            </div>
-            {data.interactionStats.byAction.map((action) => (
-              <div className="admin-mini-row" key={action.action}>
-                <span>{formatActionName(action.action)}</span>
-                <strong>{action.count}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {expandedEntity === "contributions" && (
-        <div className="admin-kg-detail">
-          <h3>Contribution Breakdown</h3>
-          <div className="admin-mini-table">
-            <div className="admin-mini-row">
-              <span>Songs</span>
-              <strong>{data.contributionStats.songs}</strong>
-            </div>
-            <div className="admin-mini-row">
-              <span>Notes (comments)</span>
-              <strong>{data.contributionStats.notes}</strong>
-            </div>
-            <div className="admin-mini-row">
-              <span>Voices (audio)</span>
-              <strong>{data.contributionStats.voices}</strong>
-            </div>
-            <div className="admin-mini-row highlight">
-              <span>Visible</span>
-              <strong>{data.contributionStats.visible}</strong>
-            </div>
-            <div className="admin-mini-row">
-              <span>Hidden</span>
-              <strong>{data.contributionStats.hidden}</strong>
-            </div>
-            <div className="admin-mini-row">
-              <span>Pending</span>
-              <strong>{data.contributionStats.pending}</strong>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {expandedEntity === "users" && (
-        <div className="admin-kg-detail">
-          <h3>User & Music Profile Details</h3>
-          <div className="admin-mini-table">
-            <div className="admin-mini-row">
-              <span>Total users</span>
-              <strong>{data.userStats.totalUsers}</strong>
-            </div>
-            <div className="admin-mini-row">
-              <span>With music connection</span>
-              <strong>{data.userStats.usersWithMusicConnection}</strong>
-            </div>
-            <div className="admin-mini-row">
-              <span>With taste profile items</span>
-              <strong>{data.userStats.usersWithProfileItems}</strong>
-            </div>
-            <div className="admin-mini-row">
-              <span>Active connections</span>
-              <strong>{data.musicConnectionStats.active}</strong>
-            </div>
-            <div className="admin-mini-row">
-              <span>Disconnected</span>
-              <strong>{data.musicConnectionStats.disconnected}</strong>
-            </div>
-            {data.musicConnectionStats.byProvider.map((p) => (
-              <div className="admin-mini-row indent" key={p.provider}>
-                <span>↳ {p.provider}</span>
-                <strong>{p.count}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {expandedEntity === "events" && (
-        <div className="admin-kg-detail">
-          <h3>Event Sources & Distribution</h3>
-          <div className="admin-mini-table">
-            {data.eventStats.eventsBySource.map((s) => (
-              <div className="admin-mini-row" key={s.source}>
-                <span>{s.source}</span>
-                <strong>{s.count}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {expandedEntity === "artists" && (
-        <div className="admin-kg-detail">
-          <h3>Artist Network</h3>
-          <p className="admin-meta">
-            There are {data.metadataStats.totalArtists} distinct artists playing in the current window.
-            Connecting artists to Spotify matching and discovery scoring allows personalized recommendations.
-          </p>
-          <div className="admin-chain">
-            <div className="admin-chain-node source">
-              <strong>Event Artist</strong>
-            </div>
-            <span className="admin-chain-link">→</span>
-            <div className="admin-chain-node process">
-              <strong>Spotify Match</strong>
-            </div>
-            <span className="admin-chain-link">→</span>
-            <div className="admin-chain-node public">
-              <strong>Personalized Discovery</strong>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {expandedEntity === "tags" && (
-        <div className="admin-kg-detail">
-          <h3>Tags & Genres</h3>
-          <p className="admin-meta">
-            {data.metadataStats.totalTags} distinct tags are used across events.
-            Tags filter the event board and help power the discovery score.
-          </p>
-        </div>
-      )}
-
-      {expandedEntity === "playlists" && (
-        <div className="admin-kg-detail">
-          <h3>Ecosystem Playlists</h3>
-          <div className="admin-mini-table">
-            <div className="admin-mini-row highlight">
-              <span>Ryan&apos;s Playlist</span>
-              <strong><a href="https://open.spotify.com/playlist/4fcdaCe97lEeEMe8rOhuSM" target="_blank" rel="noreferrer" style={{color: 'inherit'}}>Open ↗</a></strong>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {expandedEntity === "sources" && (
-        <div className="admin-kg-detail">
-          <h3>External Source Reference</h3>
-          <div className="admin-chain">
-            <div className="admin-chain-node source">
-              <strong>AVLgo</strong>
-              <small>Primary event source</small>
-              <code>{data.systemStatus.isCustomFeed ? "Custom feed" : "avlgo.com/api/export/json"}</code>
-            </div>
-            <span className="admin-chain-link">→</span>
-            <div className="admin-chain-node process">
-              <strong>Normalize & Filter</strong>
-              <small>Music events only</small>
-            </div>
-            <span className="admin-chain-link">→</span>
-            <div className="admin-chain-node storage">
-              <strong>PostgreSQL</strong>
-              <small>{data.eventStats.totalEvents} events stored</small>
-            </div>
-            <span className="admin-chain-link">→</span>
-            <div className="admin-chain-node public">
-              <strong>Public Board</strong>
-              <small>avlmc.vercel.app</small>
-            </div>
           </div>
         </div>
       )}
@@ -1066,19 +616,12 @@ function ResourcesSection({ data }: { data: AdminDashboardData }) {
       </div>
 
       <div className="admin-subsection">
-        <h3>Partner Slots — Not Yet Connected</h3>
+        <h3>Partner &amp; Resource Directory</h3>
         <p className="admin-meta">
-          These represent future partner relationships that the product could
-          support.
+          Partners, sponsors, community organizations, press, and venue contacts are now a managed,
+          persisted directory — create and link them in the <strong>Stewardship → Directory</strong> tab,
+          where they connect to venues and sources and appear in the knowledge graph.
         </p>
-        <div className="admin-partner-slots">
-          <PartnerSlot name="Community Organizations" />
-          <PartnerSlot name="Press / Media Resources" />
-          <PartnerSlot name="Playlist Collaborators" />
-          <PartnerSlot name="Potential Sponsors" />
-          <PartnerSlot name="Venue Contacts" />
-          <PartnerSlot name="Artist / Community Resources" />
-        </div>
       </div>
     </div>
   );
@@ -1126,58 +669,6 @@ function StatusIndicator({
   );
 }
 
-function PipelineStage({
-  number,
-  title,
-  items,
-}: {
-  number: number;
-  title: string;
-  items: Array<{
-    name: string;
-    detail: string;
-    status: string;
-  }>;
-}) {
-  return (
-    <div className="admin-arch-stage">
-      <div className="admin-arch-stage-header">
-        <span className="admin-arch-number">{number}</span>
-        <strong>{title}</strong>
-      </div>
-      <div className="admin-arch-items">
-        {items.map((item) => (
-          <div
-            className={`admin-arch-item ${item.status}`}
-            key={item.name}
-          >
-            <strong>{item.name}</strong>
-            <small>{item.detail}</small>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DepRow({
-  feature,
-  depends,
-  fallback,
-}: {
-  feature: string;
-  depends: string;
-  fallback: string;
-}) {
-  return (
-    <div className="admin-dep-row">
-      <span>{feature}</span>
-      <span>{depends}</span>
-      <span className="admin-dep-fallback">{fallback}</span>
-    </div>
-  );
-}
-
 function ResourceCard({
   title,
   status,
@@ -1219,16 +710,6 @@ function EnvRow({ name, set }: { name: string; set: boolean }) {
       <span className={`admin-badge ${set ? "active" : "stale"}`}>
         {set ? "Set" : "Not set"}
       </span>
-    </div>
-  );
-}
-
-function PartnerSlot({ name }: { name: string }) {
-  return (
-    <div className="admin-partner-slot">
-      <span className="admin-partner-icon">○</span>
-      <span>{name}</span>
-      <span className="admin-badge stale">Not yet connected</span>
     </div>
   );
 }

@@ -1,0 +1,757 @@
+/**
+ * System Registry — the single source of truth for how AVL Music Companion is wired.
+ *
+ * This module is the SPINE of the Admin Portal initiative (PRD 06 / Cycle C1). It is a
+ * typed, version-controlled model of the product as a graph of nodes (surfaces, services,
+ * datastores, integrations, jobs, external sources, partners) and the edges (data flows and
+ * dependencies) between them.
+ *
+ * It is consumed by:
+ *   - the visual architecture graph (Outcome 1) — components/admin/ArchitectureSection.tsx
+ *   - the agent-readable export (Outcome 3) — app/api/admin/system-map/route.ts + docs/product/system-map.generated.md
+ *   - health overlays (Outcome 4, PRD 07) — via the reserved `healthProbeId` field
+ *   - stewardship entity views (Outcome 6, PRD 08) — via datastore nodes
+ *   - the listener-taste-graph backdrop (Outcome 2, PRD 10)
+ *
+ * IMPORTANT: this file is intentionally pure (no database or `server-only` imports) so it can
+ * be imported by the markdown generator script and the drift-guard test without a DB. Live
+ * counts and health are stitched in at request time by `lib/admin/registry.ts`.
+ *
+ * Keep node granularity at the service / table / integration level — model the architecture a
+ * maintainer needs, not every function. When you add or rename a backing file or table, update
+ * the matching node's `sourceOfTruth`; the drift guard (tests/system-registry.test.ts) fails if
+ * a node points at a file or table that no longer exists.
+ */
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
+export type NodeKind =
+  | "surface" // a route or rendered component
+  | "service" // a lib/* module that does work
+  | "datastore" // a Postgres table
+  | "integration" // a wired external system (AVLgo, Auth.js/Spotify, Vercel Blob, Umami)
+  | "job" // a scheduled (cron) process
+  | "external_source" // an upstream data source we read from
+  | "partner"; // an ecosystem relationship
+
+/** Where the node sits in the high-level left-to-right system view. */
+export type SystemLayer =
+  | "sources"
+  | "processing"
+  | "data"
+  | "experience"
+  | "community"
+  | "identity"
+  | "operations"
+  | "partners";
+
+/** Who can reach this node. */
+export type NodeAccess = "public" | "admin" | "internal";
+
+/** How the node's data is maintained. */
+export type NodeOwnership = "automated" | "manual" | "hybrid";
+
+/**
+ * Stable keys for the live counts stitched in at request time. The static model only declares
+ * WHICH count belongs on a node (`countKey`); `lib/admin/registry.ts` resolves the number.
+ */
+export type DerivedCountKey =
+  | "events"
+  | "venues"
+  | "contributions"
+  | "reactions"
+  | "event_intents"
+  | "event_interaction_events"
+  | "event_person_event_state"
+  | "users"
+  | "accounts"
+  | "music_connections"
+  | "music_profile_items"
+  | "listener_discovery_preferences"
+  | "spotify_event_match_corrections"
+  | "system_job_runs"
+  | "admin_resources";
+
+export type RegistryNode = {
+  /** Stable identifier; referenced by edges and by later cycles. Never reuse or repurpose. */
+  id: string;
+  kind: NodeKind;
+  layer: SystemLayer;
+  /** Human label shown in the graph. */
+  label: string;
+  /** One- or two-sentence plain-language description. */
+  description: string;
+  /**
+   * Where this node's source-of-truth lives: a repo-relative file path (e.g. `lib/events.ts`)
+   * or, for `datastore` nodes, a Postgres table name (e.g. `events`). The drift guard validates
+   * file paths against the working tree and table names against `db/schema.sql`.
+   */
+  sourceOfTruth: string;
+  access: NodeAccess;
+  ownership: NodeOwnership;
+  /** Configuration this node needs. NAMES ONLY — values never appear in the registry. */
+  envVars?: string[];
+  /** Reserved for PRD 07: id of the health probe that reports this node's live status. */
+  healthProbeId?: string;
+  /** Which live count (if any) attaches to this node. */
+  countKey?: DerivedCountKey;
+  /**
+   * True when the node represents a system that lives OUTSIDE this repo (AVLgo, Spotify, Vercel
+   * Blob, Umami, a partner). Used only for presentation — the boundary of "our code". Its
+   * `sourceOfTruth` still points at where it is wired in code and is drift-checked like any other
+   * node (the guard only skips `http(s)://` locators).
+   */
+  external?: boolean;
+  /** Optional outbound link shown in the node detail (docs, dashboard, external site). */
+  docHref?: string;
+};
+
+export type EdgeKind = "flowsTo" | "dependsOn";
+
+export type RegistryEdge = {
+  from: string;
+  to: string;
+  kind: EdgeKind;
+  /** Short description of what moves across the edge, e.g. "daily upsert", "ranked order". */
+  label?: string;
+};
+
+export type SystemRegistry = {
+  nodes: RegistryNode[];
+  edges: RegistryEdge[];
+};
+
+/* ------------------------------------------------------------------ */
+/*  Layer metadata (drives the high-level graph layout & legend)       */
+/* ------------------------------------------------------------------ */
+
+export const SYSTEM_LAYERS: Array<{
+  id: SystemLayer;
+  label: string;
+  blurb: string;
+}> = [
+  { id: "sources", label: "Sources", blurb: "Where raw data originates" },
+  { id: "processing", label: "Processing", blurb: "Normalize, dedupe, rank" },
+  { id: "data", label: "Data Stores", blurb: "Postgres tables of record" },
+  { id: "experience", label: "Public Experience", blurb: "What listeners see" },
+  { id: "community", label: "Community", blurb: "Listener-contributed signal" },
+  { id: "identity", label: "Identity & Taste", blurb: "Optional sign-in & personalization" },
+  { id: "operations", label: "Operations", blurb: "Jobs, admin, observability" },
+  { id: "partners", label: "Partners", blurb: "Ecosystem relationships" },
+];
+
+export const NODE_KIND_LABELS: Record<NodeKind, string> = {
+  surface: "Surface",
+  service: "Service",
+  datastore: "Data store",
+  integration: "Integration",
+  job: "Scheduled job",
+  external_source: "External source",
+  partner: "Partner",
+};
+
+/* ------------------------------------------------------------------ */
+/*  Nodes                                                              */
+/* ------------------------------------------------------------------ */
+
+const NODES: RegistryNode[] = [
+  /* ---- Sources --------------------------------------------------- */
+  {
+    id: "src-avlgo",
+    kind: "external_source",
+    layer: "sources",
+    label: "AVLgo Export",
+    description:
+      "Primary upstream event feed (avlgo.com JSON export). Read on a daily schedule and on demand.",
+    sourceOfTruth: "lib/events.ts",
+    access: "public",
+    ownership: "automated",
+    envVars: ["AVLGO_API_URL"],
+    external: true,
+    healthProbeId: "avlgo-feed",
+    docHref: "https://www.avlgo.com",
+  },
+  {
+    id: "src-seed",
+    kind: "external_source",
+    layer: "sources",
+    label: "Seed Events",
+    description:
+      "Hardcoded fallback events used when the AVLgo feed is unreachable, so the board never renders empty.",
+    sourceOfTruth: "lib/events.ts",
+    access: "public",
+    ownership: "manual",
+  },
+  {
+    id: "int-spotify",
+    kind: "integration",
+    layer: "sources",
+    label: "Spotify Web API",
+    description:
+      "Optional. Supplies a signed-in listener's top artists/tracks for taste and powers event artist matching.",
+    sourceOfTruth: "lib/music.ts",
+    access: "internal",
+    ownership: "automated",
+    envVars: ["AUTH_SPOTIFY_ENABLED", "AUTH_SPOTIFY_ID", "AUTH_SPOTIFY_SECRET"],
+    external: true,
+    healthProbeId: "spotify-api",
+    docHref: "https://developer.spotify.com/documentation/web-api",
+  },
+
+  /* ---- Processing ------------------------------------------------ */
+  {
+    id: "svc-events",
+    kind: "service",
+    layer: "processing",
+    label: "Event Ingestion",
+    description:
+      "Fetches the AVLgo feed, normalizes fields, filters to music events, applies the 21-day rolling window, and upserts into the events table.",
+    sourceOfTruth: "lib/events.ts",
+    access: "internal",
+    ownership: "automated",
+    envVars: ["AVLGO_API_URL"],
+  },
+  {
+    id: "svc-event-dedupe",
+    kind: "service",
+    layer: "processing",
+    label: "Deduplication",
+    description:
+      "Groups near-identical events and picks a canonical record, hiding the rest. Surfaces the audit in the admin Gaps tab.",
+    sourceOfTruth: "lib/event-dedupe.ts",
+    access: "internal",
+    ownership: "automated",
+  },
+  {
+    id: "svc-music",
+    kind: "service",
+    layer: "processing",
+    label: "Music Taste Sync",
+    description:
+      "Pulls a connected listener's Spotify profile into music_connections and music_profile_items, and matches event artists to Spotify.",
+    sourceOfTruth: "lib/music.ts",
+    access: "internal",
+    ownership: "automated",
+  },
+  {
+    id: "svc-discovery",
+    kind: "service",
+    layer: "processing",
+    label: "Discovery Scoring",
+    description:
+      "Ranks events per request by blending taste profile, behavioral signals, and listener-configured weights. Anonymous visitors get public-signal-only ranking.",
+    sourceOfTruth: "lib/discovery.ts",
+    access: "internal",
+    ownership: "automated",
+  },
+  {
+    id: "svc-discovery-memory",
+    kind: "service",
+    layer: "processing",
+    label: "Signal Memory",
+    description:
+      "Persists and reads per-listener behavioral signals (impressions, opens, fire, planning, removals) that feed discovery scoring.",
+    sourceOfTruth: "lib/discovery-memory.ts",
+    access: "internal",
+    ownership: "automated",
+  },
+  {
+    id: "svc-community",
+    kind: "service",
+    layer: "processing",
+    label: "Community Service",
+    description:
+      "Validates and stores community contributions, reactions, and ticket/going intents; powers moderation status.",
+    sourceOfTruth: "lib/community.ts",
+    access: "internal",
+    ownership: "hybrid",
+  },
+  {
+    id: "svc-listener-prefs",
+    kind: "service",
+    layer: "processing",
+    label: "Listener Preferences",
+    description:
+      "Reads and writes a signed-in listener's configurable discovery weights and custom taste signals.",
+    sourceOfTruth: "lib/listener-preferences.ts",
+    access: "internal",
+    ownership: "manual",
+  },
+
+  /* ---- Data stores ----------------------------------------------- */
+  {
+    id: "db-events",
+    kind: "datastore",
+    layer: "data",
+    label: "events",
+    description: "Canonical normalized music events shown on the board and detail pages.",
+    sourceOfTruth: "events",
+    access: "internal",
+    ownership: "automated",
+    countKey: "events",
+    healthProbeId: "event-data",
+  },
+  {
+    id: "db-job-runs",
+    kind: "datastore",
+    layer: "data",
+    label: "system_job_runs",
+    description: "Append-only record of scheduled job outcomes (start, finish, success/failure, items) for cron observability.",
+    sourceOfTruth: "system_job_runs",
+    access: "admin",
+    ownership: "automated",
+    countKey: "system_job_runs",
+  },
+  {
+    id: "db-admin-resources",
+    kind: "datastore",
+    layer: "data",
+    label: "admin_resources",
+    description: "Curated partner/resource directory — sources, playlists, venue partners, sponsors, community orgs — managed in the Stewardship tab.",
+    sourceOfTruth: "admin_resources",
+    access: "admin",
+    ownership: "manual",
+    countKey: "admin_resources",
+  },
+  {
+    id: "db-contributions",
+    kind: "datastore",
+    layer: "data",
+    label: "contributions",
+    description: "Community songs, notes, and voice memos attached to events; carries moderation status.",
+    sourceOfTruth: "contributions",
+    access: "internal",
+    ownership: "hybrid",
+    countKey: "contributions",
+  },
+  {
+    id: "db-reactions",
+    kind: "datastore",
+    layer: "data",
+    label: "reactions",
+    description: "Lightweight per-session reactions (fire) on events.",
+    sourceOfTruth: "reactions",
+    access: "internal",
+    ownership: "automated",
+    countKey: "reactions",
+  },
+  {
+    id: "db-event-intents",
+    kind: "datastore",
+    layer: "data",
+    label: "event_intents",
+    description: "Going / ticket-click intents per identity, sourced from avlmc, spotify, or ticket clicks.",
+    sourceOfTruth: "event_intents",
+    access: "internal",
+    ownership: "automated",
+    countKey: "event_intents",
+  },
+  {
+    id: "db-interaction-events",
+    kind: "datastore",
+    layer: "data",
+    label: "event_interaction_events",
+    description: "Append-only behavioral log (impressions, opens, clicks, fire, planning) feeding discovery.",
+    sourceOfTruth: "event_interaction_events",
+    access: "internal",
+    ownership: "automated",
+    countKey: "event_interaction_events",
+  },
+  {
+    id: "db-person-event-state",
+    kind: "datastore",
+    layer: "data",
+    label: "event_person_event_state",
+    description: "Per-identity, per-event state (fire / planning / removed) used to personalize and de-duplicate signals.",
+    sourceOfTruth: "event_person_event_state",
+    access: "internal",
+    ownership: "automated",
+    countKey: "event_person_event_state",
+  },
+  {
+    id: "db-users",
+    kind: "datastore",
+    layer: "data",
+    label: "users",
+    description: "Auth.js user records for signed-in listeners.",
+    sourceOfTruth: "users",
+    access: "internal",
+    ownership: "automated",
+    countKey: "users",
+  },
+  {
+    id: "db-accounts",
+    kind: "datastore",
+    layer: "data",
+    label: "accounts",
+    description: "Auth.js OAuth account links (provider tokens live here; never exposed to the admin).",
+    sourceOfTruth: "accounts",
+    access: "internal",
+    ownership: "automated",
+    countKey: "accounts",
+  },
+  {
+    id: "db-music-connections",
+    kind: "datastore",
+    layer: "data",
+    label: "music_connections",
+    description: "A listener's connected music providers, scopes, sync state, and taste opt-out.",
+    sourceOfTruth: "music_connections",
+    access: "internal",
+    ownership: "automated",
+    countKey: "music_connections",
+  },
+  {
+    id: "db-music-profile-items",
+    kind: "datastore",
+    layer: "data",
+    label: "music_profile_items",
+    description: "A listener's top artists/tracks pulled from their provider; the raw material of taste.",
+    sourceOfTruth: "music_profile_items",
+    access: "internal",
+    ownership: "automated",
+    countKey: "music_profile_items",
+  },
+  {
+    id: "db-listener-prefs",
+    kind: "datastore",
+    layer: "data",
+    label: "listener_discovery_preferences",
+    description: "Per-listener discovery weights and custom signals that tune ranking.",
+    sourceOfTruth: "listener_discovery_preferences",
+    access: "internal",
+    ownership: "manual",
+    countKey: "listener_discovery_preferences",
+  },
+  {
+    id: "db-spotify-corrections",
+    kind: "datastore",
+    layer: "data",
+    label: "spotify_event_match_corrections",
+    description: "Listener corrections to Spotify artist matches (reject / replace) that refine future matching.",
+    sourceOfTruth: "spotify_event_match_corrections",
+    access: "internal",
+    ownership: "hybrid",
+    countKey: "spotify_event_match_corrections",
+  },
+
+  /* ---- Public experience ----------------------------------------- */
+  {
+    id: "ui-homepage",
+    kind: "surface",
+    layer: "experience",
+    label: "Homepage",
+    description: "The public landing page that renders the ranked event board.",
+    sourceOfTruth: "app/page.tsx",
+    access: "public",
+    ownership: "automated",
+  },
+  {
+    id: "ui-eventboard",
+    kind: "surface",
+    layer: "experience",
+    label: "Event Board",
+    description: "Card grid of events with date/venue/tags, reactions, community, and discovery ordering.",
+    sourceOfTruth: "components/EventBoard.tsx",
+    access: "public",
+    ownership: "automated",
+  },
+  {
+    id: "ui-event-detail",
+    kind: "surface",
+    layer: "experience",
+    label: "Event Detail",
+    description: "Per-event page with full context, community panel, and share metadata.",
+    sourceOfTruth: "app/event/[id]/page.tsx",
+    access: "public",
+    ownership: "automated",
+  },
+
+  /* ---- Community ------------------------------------------------- */
+  {
+    id: "ui-community-panel",
+    kind: "surface",
+    layer: "community",
+    label: "Community Panel",
+    description: "Lets listeners add songs, notes, and voices to an event.",
+    sourceOfTruth: "components/CommunityPanel.tsx",
+    access: "public",
+    ownership: "manual",
+  },
+  {
+    id: "api-community",
+    kind: "surface",
+    layer: "community",
+    label: "Community API",
+    description: "Write endpoints for contributions, reactions, and ticket intents.",
+    sourceOfTruth: "app/api/community/contributions/route.ts",
+    access: "public",
+    ownership: "automated",
+  },
+  {
+    id: "api-discovery",
+    kind: "surface",
+    layer: "community",
+    label: "Discovery Action API",
+    description: "Logs event interactions and Spotify match corrections that train discovery.",
+    sourceOfTruth: "app/api/discovery/event-action/route.ts",
+    access: "public",
+    ownership: "automated",
+  },
+
+  /* ---- Identity & taste ------------------------------------------ */
+  {
+    id: "int-authjs",
+    kind: "integration",
+    layer: "identity",
+    label: "Auth.js",
+    description: "Optional OAuth sign-in (Spotify provider) backed by the Postgres adapter.",
+    sourceOfTruth: "auth.ts",
+    access: "internal",
+    ownership: "automated",
+    envVars: ["NEXT_PUBLIC_AUTH_ENABLED", "AUTH_SECRET"],
+    healthProbeId: "auth-provider",
+  },
+  {
+    id: "api-auth",
+    kind: "surface",
+    layer: "identity",
+    label: "Auth API",
+    description: "Auth.js route handler for sign-in, callback, and session.",
+    sourceOfTruth: "app/api/auth/[...nextauth]/route.ts",
+    access: "public",
+    ownership: "automated",
+  },
+  {
+    id: "ui-listener-profile",
+    kind: "surface",
+    layer: "identity",
+    label: "Listener Profile",
+    description: "Sign-in, connected accounts, and the taste/discovery settings a listener controls.",
+    sourceOfTruth: "components/ListenerProfileButton.tsx",
+    access: "public",
+    ownership: "manual",
+  },
+  {
+    id: "api-me",
+    kind: "surface",
+    layer: "identity",
+    label: "Listener (me) API",
+    description: "Authenticated endpoints for the current listener: connections, profile, preferences, tracks.",
+    sourceOfTruth: "app/api/me/route.ts",
+    access: "public",
+    ownership: "automated",
+  },
+
+  /* ---- Operations ------------------------------------------------ */
+  {
+    id: "job-avlgo-sync",
+    kind: "job",
+    layer: "operations",
+    label: "AVLgo Sync (cron)",
+    description: "Daily scheduled refresh of events from the AVLgo feed (10:00 UTC).",
+    sourceOfTruth: "app/api/sync/avlgo/route.ts",
+    access: "internal",
+    ownership: "automated",
+    healthProbeId: "cron-avlgo-sync",
+  },
+  {
+    id: "job-cleanup",
+    kind: "job",
+    layer: "operations",
+    label: "Image Cleanup (cron)",
+    description: "Daily scheduled cleanup of stale cached event images from blob storage (11:00 UTC).",
+    sourceOfTruth: "app/api/sync/cleanup/route.ts",
+    access: "internal",
+    ownership: "automated",
+    healthProbeId: "cron-cleanup",
+  },
+  {
+    id: "int-blob",
+    kind: "integration",
+    layer: "operations",
+    label: "Vercel Blob",
+    description: "Stores cached event images so cards stay fast and the upstream feed isn't hammered.",
+    sourceOfTruth: "lib/blob-storage.ts",
+    access: "internal",
+    ownership: "automated",
+    envVars: ["BLOB_READ_WRITE_TOKEN"],
+    external: true,
+    healthProbeId: "blob-storage",
+  },
+  {
+    id: "int-umami",
+    kind: "integration",
+    layer: "operations",
+    label: "Umami Analytics",
+    description: "Privacy-friendly web analytics. The tracking script runs on public pages; traffic/referrer/page stats are read back into the admin Analytics tab server-side via the Umami Cloud API.",
+    sourceOfTruth: "app/layout.tsx",
+    access: "internal",
+    ownership: "automated",
+    envVars: ["NEXT_PUBLIC_UMAMI_WEBSITE_ID"],
+    external: true,
+    healthProbeId: "umami",
+    docHref: "https://umami.is",
+  },
+  {
+    id: "svc-admin-data",
+    kind: "service",
+    layer: "operations",
+    label: "Admin Data Loader",
+    description: "Aggregates counts, completeness, gaps, and stats for the admin portal (read-only).",
+    sourceOfTruth: "lib/admin-data.ts",
+    access: "admin",
+    ownership: "automated",
+  },
+  {
+    id: "svc-registry",
+    kind: "service",
+    layer: "operations",
+    label: "System Registry",
+    description: "This model. The hand-authored source of truth for the architecture graph, agent export, and health overlays.",
+    sourceOfTruth: "lib/system-registry.ts",
+    access: "admin",
+    ownership: "manual",
+  },
+  {
+    id: "ui-admin",
+    kind: "surface",
+    layer: "operations",
+    label: "Admin Portal",
+    description: "Password-gated operating console: health, architecture, knowledge graph, stewardship, insight, analytics.",
+    sourceOfTruth: "components/AdminPortal.tsx",
+    access: "admin",
+    ownership: "manual",
+    envVars: ["ADMIN_PASSWORD", "ADMIN_SESSION_TOKEN"],
+  },
+
+  /* ---- Partners -------------------------------------------------- */
+  {
+    id: "partner-ryan-playlist",
+    kind: "partner",
+    layer: "partners",
+    label: "Ryan's Playlist",
+    description: "Curated Spotify playlist featured in the navigation — the first ecosystem partner connection.",
+    sourceOfTruth: "components/EventBoard.tsx",
+    access: "public",
+    ownership: "manual",
+    external: true,
+    docHref: "https://open.spotify.com/playlist/4fcdaCe97lEeEMe8rOhuSM",
+  },
+];
+
+/* ------------------------------------------------------------------ */
+/*  Edges                                                             */
+/* ------------------------------------------------------------------ */
+
+const EDGES: RegistryEdge[] = [
+  // Ingestion pipeline
+  { from: "src-avlgo", to: "svc-events", kind: "flowsTo", label: "daily JSON export" },
+  { from: "src-seed", to: "svc-events", kind: "flowsTo", label: "fallback when feed down" },
+  { from: "job-avlgo-sync", to: "svc-events", kind: "dependsOn", label: "scheduled trigger" },
+  { from: "svc-events", to: "svc-event-dedupe", kind: "flowsTo", label: "normalized rows" },
+  { from: "svc-event-dedupe", to: "db-events", kind: "flowsTo", label: "upsert canonical" },
+  { from: "svc-events", to: "int-blob", kind: "flowsTo", label: "cache images" },
+
+  // Public experience
+  { from: "db-events", to: "svc-discovery", kind: "flowsTo", label: "candidate events" },
+  { from: "svc-discovery", to: "ui-eventboard", kind: "flowsTo", label: "ranked order" },
+  { from: "db-events", to: "ui-eventboard", kind: "flowsTo", label: "event rows" },
+  { from: "ui-eventboard", to: "ui-homepage", kind: "flowsTo", label: "renders into" },
+  { from: "ui-homepage", to: "ui-event-detail", kind: "flowsTo", label: "navigates to" },
+  { from: "db-events", to: "ui-event-detail", kind: "flowsTo", label: "event by id" },
+
+  // Discovery signals
+  { from: "svc-discovery", to: "svc-discovery-memory", kind: "dependsOn", label: "reads signals" },
+  { from: "svc-discovery-memory", to: "db-interaction-events", kind: "flowsTo", label: "append log" },
+  { from: "svc-discovery-memory", to: "db-person-event-state", kind: "flowsTo", label: "per-event state" },
+  { from: "api-discovery", to: "svc-discovery-memory", kind: "flowsTo", label: "logs actions" },
+  { from: "api-discovery", to: "db-spotify-corrections", kind: "flowsTo", label: "match corrections" },
+  { from: "ui-eventboard", to: "api-discovery", kind: "flowsTo", label: "interaction events" },
+
+  // Taste / personalization
+  { from: "int-spotify", to: "svc-music", kind: "flowsTo", label: "top artists/tracks" },
+  { from: "svc-music", to: "db-music-connections", kind: "flowsTo", label: "connection state" },
+  { from: "svc-music", to: "db-music-profile-items", kind: "flowsTo", label: "taste items" },
+  { from: "db-music-profile-items", to: "svc-discovery", kind: "flowsTo", label: "taste weights" },
+  { from: "svc-listener-prefs", to: "db-listener-prefs", kind: "flowsTo", label: "saved weights" },
+  { from: "db-listener-prefs", to: "svc-discovery", kind: "flowsTo", label: "custom weights" },
+  { from: "db-spotify-corrections", to: "svc-music", kind: "flowsTo", label: "refines matching" },
+
+  // Community
+  { from: "ui-community-panel", to: "api-community", kind: "flowsTo", label: "writes" },
+  { from: "api-community", to: "svc-community", kind: "dependsOn" },
+  { from: "svc-community", to: "db-contributions", kind: "flowsTo", label: "songs/notes/voices" },
+  { from: "svc-community", to: "db-reactions", kind: "flowsTo", label: "fire" },
+  { from: "svc-community", to: "db-event-intents", kind: "flowsTo", label: "going/ticket" },
+  { from: "ui-event-detail", to: "ui-community-panel", kind: "flowsTo", label: "embeds" },
+
+  // Identity & taste wiring
+  { from: "api-auth", to: "int-authjs", kind: "dependsOn" },
+  { from: "int-authjs", to: "db-users", kind: "flowsTo", label: "user records" },
+  { from: "int-authjs", to: "db-accounts", kind: "flowsTo", label: "oauth links" },
+  { from: "ui-listener-profile", to: "api-me", kind: "flowsTo", label: "reads/writes" },
+  { from: "api-me", to: "svc-music", kind: "dependsOn", label: "sync taste" },
+  { from: "api-me", to: "svc-listener-prefs", kind: "dependsOn", label: "save settings" },
+  { from: "ui-eventboard", to: "ui-listener-profile", kind: "flowsTo", label: "sign-in entry" },
+
+  // Operations
+  { from: "job-cleanup", to: "int-blob", kind: "flowsTo", label: "delete stale images" },
+  { from: "job-avlgo-sync", to: "db-job-runs", kind: "flowsTo", label: "records outcome" },
+  { from: "job-cleanup", to: "db-job-runs", kind: "flowsTo", label: "records outcome" },
+  { from: "int-umami", to: "ui-admin", kind: "flowsTo", label: "stats read back" },
+  { from: "int-umami", to: "ui-homepage", kind: "dependsOn", label: "tracks usage" },
+  { from: "svc-admin-data", to: "db-events", kind: "dependsOn", label: "reads counts" },
+  { from: "svc-admin-data", to: "db-contributions", kind: "dependsOn", label: "reads counts" },
+  { from: "svc-admin-data", to: "db-music-connections", kind: "dependsOn", label: "reads counts" },
+  { from: "ui-admin", to: "svc-admin-data", kind: "dependsOn" },
+  { from: "ui-admin", to: "svc-registry", kind: "dependsOn", label: "renders graph" },
+  { from: "ui-admin", to: "db-admin-resources", kind: "flowsTo", label: "manages directory" },
+
+  // Partners
+  { from: "ui-eventboard", to: "partner-ryan-playlist", kind: "flowsTo", label: "features" },
+  { from: "db-admin-resources", to: "partner-ryan-playlist", kind: "flowsTo", label: "catalogs" },
+];
+
+/* ------------------------------------------------------------------ */
+/*  Public accessors (the ONLY way UI/export/tests read the model)     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The canonical static registry. Returns fresh arrays so callers can safely sort/enrich without
+ * mutating the module-level source of truth.
+ */
+export function getSystemRegistry(): SystemRegistry {
+  return {
+    nodes: NODES.map((node) => ({ ...node })),
+    edges: EDGES.map((edge) => ({ ...edge })),
+  };
+}
+
+export function getRegistryNode(id: string): RegistryNode | undefined {
+  const node = NODES.find((candidate) => candidate.id === id);
+  return node ? { ...node } : undefined;
+}
+
+/** Nodes grouped by layer, in canonical layer order, for the high-level view and markdown. */
+export function getNodesByLayer(
+  nodes: RegistryNode[] = NODES
+): Array<{ id: SystemLayer; label: string; blurb: string; nodes: RegistryNode[] }> {
+  return SYSTEM_LAYERS.map((layer) => ({
+    ...layer,
+    nodes: nodes.filter((node) => node.layer === layer.id),
+  })).filter((group) => group.nodes.length > 0);
+}
+
+/** Immediate inbound and outbound edges for a node — the "connections" shown when it expands. */
+export function getNodeEdges(
+  id: string,
+  edges: RegistryEdge[] = EDGES
+): { inbound: RegistryEdge[]; outbound: RegistryEdge[] } {
+  return {
+    inbound: edges.filter((edge) => edge.to === id),
+    outbound: edges.filter((edge) => edge.from === id),
+  };
+}

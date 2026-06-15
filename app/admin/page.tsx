@@ -4,6 +4,12 @@ import Image from "next/image";
 import { AdminPortal } from "@/components/AdminPortal";
 import { ADMIN_COOKIE_NAME, isAdminSession } from "@/lib/admin";
 import { loadAdminDashboardData } from "@/lib/admin-data";
+import { loadSystemMap } from "@/lib/admin/registry";
+import { loadSystemHealth } from "@/lib/admin/health";
+import { loadStewardship } from "@/lib/admin/stewardship";
+import { loadRecommendationInsight } from "@/lib/admin/insight";
+import { loadAnalytics } from "@/lib/admin/analytics";
+import { listTraceableListeners, loadListenerTrace } from "@/lib/admin/listener-graph";
 import {
   listContributions,
   publicContribution,
@@ -52,15 +58,31 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   const params = await searchParams;
   const status = getStatus(params.status);
-  const [data, contributions] = await Promise.all([
-    loadAdminDashboardData(),
-    listContributions(status === "all" ? undefined : status),
-  ]);
+  const [data, systemMap, health, stewardship, insight, analytics, listeners, contributions] =
+    await Promise.all([
+      loadAdminDashboardData(),
+      loadSystemMap(),
+      loadSystemHealth(),
+      loadStewardship(),
+      loadRecommendationInsight(),
+      loadAnalytics("7d"),
+      listTraceableListeners(),
+      listContributions(status === "all" ? undefined : status),
+    ]);
+
+  const listenerTrace = listeners[0] ? await loadListenerTrace(listeners[0].identityKey) : null;
 
   return (
     <main className="admin-shell">
       <AdminPortal
         data={data}
+        systemMap={systemMap}
+        health={health}
+        stewardship={stewardship}
+        insight={insight}
+        analytics={analytics}
+        listeners={listeners}
+        listenerTrace={listenerTrace}
         contributions={contributions.map(publicContribution)}
         currentStatus={status}
       />

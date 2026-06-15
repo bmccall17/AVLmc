@@ -126,3 +126,42 @@ create index if not exists spotify_event_match_corrections_identity_idx
   on public.spotify_event_match_corrections (identity_key, event_id);
 create index if not exists spotify_event_match_corrections_user_id_idx
   on public.spotify_event_match_corrections (user_id);
+
+
+-- 5. system_job_runs — append-only observability for scheduled jobs (PRD 07 / C2)
+create table if not exists public.system_job_runs (
+  id text primary key,
+  job text not null check (job in ('avlgo_sync', 'cleanup')),
+  status text not null check (status in ('success', 'failure')),
+  detail text,
+  items_processed integer,
+  started_at timestamptz not null,
+  finished_at timestamptz not null default now(),
+  duration_ms integer
+);
+
+create index if not exists system_job_runs_job_finished_idx
+  on public.system_job_runs (job, finished_at desc);
+
+
+-- 6. admin_resources — curated partner/resource directory (PRD 08 / C3)
+create table if not exists public.admin_resources (
+  id text primary key,
+  type text not null check (type in (
+    'source', 'playlist', 'venue_partner', 'community_org', 'press_media',
+    'playlist_collaborator', 'sponsor', 'venue_contact', 'artist_resource', 'other'
+  )),
+  name text not null,
+  description text,
+  url text,
+  status text not null default 'active' check (status in ('active', 'prospect', 'archived')),
+  linked_venue_name text,
+  linked_source text,
+  surfaced_publicly boolean not null default false,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists admin_resources_type_status_idx
+  on public.admin_resources (type, status);

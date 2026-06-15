@@ -9,6 +9,8 @@
     "lint": "eslint . --max-warnings=0",
     "test:discovery": "rm -rf /tmp/avlmc-discovery-tests && tsc -p tests/tsconfig.discovery.json && node --test /tmp/avlmc-discovery-tests/tests/discovery-scoring.test.js",
     "test:event-dedupe": "rm -rf /tmp/avlmc-event-dedupe-tests && tsc --target es2022 --module commonjs --moduleResolution node --rootDir . --outDir /tmp/avlmc-event-dedupe-tests --esModuleInterop --skipLibCheck --strict tests/event-dedupe.test.ts lib/event-dedupe.ts && node --test /tmp/avlmc-event-dedupe-tests/tests/event-dedupe.test.js",
+    "test:registry": "node --import tsx --test tests/system-registry.test.ts",
+    "generate:system-map": "tsx scripts/generate-system-map.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
