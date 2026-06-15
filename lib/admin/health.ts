@@ -234,8 +234,9 @@ async function probeAvlgoFeed(): Promise<HealthProbe> {
   const label = "AVLgo Feed";
   const start = Date.now();
   try {
-    // Reachability only — read status, then discard the body (no full ingest), time-boxed.
-    const response = await fetchWithTimeout(url, 3000);
+    // Reachability only — read status, then discard the body (no full ingest), time-boxed. The
+    // probe bypasses the cache the daily sync uses, so it talks to the slow origin directly.
+    const response = await fetchWithTimeout(url, 8000);
     const latencyMs = Date.now() - start;
     const ok = response.ok;
     const httpStatus = response.status;
@@ -252,16 +253,24 @@ async function probeAvlgoFeed(): Promise<HealthProbe> {
     return base("avlgo-feed", label, {
       status: "degraded",
       severity: "warning",
-      detail: `Feed responded HTTP ${httpStatus} (${latencyMs}ms).`,
-      remediation: custom ? "Verify AVLGO_API_URL is correct." : "AVLgo may be having issues; seed events fall back.",
+      detail: `Feed responded HTTP ${httpStatus} (${latencyMs}ms). Seed events fall back; see Event Data Freshness for whether ingest is actually current.`,
+      remediation: custom ? "Verify AVLGO_API_URL is correct." : "Usually transient on AVLgo's side.",
       latencyMs,
     });
   } catch (error) {
+    // A probe timeout/abort does NOT mean the feed is down — the daily sync uses a cached fetch and
+    // seed events as fallback. Event Data Freshness is the authoritative staleness signal, so keep
+    // a slow probe informational and only flag an actual network failure for attention.
+    const aborted = error instanceof Error && /abort|timed out/i.test(error.message);
     return base("avlgo-feed", label, {
-      status: "down",
-      severity: "critical",
-      detail: `Feed unreachable within timeout (${messageFrom(error, "network error")}). Seed events are used as fallback.`,
-      remediation: custom ? "Check AVLGO_API_URL host." : "Check avlgo.com availability.",
+      status: aborted ? "degraded" : "down",
+      severity: aborted ? "info" : "warning",
+      detail: aborted
+        ? "Liveness probe didn't complete within 8s — the export endpoint is slow to a direct (uncached) request. The daily sync uses a cached fetch with seed fallback; check Event Data Freshness for whether data is actually current."
+        : `Could not reach the feed host (${messageFrom(error, "network error")}). Seed events fall back; check Event Data Freshness for actual staleness.`,
+      remediation: custom
+        ? "Check the AVLGO_API_URL host only if Event Data Freshness is also stale."
+        : "If Event Data Freshness is green, the feed is fine — this is just a slow probe.",
     });
   }
 }
@@ -493,12 +502,9 @@ async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   try {
-    return await fetch(url, {
-      method: "GET",
-      signal: controller.signal,
-      cache: "no-store",
-      headers: { "user-agent": "AVLmc-admin-healthcheck" },
-    });
+    // Match the app's own feed fetch (plain GET, no custom user-agent) so a CDN/WAF doesn't treat
+    // the probe differently. `no-store` keeps it a genuine liveness check, not a cached 200.
+    return await fetch(url, { method: "GET", signal: controller.signal, cache: "no-store" });
   } finally {
     clearTimeout(timer);
   }
