@@ -62,8 +62,9 @@ Implemented in this pass:
 - Anonymous and signed-in personalization use a merged memory model: cookie-backed session signals continue to work without login, while signed-in users also read and write account-backed signals.
 - `event_interaction_events` stores an append-only learning stream for homepage impressions, detail opens, AVLgo clicks, planning, fire, remove, undo remove, and contribution actions.
 - `event_person_event_state` stores the current per-person fire, planning, and removed state for each event.
-- `POST /api/discovery/event-action` centralizes homepage/detail learning actions and returns updated public counts plus the person's current event state.
+- `POST /api/discovery/event-action` centralizes homepage/detail learning actions and returns updated public counts plus the person's current event state. **Database failures strictly return 500 errors to prevent silent failures.**
 - Discovery scoring now uses recent personal signals in addition to public community signals and optional Spotify taste rows. Positive interactions can boost similar shows; removed-event patterns can downrank similar future shows without hiding them automatically.
+- **Real-Time Client Feedback:** Actions like removing or firing an event immediately update local `preferenceSignals`, causing the `EventBoard` to instantly re-rank similar events without a page reload.
 - Direct event URLs remain accessible after removal and include a restore affordance.
 
 ## Product Direction

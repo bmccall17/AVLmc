@@ -131,6 +131,10 @@ Analytics are actively running via **Umami Cloud** to monitor Unique Visitors (p
 
 See [Architecture Reference](architecture-reference.md) for current routes, components, storage behavior, and the Aiven production persistence path.
 
+## Architecture Decision Records (ADRs)
+
+- [ADR 001: Real-Time Taste Signals and Event State Persistence](adrs/0001-real-time-taste-signals-and-state-persistence.md)
+
 ## Hard Constraints
 
 - No paid hosting, database, storage, auth, email, transcription, or API services in the first version.
