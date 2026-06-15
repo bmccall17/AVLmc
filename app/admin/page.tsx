@@ -6,10 +6,6 @@ import { ADMIN_COOKIE_NAME, isAdminSession } from "@/lib/admin";
 import { loadAdminDashboardData } from "@/lib/admin-data";
 import { loadSystemMap } from "@/lib/admin/registry";
 import { loadSystemHealth } from "@/lib/admin/health";
-import { loadStewardship } from "@/lib/admin/stewardship";
-import { loadRecommendationInsight } from "@/lib/admin/insight";
-import { loadAnalytics } from "@/lib/admin/analytics";
-import { listTraceableListeners, loadListenerTrace } from "@/lib/admin/listener-graph";
 import {
   listContributions,
   publicContribution,
@@ -58,19 +54,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   const params = await searchParams;
   const status = getStatus(params.status);
-  const [data, systemMap, health, stewardship, insight, analytics, listeners, contributions] =
-    await Promise.all([
-      loadAdminDashboardData(),
-      loadSystemMap(),
-      loadSystemHealth(),
-      loadStewardship(),
-      loadRecommendationInsight(),
-      loadAnalytics("7d"),
-      listTraceableListeners(),
-      listContributions(status === "all" ? undefined : status),
-    ]);
 
-  const listenerTrace = listeners[0] ? await loadListenerTrace(listeners[0].identityKey) : null;
+  // Only the always-visible surfaces load on first paint. The heavy tabs (Stewardship, Insight,
+  // Analytics, Listener Trace) lazy-load their own data when first opened — see AdminPortal — which
+  // keeps the initial admin load light and avoids saturating the single-connection DB pool.
+  const [data, systemMap, health, contributions] = await Promise.all([
+    loadAdminDashboardData(),
+    loadSystemMap(),
+    loadSystemHealth(),
+    listContributions(status === "all" ? undefined : status),
+  ]);
 
   return (
     <main className="admin-shell">
@@ -78,11 +71,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         data={data}
         systemMap={systemMap}
         health={health}
-        stewardship={stewardship}
-        insight={insight}
-        analytics={analytics}
-        listeners={listeners}
-        listenerTrace={listenerTrace}
         contributions={contributions.map(publicContribution)}
         currentStatus={status}
       />

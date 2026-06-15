@@ -5721,3 +5721,28 @@ button.primary-action {
   margin: 8px 0 4px;
   padding: 12px;
 }
+
+/* ---- Lazy tab loading state ---- */
+
+.admin-lazy-loading {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  padding: 48px 24px;
+}
+
+.admin-lazy-spinner {
+  animation: admin-spin 0.8s linear infinite;
+  border: 2px solid rgba(63, 63, 70, 0.6);
+  border-radius: 50%;
+  border-top-color: #2dd4bf;
+  display: inline-block;
+  height: 18px;
+  width: 18px;
+}
+
+@keyframes admin-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

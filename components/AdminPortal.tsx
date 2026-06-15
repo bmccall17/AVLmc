@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { AdminDashboardData } from "@/lib/admin-data";
 import type { SystemMap } from "@/lib/admin/registry";
 import type { SystemHealth } from "@/lib/admin/health";
@@ -26,14 +26,11 @@ type AdminPortalProps = {
   data: AdminDashboardData;
   systemMap: SystemMap;
   health: SystemHealth;
-  stewardship: StewardshipData;
-  insight: RecommendationInsight;
-  analytics: SystemAnalytics;
-  listeners: ListenerSummary[];
-  listenerTrace: ListenerTrace | null;
   contributions: PublicContribution[];
   currentStatus: ContributionStatus | "all";
 };
+
+type ListenerBundle = { listeners: ListenerSummary[]; trace: ListenerTrace | null };
 
 type TabId =
   | "overview"
@@ -66,15 +63,17 @@ export function AdminPortal({
   data,
   systemMap,
   health,
-  stewardship,
-  insight,
-  analytics,
-  listeners,
-  listenerTrace,
   contributions,
   currentStatus,
 }: AdminPortalProps) {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+
+  // Heavy tabs lazy-load their data the first time they are opened, then cache it client-side so
+  // switching back is instant. This keeps the initial admin load light.
+  const [insight, setInsight] = useState<RecommendationInsight | null>(null);
+  const [stewardship, setStewardship] = useState<StewardshipData | null>(null);
+  const [analytics, setAnalytics] = useState<SystemAnalytics | null>(null);
+  const [listenerBundle, setListenerBundle] = useState<ListenerBundle | null>(null);
 
   return (
     <div className="admin-portal">
@@ -188,12 +187,40 @@ export function AdminPortal({
         {activeTab === "knowledge" && (
           <KnowledgeGraphSection systemMap={systemMap} data={data} />
         )}
-        {activeTab === "insight" && <InsightSection insight={insight} />}
-        {activeTab === "listener" && (
-          <ListenerGraphSection listeners={listeners} initialTrace={listenerTrace} />
+        {activeTab === "insight" && (
+          <LazySection
+            value={insight}
+            setValue={setInsight}
+            url="/api/admin/insight"
+            render={(value) => <InsightSection insight={value} />}
+          />
         )}
-        {activeTab === "stewardship" && <StewardshipSection stewardship={stewardship} />}
-        {activeTab === "analytics" && <AnalyticsSection initial={analytics} />}
+        {activeTab === "listener" && (
+          <LazySection
+            value={listenerBundle}
+            setValue={setListenerBundle}
+            url="/api/admin/listeners"
+            render={(value) => (
+              <ListenerGraphSection listeners={value.listeners} initialTrace={value.trace} />
+            )}
+          />
+        )}
+        {activeTab === "stewardship" && (
+          <LazySection
+            value={stewardship}
+            setValue={setStewardship}
+            url="/api/admin/stewardship"
+            render={(value) => <StewardshipSection stewardship={value} />}
+          />
+        )}
+        {activeTab === "analytics" && (
+          <LazySection
+            value={analytics}
+            setValue={setAnalytics}
+            url="/api/admin/analytics?range=7d"
+            render={(value) => <AnalyticsSection initial={value} />}
+          />
+        )}
         {activeTab === "gaps" && <GapsSection data={data} />}
         {activeTab === "resources" && <ResourcesSection data={data} />}
         {activeTab === "moderation" && (
@@ -205,6 +232,72 @@ export function AdminPortal({
       </div>
     </div>
   );
+}
+
+/* ================================================================== */
+/*  Lazy tab loader                                                    */
+/* ================================================================== */
+
+function LazySection<T>({
+  value,
+  setValue,
+  url,
+  render,
+}: {
+  value: T | null;
+  setValue: (value: T) => void;
+  url: string;
+  render: (value: T) => ReactNode;
+}) {
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (value !== null) {
+      return;
+    }
+    let active = true;
+    fetch(url)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Could not load this tab’s data.");
+        }
+        return response.json();
+      })
+      .then((loaded) => {
+        // Cache in the parent so returning to this tab is instant; parent stays mounted.
+        setValue(loaded as T);
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err instanceof Error ? err.message : "Could not load this tab’s data.");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [url, value, setValue]);
+
+  if (error) {
+    return (
+      <div className="admin-section">
+        <div className="admin-section-header">
+          <h2>Couldn’t load this tab</h2>
+        </div>
+        <p className="admin-meta">{error} Switch tabs and back to retry.</p>
+      </div>
+    );
+  }
+
+  if (value === null) {
+    return (
+      <div className="admin-section admin-lazy-loading">
+        <span className="admin-lazy-spinner" aria-hidden="true" />
+        <p className="admin-meta">Loading…</p>
+      </div>
+    );
+  }
+
+  return <>{render(value)}</>;
 }
 
 /* ================================================================== */
