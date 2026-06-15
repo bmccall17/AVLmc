@@ -3211,7 +3211,7 @@ button.primary-action {
 }
 
 .admin-portal {
-  padding: 28px max(20px, calc((100vw - 1320px) / 2)) 64px;
+  padding: 28px 32px 64px;
 }
 
 /* ---- Login ---- */
