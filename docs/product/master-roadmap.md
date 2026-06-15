@@ -117,6 +117,16 @@ Built outputs:
 
 See [Personalized Discovery Backlog](personalized-discovery-backlog.md) for next-plan notes and acceptance targets.
 
+## Scaling Milestones & Tracking
+
+Analytics are actively running via **Umami Cloud** to monitor Unique Visitors (proxy for WAU/MAU) without heavy cookies or breaking the $0 constraint.
+
+| Metric Threshold | Triggered Action | Status |
+| --- | --- | --- |
+| **WAU < 10** | Keep Vercel OG image generation fully dynamic (no caching). | Current |
+| **WAU > 100** or **Events > 5,000/mo** | Implement Next.js `revalidate = 3600` on `opengraph-image.tsx` and `twitter-image.tsx` to cache Satori image generation and avoid Vercel compute limit overages. | Parked |
+| **Events > 10,000/mo** | Umami Cloud Free Tier limit reached. Transition to self-hosted Umami on a $5/mo VPS or upgrade Umami tier. | Parked |
+
 ## Implementation Reference
 
 See [Architecture Reference](architecture-reference.md) for current routes, components, storage behavior, and the Aiven production persistence path.

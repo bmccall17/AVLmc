@@ -136,6 +136,7 @@ export function EventBoard({
   const [listenerPreferences, setListenerPreferences] = useState(() =>
     normalizeListenerPreferences(initialListenerPreferences)
   );
+  const [localPreferenceSignals, setLocalPreferenceSignals] = useState(preferenceSignals);
   const [discoveryStates, setDiscoveryStates] = useState(initialDiscoveryStates);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
@@ -225,7 +226,7 @@ export function EventBoard({
         counts: eventCounts,
         events,
         listenerPreferences,
-        preferenceSignals,
+        preferenceSignals: localPreferenceSignals,
         profileItems: musicProfileItems,
         spotifyMatchCorrections,
       })
@@ -234,9 +235,9 @@ export function EventBoard({
     eventCounts,
     events,
     listenerPreferences,
+    localPreferenceSignals,
     musicConnections,
     musicProfileItems,
-    preferenceSignals,
     spotifyMatchCorrections,
   ]);
 
@@ -392,6 +393,21 @@ export function EventBoard({
           ...current,
           [event.id]: data.state,
         }));
+      }
+
+      // Append a taste signal so the scoring engine re-ranks similar events immediately.
+      if (action !== "avlgo_click") {
+        setLocalPreferenceSignals((current) => [
+          {
+            action,
+            artistName: event.artistName,
+            eventId: event.id,
+            eventTitle: event.eventTitle,
+            tags: event.tags,
+            venueName: event.venueName,
+          },
+          ...current,
+        ]);
       }
 
       return data;

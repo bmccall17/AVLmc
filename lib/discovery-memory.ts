@@ -295,6 +295,7 @@ export async function recordDiscoveryEventAction(input: DiscoveryActionInput) {
     return null;
   }
 
+  // Step 1: Log the interaction event (best-effort, swallow missing-table errors).
   try {
     await query(
       `
@@ -331,16 +332,28 @@ export async function recordDiscoveryEventAction(input: DiscoveryActionInput) {
         writeIdentityKey,
       ]
     );
-
-    if (STATE_ACTIONS.has(input.action)) {
-      await writePersonEventState(input);
+  } catch (error) {
+    if (!isMissingRelationError(error)) {
+      throw error;
     }
+    // Interaction log table missing — continue so state write can still attempt.
+  }
 
+  // Step 2: Write the durable person-event state (must succeed for state actions).
+  if (STATE_ACTIONS.has(input.action)) {
+    // Let errors propagate — the caller must know if the state write failed.
+    await writePersonEventState(input);
+  }
+
+  // Step 3: Read back the persisted state.
+  try {
     const states = await listDiscoveryStates([input.event.id], input);
     return states[input.event.id] ?? emptyDiscoveryState(input.event.id);
   } catch (error) {
     if (isMissingRelationError(error)) {
-      return null;
+      // State table missing for read-back — if this was a state action the write
+      // above would have already thrown, so we only reach here for non-state actions.
+      return emptyDiscoveryState(input.event.id);
     }
     throw error;
   }

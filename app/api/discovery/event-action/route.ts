@@ -72,38 +72,35 @@ export async function POST(request: Request) {
     sessionId,
     userId,
   });
-  const recordedState = await recordDiscoveryEventAction({
-    action,
-    event,
-    sessionId,
-    source: surface ?? intentSource,
-    userId,
-  });
+
+  let recordedState: Awaited<ReturnType<typeof recordDiscoveryEventAction>>;
+
+  try {
+    recordedState = await recordDiscoveryEventAction({
+      action,
+      event,
+      sessionId,
+      source: surface ?? intentSource,
+      userId,
+    });
+  } catch (error) {
+    console.error("Discovery state write failed:", error);
+    return NextResponse.json(
+      { error: "Could not persist your discovery action. Please try again." },
+      { status: 500 }
+    );
+  }
+
   const state =
     recordedState ??
     (await listDiscoveryStates([event.id], { sessionId, userId }))[event.id] ??
-    fallbackStateForAction(event.id, action);
+    emptyDiscoveryState(event.id);
 
   const response = NextResponse.json({ counts, state });
   setAnonymousSessionCookie(response, sessionId);
   return response;
 }
 
-function fallbackStateForAction(eventId: string, action: DiscoveryEventAction) {
-  const state = emptyDiscoveryState(eventId);
-
-  if (action === "fire") {
-    return { ...state, fire: true, fireAt: new Date().toISOString() };
-  }
-  if (action === "planning") {
-    return { ...state, planning: true, planningAt: new Date().toISOString() };
-  }
-  if (action === "remove") {
-    return { ...state, removed: true, removedAt: new Date().toISOString() };
-  }
-
-  return state;
-}
 
 async function recordCountAction(input: {
   action: DiscoveryEventAction;

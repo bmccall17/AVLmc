@@ -159,7 +159,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <EventBoard
           counts={counts}
           discoveryScores={discoveryScores}
-          events={visibleEvents}
+          events={events}
           hasTasteProfile={hasTasteProfile}
           initialDiscoveryStates={discoveryStates}
           initialListenerPreferences={activeListenerPreferences}
