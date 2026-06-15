@@ -30,6 +30,11 @@ export const metadata: Metadata = {
   },
 };
 
+// This page reads cookies and queries the DB on render. Without this guard Next.js
+// runs a build-time render pass that opens DB connections and can exhaust the Neon
+// pool, failing the build (53300 too_many_connections). Force dynamic to skip it.
+export const dynamic = "force-dynamic";
+
 export default async function DiscoveryActionSandboxPage() {
   const allEvents = await getUpcomingEvents();
   const eventIds = allEvents.map((event) => event.id);

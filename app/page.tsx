@@ -24,6 +24,11 @@ import { getListenerDiscoveryPreferences } from "@/lib/listener-preferences-stor
 import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
 import { SPOTIFY_LIMITED_BETA_CODE } from "@/lib/spotify-limited-access";
 
+// Reads cookies/auth and queries the DB on render. Force dynamic so Next.js skips the
+// build-time render pass that would otherwise open DB connections and risk exhausting
+// the Neon pool (53300 too_many_connections) during the build.
+export const dynamic = "force-dynamic";
+
 function formatDateParam(date: Date) {
   return [
     date.getFullYear(),
