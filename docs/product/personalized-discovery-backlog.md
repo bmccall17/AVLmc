@@ -166,6 +166,55 @@ Do not use raw Spotify OAuth tokens in client code or ranking responses. Discove
 - Apple identity is separate from Apple Music.
 - Apple Music requires MusicKit/developer-token setup before planning library access (`AUTH_APPLE_MUSIC_ENABLED` flag exists; not implemented).
 
+## Future Direction — Deeper Personalization (planned, not yet scoped)
+
+Personalization today is intentionally shallow: scoring reads only a person's **most recent
+240 explicit, meaningful actions** (`detail_open`, `avlgo_click`, `fire`, `planning`, `remove`,
+contributions) from `event_interaction_events` (`lib/discovery-memory.ts` →
+`listDiscoveryPreferenceSignals`), and **ignores `impression` rows entirely**. The full
+behavioral stream is captured but mostly unused. This is the next big investment area.
+
+- **Implicit / behavioral signals from impressions.** An impression that never converts is a
+  soft *negative*; repeatedly showing an artist/venue/genre a person never engages should
+  gently cool it. Conversely, dwell/return patterns are soft positives. Design carefully:
+  impressions are high-volume and noisy, so weight them far below explicit actions, decay
+  them over time, and guard against feedback loops (don't bury everything a person hasn't
+  clicked yet). When built, this also changes the retention story — impressions become
+  signal, not just bloat (see the impression-prune note: only prune beyond the signal window).
+- **Richer signal model.** Move past the flat "recent 240" cap toward time-decayed,
+  per-dimension affinities (artist / venue / genre / time-of-week / price / indoor-outdoor)
+  with confidence weighting; separate short-term intent from long-term taste.
+- **Cold-start & anonymity.** Strengthen anonymous personalization from session behavior
+  before sign-in, and a graceful hand-off when a session links to an account.
+- **Transparency & control.** Keep every learned signal explainable and correctable (extends
+  the V3 weights / custom-signal / match-correction model), so behavioral inference never
+  feels creepy or unaccountable.
+
+Acceptance for a first cut: a signed-in listener's ranking measurably reflects what they
+*skip*, not just what they tap, validated in the admin Recommendation-Insight / Listener-Trace
+tabs against real behavior — without runaway feedback loops.
+
+## Future Direction — Social, Curators & Influencers (planned, not yet scoped)
+
+A larger theme beyond solo personalization: turn AVLmc into a place where taste is *shared*.
+Builds on **Phase 9 (Social Music Sharing)** — the shipped Shared Listening surface (PRD 17)
+is step one; the noted **inner-circle attribution layer** is step two.
+
+- **Listener-to-listener connection.** Optional follow / friend graph so people can see what
+  friends are going to / firing, and share shows and song lists — privacy-first and opt-in.
+- **Curators & influencers.** First-class curator/influencer profiles with public top-lists
+  and per-show picks; surface "curated by" signal on the board and let listeners follow
+  curators' taste. This is the natural home for attribution that Shared Listening defers today.
+- **Social signal in discovery.** Let trusted-circle / followed-curator activity become an
+  optional ranking input (clearly distinct from anonymous public heat), without making the
+  board pay-to-play or letting influence drown out local discovery.
+- **Scope guardrails.** Stays $0 and privacy-first; no public social graph by default; no
+  Spotify *write* actions (still the parked Outcome 9). Likely its own multi-cycle epic with a
+  desired-outcomes doc when prioritized.
+
+Both directions are **large and unscoped** — flagged here so `/orchestrator` can surface them
+and a desired-outcomes doc + epic can be written when they come up the priority list.
+
 ## Auth Delay Fallback
 
 If Auth or Spotify sync is delayed, still ship the discovery pass with anonymous Best Bets, ranked filters, and manual song links. The same scoring interface should accept Spotify rows later without changing the public board contract.
