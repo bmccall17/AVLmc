@@ -8,7 +8,14 @@ Replace the shallow, hardcoded genre check with a real **genre taxonomy** — ca
 
 ## Implementation Status
 
-**Planned.** Foundation cycle for Track B; unblocks C5. Independent of Track A.
+**Shipped.** Delivered:
+
+- **Taxonomy module** — `lib/genre-taxonomy.ts` (pure, client-safe, dependency-free): 20 canonical genres sized to Asheville's scene, an alias/synonym map (e.g. `rnb`/`r&b` → soul, `singer-songwriter` → folk, `edm`/`house`/`dj` → electronic, `hip hop` → hiphop), and a symmetric parent/child adjacency table (`funk↔soul` 0.8, `rock↔indie` 0.7, etc.). Exports `resolveGenres`, `genreRelationStrength`, `bestRelationStrength`, `GENRE_LABELS`, and `isGenericGenreTerm` (the single generic-term guard discovery now delegates to). Whole-token matching avoids false positives (`rockwell` ≠ rock); unknown terms pass through as neutral.
+- **Richer matching** — `scoreGenreMatch` (`lib/discovery.ts`) now resolves an event's title/artist/tags into canonical genres via the taxonomy and returns `{ score, genres }`, preserving the calibrated `min(24, …)` output ceiling so downstream `genreMatch` weighting stays unchanged. Catches alias-tagged events the old flat 15-term list missed.
+- **Explainable reasons** — `getGenreReasons` emits a compact, truthful reason naming up to two matched canonical genres (e.g. `genre match: jazz / soul`), public data only. Ordered after personalized reasons so it surfaces for everyone (esp. anonymous) but yields the 3-reason budget to stronger signals when tight.
+- **Quick-filter alignment** — board genre filters (Dance, Rock) route through `resolveGenres` so alias-tagged events match their canonical filter (`components/EventBoard.tsx`).
+- **Tunable** — still consumes the existing `genreMatch` weight; no new control. Set it to 0 → genre stops influencing rank.
+- **Validation** — `test:taxonomy` (alias resolution, relationship strength, generic filtering, pass-through) and the existing `test:discovery` suite both green. Registered `svc-genre-taxonomy` + edge in `lib/system-registry.ts`; system map regenerated; `npm run test:registry` passes. New code Snyk-clean; $0.
 
 ## Goals
 

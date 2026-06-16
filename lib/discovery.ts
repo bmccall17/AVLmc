@@ -12,6 +12,12 @@ import {
   type ListenerPreferenceKey,
 } from "./listener-preferences";
 import type { MusicConnection, MusicProfileItem } from "@/lib/music";
+import {
+  GENRE_LABELS,
+  isGenericGenreTerm,
+  resolveGenres,
+  type CanonicalGenre,
+} from "./genre-taxonomy";
 
 export type DiscoveryReason =
   | {
@@ -124,9 +130,11 @@ export function scoreDiscoveryEvents({
         spotifyMatchCorrections.filter((correction) => correction.eventId === event.id)
       );
       const personalScore = scorePersonalSignals(event, preferenceSignals);
+      const genreResult = scoreGenreMatch(event);
       const componentBases = getPreferenceComponentBases({
         counts: eventCounts,
         event,
+        genreMatchBase: genreResult.score,
         personalScore,
         profileScore,
         publicScore,
@@ -142,6 +150,9 @@ export function scoreDiscoveryEvents({
         ...publicScore.reasons,
         ...profileScore.reasons,
         ...getPreferenceReasons(bestMatchTuning),
+        // Genre is supplementary: it surfaces for everyone (esp. anonymous) but yields the
+        // limited reason budget to stronger personalized signals when space is tight.
+        ...getGenreReasons(genreResult.genres),
       ]);
 
       return [
@@ -251,12 +262,14 @@ function scorePersonalSignals(event: EventRecord, signals: DiscoveryPreferenceSi
 function getPreferenceComponentBases({
   counts,
   event,
+  genreMatchBase,
   personalScore,
   profileScore,
   publicScore,
 }: {
   counts: CommunityCounts | undefined;
   event: EventRecord;
+  genreMatchBase: number;
   personalScore: ReturnType<typeof scorePersonalSignals>;
   profileScore: ReturnType<typeof scoreSpotifyMatch>;
   publicScore: ReturnType<typeof scorePublicSignals>;
@@ -265,7 +278,7 @@ function getPreferenceComponentBases({
     artistAffinity: profileScore.score,
     dateAvailability: publicScore.components.dateAvailability,
     freePaidPreference: eventContainsAny(event, ["free", "no cover", "suggested donation"]) ? 12 : 0,
-    genreMatch: scoreGenreMatch(event),
+    genreMatch: genreMatchBase,
     learnedBehavior: personalScore.learnedBehaviorScore,
     localRelevance: publicScore.components.localRelevance,
     novelty: scoreNovelty(counts, profileScore.score, personalScore.score),
@@ -325,6 +338,16 @@ function scorePreferenceTuning(
   };
 }
 
+/** Compact, truthful genre reason naming up to two matched canonical genres (public data only). */
+function getGenreReasons(genres: CanonicalGenre[]): DiscoveryReason[] {
+  if (genres.length === 0) {
+    return [];
+  }
+
+  const named = genres.slice(0, 2).map((genre) => GENRE_LABELS[genre]);
+  return [simpleReason(`genre match: ${named.join(" / ")}`)];
+}
+
 function getPreferenceReasons(tuning: PreferenceTuningResult): DiscoveryReason[] {
   if (tuning.customSignalScore >= 8) {
     return [simpleReason("matches your tuned preferences")];
@@ -342,28 +365,21 @@ function getPreferenceReasons(tuning: PreferenceTuningResult): DiscoveryReason[]
   return [];
 }
 
-function scoreGenreMatch(event: EventRecord) {
+/**
+ * Resolve an event's genre profile (canonical genres) and score how genre-identifiable it is,
+ * via the taxonomy (PRD 15 / C4). Catches alias-tagged events the old flat list missed (e.g.
+ * "rnb" → soul, "singer-songwriter" → folk). The output range/ceiling is preserved so the
+ * downstream `genreMatch` weighting stays calibrated.
+ */
+function scoreGenreMatch(event: EventRecord): { score: number; genres: CanonicalGenre[] } {
   const usefulTagCount = event.tags.filter((tag) => !isGenericTerm(normalizeText(tag))).length;
-  const genreTerms = [
-    "americana",
-    "bluegrass",
-    "country",
-    "dance",
-    "dj",
-    "folk",
-    "funk",
-    "hip hop",
-    "indie",
-    "jazz",
-    "metal",
-    "punk",
-    "r b",
-    "rock",
-    "soul",
-  ];
-  const genreTermScore = genreTerms.some((term) => getEventHaystack(event).includes(term)) ? 8 : 0;
+  const genres = resolveGenres([event.eventTitle, event.artistName, ...event.tags]);
+  const genreScore = genres.length > 0 ? 8 : 0;
 
-  return Math.min(24, usefulTagCount * 6 + genreTermScore);
+  return {
+    genres,
+    score: Math.min(24, usefulTagCount * 6 + genreScore),
+  };
 }
 
 function scoreNovelty(
@@ -680,5 +696,5 @@ function roundScore(value: number) {
 }
 
 function isGenericTerm(value: string) {
-  return ["live", "music", "band", "show", "concert", "local"].includes(value);
+  return isGenericGenreTerm(value);
 }

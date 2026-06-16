@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Bell, CalendarCheck, ChevronRight, ExternalLink, Flame, Headphones, Search, Star, UserPlus, X } from "lucide-react";
 import { SaveButton } from "@/components/SaveButton";
+import { resolveGenres, type CanonicalGenre } from "@/lib/genre-taxonomy";
 import type { CommunityCounts } from "@/lib/community";
 import { scoreDiscoveryEvents, type DiscoveryReason, type DiscoveryScore, type DiscoveryScoresByEvent } from "@/lib/discovery";
 import type {
@@ -1617,8 +1618,8 @@ const quickFilterGroups: Array<{
   },
   {
     filters: [
-      { id: "dance", label: "Dance", matches: (event) => eventContains(event, ["dance", "dj"]) },
-      { id: "rock", label: "Rock", matches: (event) => eventContains(event, ["rock", "indie"]) },
+      { id: "dance", label: "Dance", matches: (event) => eventMatchesGenres(event, ["dance", "electronic"]) },
+      { id: "rock", label: "Rock", matches: (event) => eventMatchesGenres(event, ["rock", "indie", "punk", "metal"]) },
     ],
     id: "genre",
     label: "Genre",
@@ -1633,6 +1634,13 @@ const quickFilterGroups: Array<{
     label: "Vibe",
   },
 ];
+
+// Route genre quick filters through the taxonomy (PRD 15 / C4) so alias-tagged events
+// (e.g. "dj"/"edm" → electronic) still match their canonical filter.
+function eventMatchesGenres(event: EventRecord, targets: CanonicalGenre[]): boolean {
+  const genres = resolveGenres([event.eventTitle, event.artistName, ...event.tags]);
+  return genres.some((genre) => targets.includes(genre));
+}
 
 function getDefaultQuickFilters(): QuickFilterSelections {
   return {

@@ -5,9 +5,9 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "noEmit": false,
-    "outDir": "/tmp/avlmc-discovery-tests",
+    "outDir": "/tmp/avlmc-taxonomy-tests",
     "rootDir": "..",
     "target": "es2022"
   },
-  "include": ["../next-env.d.ts", "discovery-scoring.test.ts", "../lib/discovery.ts", "../lib/genre-taxonomy.ts"]
+  "include": ["../next-env.d.ts", "genre-taxonomy.test.ts", "../lib/genre-taxonomy.ts"]
 }

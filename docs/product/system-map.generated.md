@@ -126,6 +126,7 @@ Ranks events per request by blending taste profile, behavioral signals, and list
   - ← events (flowsTo) — candidate events
   - ← music_profile_items (flowsTo) — taste weights
   - ← listener_discovery_preferences (flowsTo) — custom weights
+  - ← Genre Taxonomy (flowsTo) — genre matching
 
 #### Signal Memory  `svc-discovery-memory`
 
@@ -169,6 +170,17 @@ Reads and writes a signed-in listener's configurable discovery weights and custo
   - → listener_discovery_preferences (flowsTo) — saved weights
 - **Fed by / required by:**
   - ← Listener (me) API (dependsOn) — save settings
+
+#### Genre Taxonomy  `svc-genre-taxonomy`
+
+In-code source of truth for genre understanding: canonical genres, alias/synonym maps, and parent/child relationships. Feeds richer, explainable genre matching for everyone and is the vocabulary Spotify genres map onto.
+
+- **Kind:** Service
+- **Source of truth:** `lib/genre-taxonomy.ts`
+- **Access:** public
+- **Ownership:** manual
+- **Flows to / depends on:**
+  - → Discovery Scoring (flowsTo) — genre matching
 
 #### Saved Items  `svc-saved-items`
 
@@ -700,6 +712,7 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | music_profile_items | → | Discovery Scoring | flowsTo | taste weights |
 | Listener Preferences | → | listener_discovery_preferences | flowsTo | saved weights |
 | listener_discovery_preferences | → | Discovery Scoring | flowsTo | custom weights |
+| Genre Taxonomy | → | Discovery Scoring | flowsTo | genre matching |
 | spotify_event_match_corrections | → | Music Taste Sync | flowsTo | refines matching |
 | Community Panel | → | Community API | flowsTo | writes |
 | Community API | → | Community Service | dependsOn |  |
@@ -735,4 +748,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_45 nodes, 56 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_46 nodes, 57 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

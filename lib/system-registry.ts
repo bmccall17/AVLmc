@@ -281,6 +281,17 @@ const NODES: RegistryNode[] = [
     ownership: "manual",
   },
   {
+    id: "svc-genre-taxonomy",
+    kind: "service",
+    layer: "processing",
+    label: "Genre Taxonomy",
+    description:
+      "In-code source of truth for genre understanding: canonical genres, alias/synonym maps, and parent/child relationships. Feeds richer, explainable genre matching for everyone and is the vocabulary Spotify genres map onto.",
+    sourceOfTruth: "lib/genre-taxonomy.ts",
+    access: "public",
+    ownership: "manual",
+  },
+  {
     id: "svc-saved-items",
     kind: "service",
     layer: "processing",
@@ -711,6 +722,7 @@ const EDGES: RegistryEdge[] = [
   { from: "db-music-profile-items", to: "svc-discovery", kind: "flowsTo", label: "taste weights" },
   { from: "svc-listener-prefs", to: "db-listener-prefs", kind: "flowsTo", label: "saved weights" },
   { from: "db-listener-prefs", to: "svc-discovery", kind: "flowsTo", label: "custom weights" },
+  { from: "svc-genre-taxonomy", to: "svc-discovery", kind: "flowsTo", label: "genre matching" },
   { from: "db-spotify-corrections", to: "svc-music", kind: "flowsTo", label: "refines matching" },
 
   // Community
