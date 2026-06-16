@@ -4,6 +4,7 @@ import { getUpcomingEvents, type EventRecord } from "@/lib/events";
 import { getCommunityCountsByEvent, type CommunityCounts } from "@/lib/community";
 import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
 import { getListenerDiscoveryPreferences } from "@/lib/listener-preferences-store";
+import { getSavedKeys } from "@/lib/saved-items";
 import {
   listDiscoveryPreferenceSignals,
   listDiscoveryStates,
@@ -184,7 +185,7 @@ export async function loadListenerTrace(identityKey: string): Promise<ListenerTr
   const counts = await safeCounts(events.map((event) => event.id));
   const eventIds = events.map((event) => event.id);
 
-  const [connections, profileItems, preferences, signals, corrections, states] = await Promise.all([
+  const [connections, profileItems, preferences, signals, corrections, states, savedKeys] = await Promise.all([
     identity.userId ? safe(() => listMusicConnections(identity.userId as string), []) : Promise.resolve([]),
     identity.userId ? safe(() => listMusicProfileItems(identity.userId as string), []) : Promise.resolve([]),
     identity.userId
@@ -193,7 +194,14 @@ export async function loadListenerTrace(identityKey: string): Promise<ListenerTr
     safe(() => listDiscoveryPreferenceSignals(identity), []),
     safe(() => listSpotifyMatchCorrections(eventIds, identity), []),
     safe(() => listDiscoveryStates(eventIds, identity), {}),
+    identity.userId ? safe(() => getSavedKeys(identity.userId as string), []) : Promise.resolve([]),
   ]);
+
+  // Saved venues/artists feed the venuePreference / artistAffinity bases (PRD 14 / C3), so the
+  // trace attributes any favorite-driven boost to this listener's saves.
+  const savedFavorites = savedKeys
+    .filter((key) => key.itemType === "venue" || key.itemType === "artist")
+    .map((key) => ({ itemType: key.itemType as "venue" | "artist", itemKey: key.itemKey }));
 
   const optedOut = connections.some((connection) => connection.tasteOptOutAt !== null);
   const connectedActive = connections.some((connection) => connection.disconnectedAt === null);
@@ -206,6 +214,7 @@ export async function loadListenerTrace(identityKey: string): Promise<ListenerTr
     profileItems,
     listenerPreferences: preferences,
     preferenceSignals: signals,
+    savedFavorites,
     spotifyMatchCorrections: corrections,
   });
   const anonymousScores = scoreDiscoveryEvents({ events, counts });

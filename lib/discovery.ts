@@ -64,6 +64,12 @@ export type DiscoveryScoreComponents = Record<ListenerPreferenceKey, DiscoverySc
   learnedBehavior: DiscoveryScoreComponent;
 };
 
+/** A saved venue/artist favorite (PRD 14 / C3). `itemKey` is the normalized name from C1. */
+export type SavedFavorite = {
+  itemType: "venue" | "artist";
+  itemKey: string;
+};
+
 type ScoreDiscoveryEventsInput = {
   connections?: MusicConnection[];
   counts: Record<string, CommunityCounts | undefined>;
@@ -72,6 +78,7 @@ type ScoreDiscoveryEventsInput = {
   now?: Date;
   preferenceSignals?: DiscoveryPreferenceSignal[];
   profileItems?: MusicProfileItem[];
+  savedFavorites?: SavedFavorite[];
   spotifyMatchCorrections?: SpotifyMatchCorrection[];
 };
 
@@ -109,6 +116,7 @@ export function scoreDiscoveryEvents({
   now = new Date(),
   preferenceSignals = [],
   profileItems = [],
+  savedFavorites = [],
   spotifyMatchCorrections = [],
 }: ScoreDiscoveryEventsInput): DiscoveryScoresByEvent {
   const spotifyEnabled = connections.some(
@@ -119,6 +127,20 @@ export function scoreDiscoveryEvents({
   );
   const profileTerms = spotifyEnabled ? buildProfileTerms(profileItems) : [];
   const preferences = normalizeListenerPreferences(listenerPreferences);
+
+  // Dedupe favorites against equivalent ad-hoc boost custom signals so a saved venue/artist and
+  // an explicit boost for the same name don't double-count across components (PRD 14 bounding).
+  const boostCustomTerms = new Set(
+    preferences.customSignals
+      .filter((signal) => signal.direction === "boost" && (signal.kind === "venue" || signal.kind === "artist"))
+      .map((signal) => `${signal.kind}:${normalizeText(signal.label)}`)
+  );
+  const savedVenues = savedFavorites.filter(
+    (favorite) => favorite.itemType === "venue" && !boostCustomTerms.has(`venue:${favorite.itemKey}`)
+  );
+  const savedArtists = savedFavorites.filter(
+    (favorite) => favorite.itemType === "artist" && !boostCustomTerms.has(`artist:${favorite.itemKey}`)
+  );
 
   return Object.fromEntries(
     events.map((event) => {
@@ -131,9 +153,12 @@ export function scoreDiscoveryEvents({
       );
       const personalScore = scorePersonalSignals(event, preferenceSignals);
       const genreResult = scoreGenreMatch(event);
+      const favoriteScore = scoreFavorites(event, savedVenues, savedArtists);
       const componentBases = getPreferenceComponentBases({
         counts: eventCounts,
         event,
+        favoriteArtistScore: favoriteScore.artist,
+        favoriteVenueScore: favoriteScore.venue,
         genreMatchBase: genreResult.score,
         personalScore,
         profileScore,
@@ -146,6 +171,7 @@ export function scoreDiscoveryEvents({
         includeArtistAffinity: true,
       });
       const reasons = compactReasons([
+        ...getFavoriteReasons(favoriteScore),
         ...personalScore.reasons,
         ...publicScore.reasons,
         ...profileScore.reasons,
@@ -158,9 +184,18 @@ export function scoreDiscoveryEvents({
       return [
         event.id,
         {
-          bestBetsScore: publicScore.score + personalScore.score + bestBetsTuning.adjustment,
+          // Favorites contribute a direct baseline term (like the Spotify artist match), with the
+          // venuePreference / artistAffinity weights dialing it 0x–2x via the component delta. A
+          // saved venue applies to both sorts; a saved artist rides artistAffinity (Best Match).
+          bestBetsScore:
+            publicScore.score + personalScore.score + favoriteScore.venue + bestBetsTuning.adjustment,
           bestMatchScore:
-            publicScore.score + profileScore.score + personalScore.score + bestMatchTuning.adjustment,
+            publicScore.score +
+            profileScore.score +
+            personalScore.score +
+            favoriteScore.venue +
+            favoriteScore.artist +
+            bestMatchTuning.adjustment,
           components: bestMatchTuning.components,
           eventId: event.id,
           preferenceAdjustment: bestMatchTuning.adjustment,
@@ -262,6 +297,8 @@ function scorePersonalSignals(event: EventRecord, signals: DiscoveryPreferenceSi
 function getPreferenceComponentBases({
   counts,
   event,
+  favoriteArtistScore,
+  favoriteVenueScore,
   genreMatchBase,
   personalScore,
   profileScore,
@@ -269,13 +306,15 @@ function getPreferenceComponentBases({
 }: {
   counts: CommunityCounts | undefined;
   event: EventRecord;
+  favoriteArtistScore: number;
+  favoriteVenueScore: number;
   genreMatchBase: number;
   personalScore: ReturnType<typeof scorePersonalSignals>;
   profileScore: ReturnType<typeof scoreSpotifyMatch>;
   publicScore: ReturnType<typeof scorePublicSignals>;
 }): PreferenceComponentBases {
   return {
-    artistAffinity: profileScore.score,
+    artistAffinity: profileScore.score + favoriteArtistScore,
     dateAvailability: publicScore.components.dateAvailability,
     freePaidPreference: eventContainsAny(event, ["free", "no cover", "suggested donation"]) ? 12 : 0,
     genreMatch: genreMatchBase,
@@ -286,7 +325,9 @@ function getPreferenceComponentBases({
       ? 12
       : 0,
     socialHeat: publicScore.components.socialHeat,
-    venuePreference: personalScore.venuePreferenceScore,
+    // Saved-venue boost rides venuePreference, capped with the existing learned-behavior cap so it
+    // can't exceed the component ceiling (PRD 14 bounding).
+    venuePreference: Math.min(VENUE_PREFERENCE_CEILING, personalScore.venuePreferenceScore + favoriteVenueScore),
   };
 }
 
@@ -338,6 +379,18 @@ function scorePreferenceTuning(
   };
 }
 
+/** Truthful reasons when a saved venue/artist drove a boost (PRD 14). No private values exposed. */
+function getFavoriteReasons(favoriteScore: { artist: number; venue: number }): DiscoveryReason[] {
+  const reasons: DiscoveryReason[] = [];
+  if (favoriteScore.venue > 0) {
+    reasons.push(simpleReason("saved venue"));
+  }
+  if (favoriteScore.artist > 0) {
+    reasons.push(simpleReason("saved artist"));
+  }
+  return reasons;
+}
+
 /** Compact, truthful genre reason naming up to two matched canonical genres (public data only). */
 function getGenreReasons(genres: CanonicalGenre[]): DiscoveryReason[] {
   if (genres.length === 0) {
@@ -379,6 +432,36 @@ function scoreGenreMatch(event: EventRecord): { score: number; genres: Canonical
   return {
     genres,
     score: Math.min(24, usefulTagCount * 6 + genreScore),
+  };
+}
+
+const VENUE_PREFERENCE_CEILING = 36;
+const ARTIST_FAVORITE_CEILING = 30;
+
+/**
+ * Score a listener's saved venues/artists against this event (PRD 14 / C3). A saved venue that
+ * matches the event venue feeds the `venuePreference` base; a saved artist that matches the event
+ * artist feeds `artistAffinity`. Reuses `fieldMatchStrength` (same normalization as saving) and
+ * caps each contribution within the existing component ceilings so favorites can't dominate.
+ */
+function scoreFavorites(
+  event: EventRecord,
+  savedVenues: SavedFavorite[],
+  savedArtists: SavedFavorite[]
+): { artist: number; venue: number } {
+  let venue = 0;
+  for (const favorite of savedVenues) {
+    venue += fieldMatchStrength(event.venueName, favorite.itemKey);
+  }
+
+  let artist = 0;
+  for (const favorite of savedArtists) {
+    artist += fieldMatchStrength(event.artistName, favorite.itemKey);
+  }
+
+  return {
+    artist: Math.min(ARTIST_FAVORITE_CEILING, artist * ARTIST_FAVORITE_CEILING),
+    venue: Math.min(VENUE_PREFERENCE_CEILING, venue * VENUE_PREFERENCE_CEILING),
   };
 }
 

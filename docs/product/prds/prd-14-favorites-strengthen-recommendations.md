@@ -8,7 +8,15 @@ Make saving consequential. A saved venue or artist should not just sit in a list
 
 ## Implementation Status
 
-**Planned.** Depends on C1 (`saved_items`, `lib/saved-items.ts`). Independent of C2.
+**Shipped.** Delivered:
+
+- **Favorites feed the scoring spine** (`lib/discovery.ts`) — `scoreDiscoveryEvents` accepts an optional `savedFavorites: SavedFavorite[]`. A new `scoreFavorites` matches saved venues against `event.venueName` and saved artists against `event.artistName` via the existing `fieldMatchStrength` (same normalization as saving). The saved-venue contribution feeds the **`venuePreference`** base and the saved-artist contribution feeds **`artistAffinity`** — reusing the already-shipped weights, with **no new control**.
+- **Default-effective, tunable, cancelable** — mirroring the Spotify artist-match pattern, favorites add a direct baseline term (venue → both sorts; artist → Best Match) while the `venuePreference` / `artistAffinity` component delta dials it 0×–2×; dialing the weight to 0 cancels it. Bounded by the existing ceilings (`venuePreference` `min(36, …)`, artist favorite capped at 30).
+- **No double-counting** — a saved venue/artist that duplicates an equivalent ad-hoc *boost* custom signal is deduped (the custom signal already covers it).
+- **Truthful reasons** — boosted cards show a compact `saved venue` / `saved artist` reason (no private values).
+- **Admin observability** — favorites are loaded for the traced listener in `lib/admin/listener-graph.ts` and flow into the `venuePreference` / `artistAffinity` component breakdown, so the contribution is attributable in **Listener Trace**; the synthetic-profile **Recommendation Insight** comparison is unaffected (no real saves).
+- **Real-time** — the board threads `initialSavedFavorites` into its client re-score so displayed scores stay consistent with the server.
+- **Wiring** — `app/page.tsx` derives `savedFavorites` from `getSavedKeys` and passes them to scoring and the board. Anonymous ranking is unchanged (saving is signed-in-only). Unit-tested in `tests/discovery-scoring.test.ts` (venue/artist boost, weight tuning, dedupe, ceiling); all 13 discovery tests green. New code Snyk-clean; $0.
 
 ## Goals
 

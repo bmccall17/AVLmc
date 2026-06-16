@@ -100,6 +100,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const savedEventKeys = savedKeys
     .filter((key) => key.itemType === "event")
     .map((key) => key.itemKey);
+  const savedFavorites = savedKeys
+    .filter((key) => key.itemType === "venue" || key.itemType === "artist")
+    .map((key) => ({ itemType: key.itemType as "venue" | "artist", itemKey: key.itemKey }));
   const activeListenerPreferences = listenerPreferences ?? DEFAULT_LISTENER_DISCOVERY_PREFERENCES;
   const discoveryScores = scoreDiscoveryEvents({
     connections: musicConnections,
@@ -108,6 +111,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     listenerPreferences: activeListenerPreferences,
     preferenceSignals,
     profileItems: musicProfileItems,
+    savedFavorites,
     spotifyMatchCorrections,
   });
   const visibleEvents = events.filter((event) => !discoveryStates[event.id]?.removed);
@@ -175,6 +179,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           initialDiscoveryStates={discoveryStates}
           initialListenerPreferences={activeListenerPreferences}
           initialSavedEventKeys={savedEventKeys}
+          initialSavedFavorites={savedFavorites}
           isSignedIn={Boolean(userId)}
           musicConnections={musicConnections}
           musicProfileItems={musicProfileItems}

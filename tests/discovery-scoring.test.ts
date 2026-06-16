@@ -222,3 +222,72 @@ function getSpotifyReason(reasons: DiscoveryReason[]) {
   assert.ok(reason);
   return reason;
 }
+
+// --- Favorites strengthen recommendations (PRD 14 / C3) ----------------------------------------
+
+const VENUE_KEY = "the one stop at asheville music hall"; // normalizeText(francesElizaEvent.venueName)
+const ARTIST_KEY = "frances eliza"; // normalizeText(francesElizaEvent.artistName)
+
+function scoreWithFavorites(
+  savedFavorites: { itemType: "venue" | "artist"; itemKey: string }[],
+  preferences: object = {}
+) {
+  return scoreDiscoveryEvents({
+    counts: {},
+    events: [francesElizaEvent],
+    listenerPreferences: preferences,
+    now: new Date("2026-06-07T12:00:00.000Z"),
+    savedFavorites,
+  })[francesElizaEvent.id];
+}
+
+function hasReason(reasons: DiscoveryReason[], label: string) {
+  return reasons.some((reason) => reason.kind === "simple" && reason.label === label);
+}
+
+test("saving a venue raises a matching event via venuePreference", () => {
+  const base = scoreWithFavorites([]);
+  const withVenue = scoreWithFavorites([{ itemType: "venue", itemKey: VENUE_KEY }]);
+
+  assert.ok(withVenue.bestBetsScore > base.bestBetsScore);
+  assert.ok(withVenue.components.venuePreference.base > 0);
+  assert.ok(hasReason(withVenue.reasons, "saved venue"));
+});
+
+test("saving an artist raises a matching event via artistAffinity (Best Match)", () => {
+  const base = scoreWithFavorites([]);
+  const withArtist = scoreWithFavorites([{ itemType: "artist", itemKey: ARTIST_KEY }]);
+
+  assert.ok(withArtist.bestMatchScore > base.bestMatchScore);
+  assert.ok(withArtist.components.artistAffinity.base > 0);
+  assert.ok(hasReason(withArtist.reasons, "saved artist"));
+});
+
+test("the venuePreference weight tunes the saved-venue boost", () => {
+  const withVenue = scoreWithFavorites([{ itemType: "venue", itemKey: VENUE_KEY }]);
+  const muted = scoreWithFavorites([{ itemType: "venue", itemKey: VENUE_KEY }], {
+    weights: { venuePreference: 0 },
+  });
+
+  // The saved-venue base is unchanged, but dialing the weight down removes its positive influence.
+  assert.equal(withVenue.components.venuePreference.base, muted.components.venuePreference.base);
+  assert.ok(withVenue.bestBetsScore > muted.bestBetsScore);
+  assert.equal(muted.components.venuePreference.adjustment <= 0, true);
+});
+
+test("a favorite plus an equivalent boost custom signal do not double-count", () => {
+  const customOnly = scoreWithFavorites([], {
+    customSignals: [{ direction: "boost", id: "v", kind: "venue", label: VENUE_KEY, weight: 40 }],
+  });
+  const both = scoreWithFavorites([{ itemType: "venue", itemKey: VENUE_KEY }], {
+    customSignals: [{ direction: "boost", id: "v", kind: "venue", label: VENUE_KEY, weight: 40 }],
+  });
+
+  // The favorite is deduped against the equivalent boost signal, so it adds no venuePreference base.
+  assert.equal(both.components.venuePreference.base, customOnly.components.venuePreference.base);
+});
+
+test("venuePreference base stays within its ceiling", () => {
+  const withVenue = scoreWithFavorites([{ itemType: "venue", itemKey: VENUE_KEY }]);
+  assert.ok(withVenue.components.venuePreference.base <= 36);
+});

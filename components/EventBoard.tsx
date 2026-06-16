@@ -8,7 +8,7 @@ import { signIn } from "next-auth/react";
 import { SaveButton } from "@/components/SaveButton";
 import { resolveGenres, type CanonicalGenre } from "@/lib/genre-taxonomy";
 import type { CommunityCounts } from "@/lib/community";
-import { scoreDiscoveryEvents, type DiscoveryReason, type DiscoveryScore, type DiscoveryScoresByEvent } from "@/lib/discovery";
+import { scoreDiscoveryEvents, type DiscoveryReason, type DiscoveryScore, type DiscoveryScoresByEvent, type SavedFavorite } from "@/lib/discovery";
 import type {
   DiscoveryEventAction,
   DiscoveryPersonEventState,
@@ -45,6 +45,7 @@ type EventBoardProps = {
   initialDiscoveryStates: DiscoveryStateByEvent;
   initialListenerPreferences: ListenerDiscoveryPreferences;
   initialSavedEventKeys: string[];
+  initialSavedFavorites: SavedFavorite[];
   isSignedIn: boolean;
   musicConnections: MusicConnection[];
   musicProfileItems: MusicProfileItem[];
@@ -121,6 +122,7 @@ export function EventBoard({
   initialDiscoveryStates,
   initialListenerPreferences,
   initialSavedEventKeys,
+  initialSavedFavorites,
   isSignedIn,
   musicConnections,
   musicProfileItems,
@@ -299,12 +301,14 @@ export function EventBoard({
         listenerPreferences,
         preferenceSignals: localPreferenceSignals,
         profileItems: musicProfileItems,
+        savedFavorites: initialSavedFavorites,
         spotifyMatchCorrections,
       })
     );
   }, [
     eventCounts,
     events,
+    initialSavedFavorites,
     listenerPreferences,
     localPreferenceSignals,
     musicConnections,
