@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Bell, CalendarCheck, ChevronRight, ExternalLink, Flame, Headphones, Search, Star, UserPlus, X } from "lucide-react";
+import { SaveButton } from "@/components/SaveButton";
 import type { CommunityCounts } from "@/lib/community";
 import { scoreDiscoveryEvents, type DiscoveryReason, type DiscoveryScore, type DiscoveryScoresByEvent } from "@/lib/discovery";
 import type {
@@ -41,6 +42,7 @@ type EventBoardProps = {
   hasTasteProfile: boolean;
   initialDiscoveryStates: DiscoveryStateByEvent;
   initialListenerPreferences: ListenerDiscoveryPreferences;
+  initialSavedEventKeys: string[];
   isSignedIn: boolean;
   musicConnections: MusicConnection[];
   musicProfileItems: MusicProfileItem[];
@@ -113,6 +115,7 @@ export function EventBoard({
   hasTasteProfile,
   initialDiscoveryStates,
   initialListenerPreferences,
+  initialSavedEventKeys,
   isSignedIn,
   musicConnections,
   musicProfileItems,
@@ -146,6 +149,7 @@ export function EventBoard({
   const [skipConfirm, setSkipConfirm] = useState(false);
   const [skipFutureConfirm, setSkipFutureConfirm] = useState(false);
   const top30EventIdSet = useMemo(() => new Set(top30EventIds), [top30EventIds]);
+  const savedEventKeySet = useMemo(() => new Set(initialSavedEventKeys), [initialSavedEventKeys]);
   const [toastEvent, setToastEvent] = useState<EventRecord | null>(null);
   const tooltipTimer = useRef<number | null>(null);
   const trackedImpressions = useRef(new Set<string>());
@@ -710,6 +714,8 @@ export function EventBoard({
                 index={index}
                 isPending={pendingAction?.startsWith(`${event.id}:`) ?? false}
                 isRevealed={revealedEventId === event.id}
+                isSaved={savedEventKeySet.has(event.id)}
+                isSignedIn={isSignedIn}
                 isTop30={top30EventIdSet.has(event.id)}
                 key={event.id}
                 onClearTooltip={clearTooltip}
@@ -764,6 +770,8 @@ function DiscoveryEventCard({
   index,
   isPending,
   isRevealed,
+  isSaved,
+  isSignedIn,
   isTop30,
   onClearTooltip,
   onQueueTooltip,
@@ -782,6 +790,8 @@ function DiscoveryEventCard({
   index: number;
   isPending: boolean;
   isRevealed: boolean;
+  isSaved: boolean;
+  isSignedIn: boolean;
   isTop30: boolean;
   onClearTooltip: () => void;
   onQueueTooltip: (eventId: string, action: ActionKind) => void;
@@ -946,6 +956,14 @@ function DiscoveryEventCard({
         >
           <X aria-hidden="true" size={18} strokeWidth={2.6} />
         </ActionButton>
+        <SaveButton
+          eventId={event.id}
+          initialSaved={isSaved}
+          isSignedIn={isSignedIn}
+          itemKey={event.id}
+          itemType="event"
+          label={event.eventTitle}
+        />
       </div>
     </article>
   );

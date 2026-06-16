@@ -165,3 +165,19 @@ create table if not exists public.admin_resources (
 
 create index if not exists admin_resources_type_status_idx
   on public.admin_resources (type, status);
+
+
+-- 7. saved_items — private, polymorphic Saved/Favorites for signed-in listeners (PRD 12 / C1)
+create table if not exists public.saved_items (
+  id text primary key,
+  user_id integer not null references public.users(id) on delete cascade,
+  item_type text not null check (item_type in ('event', 'venue', 'artist')),
+  item_key text not null,
+  label text not null,
+  event_id text,
+  created_at timestamptz not null default now(),
+  unique (user_id, item_type, item_key)
+);
+
+create index if not exists saved_items_user_type_idx
+  on public.saved_items (user_id, item_type);

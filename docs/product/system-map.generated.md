@@ -170,6 +170,19 @@ Reads and writes a signed-in listener's configurable discovery weights and custo
 - **Fed by / required by:**
   - ← Listener (me) API (dependsOn) — save settings
 
+#### Saved Items  `svc-saved-items`
+
+Reads and writes a signed-in listener's private Saved/Favorites (events, venues, artists); normalized-name identity for venues/artists shared with discovery scoring.
+
+- **Kind:** Service
+- **Source of truth:** `lib/saved-items.ts`
+- **Access:** internal
+- **Ownership:** manual
+- **Flows to / depends on:**
+  - → saved_items (flowsTo) — persist saves
+- **Fed by / required by:**
+  - ← Saved Items API (dependsOn) — save/list/remove
+
 ### Data Stores
 
 _Postgres tables of record._
@@ -291,6 +304,7 @@ Auth.js user records for signed-in listeners.
 - **Live count:** `users` (resolved in portal/API)
 - **Fed by / required by:**
   - ← Auth.js (flowsTo) — user records
+  - ← saved_items (dependsOn) — owned by user (cascade)
 
 #### accounts  `db-accounts`
 
@@ -359,6 +373,20 @@ Listener corrections to Spotify artist matches (reject / replace) that refine fu
 - **Fed by / required by:**
   - ← Discovery Action API (flowsTo) — match corrections
 
+#### saved_items  `db-saved-items`
+
+Private, polymorphic Saved/Favorites for signed-in listeners: events, venues, and artists. Never exposed in public responses.
+
+- **Kind:** Data store
+- **Source of truth:** `saved_items`
+- **Access:** internal
+- **Ownership:** manual
+- **Live count:** `saved_items` (resolved in portal/API)
+- **Flows to / depends on:**
+  - → users (dependsOn) — owned by user (cascade)
+- **Fed by / required by:**
+  - ← Saved Items (flowsTo) — persist saves
+
 ### Public Experience
 
 _What listeners see._
@@ -388,6 +416,7 @@ Card grid of events with date/venue/tags, reactions, community, and discovery or
 - **Flows to / depends on:**
   - → Homepage (flowsTo) — renders into
   - → Discovery Action API (flowsTo) — interaction events
+  - → Saved Items API (flowsTo) — save events/venues/artists
   - → Listener Profile (flowsTo) — sign-in entry
   - → Ryan's Playlist (flowsTo) — features
 - **Fed by / required by:**
@@ -404,6 +433,7 @@ Per-event page with full context, community panel, and share metadata.
 - **Ownership:** automated
 - **Flows to / depends on:**
   - → Community Panel (flowsTo) — embeds
+  - → Saved Items API (flowsTo) — save from detail
 - **Fed by / required by:**
   - ← Homepage (flowsTo) — navigates to
   - ← events (flowsTo) — event by id
@@ -509,6 +539,20 @@ Authenticated endpoints for the current listener: connections, profile, preferen
   - → Listener Preferences (dependsOn) — save settings
 - **Fed by / required by:**
   - ← Listener Profile (flowsTo) — reads/writes
+
+#### Saved Items API  `api-saved-items`
+
+Signed-in-only endpoints to list, save, and un-save events, venues, and artists. Returns 401 when anonymous.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/me/saved-items/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → Saved Items (dependsOn) — save/list/remove
+- **Fed by / required by:**
+  - ← Event Board (flowsTo) — save events/venues/artists
+  - ← Event Detail (flowsTo) — save from detail
 
 ### Operations
 
@@ -669,6 +713,11 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | Listener Profile | → | Listener (me) API | flowsTo | reads/writes |
 | Listener (me) API | → | Music Taste Sync | dependsOn | sync taste |
 | Listener (me) API | → | Listener Preferences | dependsOn | save settings |
+| Saved Items API | → | Saved Items | dependsOn | save/list/remove |
+| Saved Items | → | saved_items | flowsTo | persist saves |
+| saved_items | → | users | dependsOn | owned by user (cascade) |
+| Event Board | → | Saved Items API | flowsTo | save events/venues/artists |
+| Event Detail | → | Saved Items API | flowsTo | save from detail |
 | Event Board | → | Listener Profile | flowsTo | sign-in entry |
 | Image Cleanup (cron) | → | Vercel Blob | flowsTo | delete stale images |
 | AVLgo Sync (cron) | → | system_job_runs | flowsTo | records outcome |
@@ -686,4 +735,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_42 nodes, 51 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_45 nodes, 56 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

@@ -72,7 +72,8 @@ export type DerivedCountKey =
   | "listener_discovery_preferences"
   | "spotify_event_match_corrections"
   | "system_job_runs"
-  | "admin_resources";
+  | "admin_resources"
+  | "saved_items";
 
 export type RegistryNode = {
   /** Stable identifier; referenced by edges and by later cycles. Never reuse or repurpose. */
@@ -279,6 +280,17 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "manual",
   },
+  {
+    id: "svc-saved-items",
+    kind: "service",
+    layer: "processing",
+    label: "Saved Items",
+    description:
+      "Reads and writes a signed-in listener's private Saved/Favorites (events, venues, artists); normalized-name identity for venues/artists shared with discovery scoring.",
+    sourceOfTruth: "lib/saved-items.ts",
+    access: "internal",
+    ownership: "manual",
+  },
 
   /* ---- Data stores ----------------------------------------------- */
   {
@@ -436,6 +448,17 @@ const NODES: RegistryNode[] = [
     ownership: "hybrid",
     countKey: "spotify_event_match_corrections",
   },
+  {
+    id: "db-saved-items",
+    kind: "datastore",
+    layer: "data",
+    label: "saved_items",
+    description: "Private, polymorphic Saved/Favorites for signed-in listeners: events, venues, and artists. Never exposed in public responses.",
+    sourceOfTruth: "saved_items",
+    access: "internal",
+    ownership: "manual",
+    countKey: "saved_items",
+  },
 
   /* ---- Public experience ----------------------------------------- */
   {
@@ -541,6 +564,16 @@ const NODES: RegistryNode[] = [
     label: "Listener (me) API",
     description: "Authenticated endpoints for the current listener: connections, profile, preferences, tracks.",
     sourceOfTruth: "app/api/me/route.ts",
+    access: "public",
+    ownership: "automated",
+  },
+  {
+    id: "api-saved-items",
+    kind: "surface",
+    layer: "identity",
+    label: "Saved Items API",
+    description: "Signed-in-only endpoints to list, save, and un-save events, venues, and artists. Returns 401 when anonymous.",
+    sourceOfTruth: "app/api/me/saved-items/route.ts",
     access: "public",
     ownership: "automated",
   },
@@ -695,6 +728,11 @@ const EDGES: RegistryEdge[] = [
   { from: "ui-listener-profile", to: "api-me", kind: "flowsTo", label: "reads/writes" },
   { from: "api-me", to: "svc-music", kind: "dependsOn", label: "sync taste" },
   { from: "api-me", to: "svc-listener-prefs", kind: "dependsOn", label: "save settings" },
+  { from: "api-saved-items", to: "svc-saved-items", kind: "dependsOn", label: "save/list/remove" },
+  { from: "svc-saved-items", to: "db-saved-items", kind: "flowsTo", label: "persist saves" },
+  { from: "db-saved-items", to: "db-users", kind: "dependsOn", label: "owned by user (cascade)" },
+  { from: "ui-eventboard", to: "api-saved-items", kind: "flowsTo", label: "save events/venues/artists" },
+  { from: "ui-event-detail", to: "api-saved-items", kind: "flowsTo", label: "save from detail" },
   { from: "ui-eventboard", to: "ui-listener-profile", kind: "flowsTo", label: "sign-in entry" },
 
   // Operations

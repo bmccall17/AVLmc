@@ -22,6 +22,7 @@ import { AVLGO_TOP_30_URL, getAvlgoTop30EventIds } from "@/lib/local-pulse";
 import { DEFAULT_LISTENER_DISCOVERY_PREFERENCES } from "@/lib/listener-preferences";
 import { getListenerDiscoveryPreferences } from "@/lib/listener-preferences-store";
 import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
+import { getSavedKeys } from "@/lib/saved-items";
 import { SPOTIFY_LIMITED_BETA_CODE } from "@/lib/spotify-limited-access";
 
 // Reads cookies/auth and queries the DB on render. Force dynamic so Next.js skips the
@@ -83,6 +84,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     spotifyMatchCorrections,
     listenerPreferences,
     avlgoTop30EventIds,
+    savedKeys,
   ] =
     await Promise.all([
       getCommunityCountsByEvent(eventIds),
@@ -93,7 +95,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       listSpotifyMatchCorrections(eventIds, { sessionId, userId }),
       userId ? getListenerDiscoveryPreferences(userId) : Promise.resolve(undefined),
       getAvlgoTop30EventIds(events),
+      userId ? getSavedKeys(userId) : Promise.resolve([]),
     ]);
+  const savedEventKeys = savedKeys
+    .filter((key) => key.itemType === "event")
+    .map((key) => key.itemKey);
   const activeListenerPreferences = listenerPreferences ?? DEFAULT_LISTENER_DISCOVERY_PREFERENCES;
   const discoveryScores = scoreDiscoveryEvents({
     connections: musicConnections,
@@ -168,6 +174,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           hasTasteProfile={hasTasteProfile}
           initialDiscoveryStates={discoveryStates}
           initialListenerPreferences={activeListenerPreferences}
+          initialSavedEventKeys={savedEventKeys}
           isSignedIn={Boolean(userId)}
           musicConnections={musicConnections}
           musicProfileItems={musicProfileItems}

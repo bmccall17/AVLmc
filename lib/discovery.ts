@@ -640,7 +640,7 @@ function getHoursUntil(event: EventRecord, now: Date) {
   return Math.max(0, (start.getTime() - now.getTime()) / (1000 * 60 * 60));
 }
 
-function normalizeText(value: string) {
+export function normalizeText(value: string) {
   return value
     .toLowerCase()
     .normalize("NFKD")

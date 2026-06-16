@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { CommunityPanel } from "@/components/CommunityPanel";
 import { EventImage } from "@/components/EventImage";
+import { SaveButton } from "@/components/SaveButton";
 import { TicketIntentLink } from "@/components/TicketIntentLink";
 import {
   ANONYMOUS_SESSION_COOKIE_NAME,
@@ -11,10 +12,12 @@ import {
 } from "@/lib/anonymous-session";
 import { getCommunityForEvent, publicContribution } from "@/lib/community";
 import { getOptionalUserId } from "@/lib/current-user";
+import { normalizeText } from "@/lib/discovery";
 import { listDiscoveryStates } from "@/lib/discovery-memory";
 import { getEventById } from "@/lib/events";
 import { formatLongDate } from "@/lib/format";
 import { listMusicConnections } from "@/lib/music";
+import { getSavedKeys } from "@/lib/saved-items";
 
 type EventPageProps = {
   params: Promise<{
@@ -68,13 +71,19 @@ export default async function EventPage({ params }: EventPageProps) {
   const sessionId = getAnonymousSessionIdFromCookieValue(
     cookieStore.get(ANONYMOUS_SESSION_COOKIE_NAME)?.value
   );
-  const [musicConnections, discoveryStates] = await Promise.all([
+  const [musicConnections, discoveryStates, savedKeys] = await Promise.all([
     userId ? listMusicConnections(userId) : Promise.resolve([]),
     listDiscoveryStates([event.id], { sessionId, userId }),
+    userId ? getSavedKeys(userId) : Promise.resolve([]),
   ]);
   const spotifySearchEnabled = musicConnections.some(
     (connection) => connection.provider === "spotify" && !connection.disconnectedAt
   );
+  const isSignedIn = Boolean(userId);
+  const savedKeySet = new Set(savedKeys.map((key) => `${key.itemType}:${key.itemKey}`));
+  const eventSaved = savedKeySet.has(`event:${event.id}`);
+  const venueSaved = savedKeySet.has(`venue:${normalizeText(event.venueName)}`);
+  const artistSaved = savedKeySet.has(`artist:${normalizeText(event.artistName)}`);
   const publicCommunity = {
     ...community,
     contributions: community.contributions.map(publicContribution),
@@ -95,8 +104,29 @@ export default async function EventPage({ params }: EventPageProps) {
         />
 
         <div className="detail-copy">
-          <p className="eyebrow">{event.venueName}</p>
+          <p className="eyebrow detail-venue-line">
+            <span>{event.venueName}</span>
+            <SaveButton
+              initialSaved={venueSaved}
+              isSignedIn={isSignedIn}
+              itemKey={event.venueName}
+              itemType="venue"
+              label={event.venueName}
+              variant="chip"
+            />
+          </p>
           <h1>{event.eventTitle}</h1>
+          <div className="detail-save-row">
+            <SaveButton
+              eventId={event.id}
+              initialSaved={eventSaved}
+              isSignedIn={isSignedIn}
+              itemKey={event.id}
+              itemType="event"
+              label={event.eventTitle}
+              variant="chip"
+            />
+          </div>
           <dl className="detail-list">
             <div>
               <dt>Date</dt>
@@ -108,7 +138,17 @@ export default async function EventPage({ params }: EventPageProps) {
             </div>
             <div>
               <dt>Artist</dt>
-              <dd>{event.artistName}</dd>
+              <dd className="detail-artist-line">
+                <span>{event.artistName}</span>
+                <SaveButton
+                  initialSaved={artistSaved}
+                  isSignedIn={isSignedIn}
+                  itemKey={event.artistName}
+                  itemType="artist"
+                  label={event.artistName}
+                  variant="chip"
+                />
+              </dd>
             </div>
             <div>
               <dt>Source</dt>

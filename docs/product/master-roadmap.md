@@ -18,7 +18,8 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 3 | [Admin Moderation](prds/prd-03-admin-moderation.md) | Built | Let a trusted admin hide spam or bad submissions. |
 | 4 | [Voice Memos](prds/prd-04-voice-memos.md) | Deferred | Add short audio contributions after a $0 storage path is selected. |
 | 5 | [Personalized Discovery Backlog](personalized-discovery-backlog.md) | Built | Add best-bet filters, sorting, and optional Spotify taste-aware recommendations. |
-| 7 | [Admin Portal Initiative (Epic)](admin-portal-prd.md) | Planned | Turn `/admin` into a visual, live, explainable operating system; PRDs 06–11 across six cycles. |
+| 7 | [Admin Portal Initiative (Epic)](admin-portal-prd.md) | Shipped | Turn `/admin` into a visual, live, explainable operating system; PRDs 06–11 across six cycles. |
+| 8 | [Saved/Favorites & Genre Initiative (Epic)](saved-favorites-genre-prd.md) | Planned | Private Saved space (events/venues/artists) + richer genre matching (taxonomy + Spotify genres); PRDs 12–16 across five cycles. |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
@@ -148,6 +149,24 @@ C1 ships first (it provides the System Registry and visual graph engine every la
 **C6 shipped:** an **Analytics** tab (`components/admin/AnalyticsSection.tsx`, `lib/admin/analytics.ts`, `app/api/admin/analytics`) bringing Umami web traffic (visitors / pageviews / top pages / referrers, server-side, key never client-exposed) into the portal over a 24h/7d/30d range, joined with a first-party event funnel and conversions, plus a free-tier scaling-milestone indicator; degrades gracefully when Umami API access is absent.
 
 **C5 shipped:** a **Listener Trace** tab (`components/admin/ListenerGraphSection.tsx`, `lib/admin/listener-graph.ts`, admin-gated `app/api/admin/listener-trace`) — a privacy-first, six-stage per-listener trace (identity → connected data → preferences → signals → settings → surfaced events) that reuses the C1 staged layout and C4 scoring to attribute each surfaced event's ranking to this listener's inputs vs. the anonymous baseline. No tokens/secrets are read or shown. **The Admin Portal initiative (Phase 7, all seven outcomes / six cycles) is complete.**
+
+### Phase 8: Saved/Favorites & Richer Genre Matching
+
+Purpose: let a signed-in listener keep a private **Saved** space for the events, venues, and artists they care about, and make the board's **genre understanding richer** for everyone — so the app both remembers what a person values and matches it more intelligently, while the public board stays fully usable without an account.
+
+This is a multi-cycle initiative tracked by the [Saved/Favorites & Genre Initiative (Epic)](saved-favorites-genre-prd.md), which decomposes the desired outcomes in [`saved-favorites-genre_desiredoutcomes.md`](saved-favorites-genre_desiredoutcomes.md) into two independent tracks across five dependency-sequenced cycles. Each cycle is an independently shippable PRD.
+
+| Cycle | PRD | Track | Outcome(s) | Status |
+| --- | --- | --- | --- | --- |
+| C1 | [PRD 12: Saved Foundation & Save Actions](prds/prd-12-saved-foundation-and-actions.md) | A — Saved/Favorites | 2, 5 | **Shipped** |
+| C2 | [PRD 13: The Saved Space & Sign-In Nudges](prds/prd-13-saved-space-and-signin-nudges.md) | A — Saved/Favorites | 1, 3 | **Planned** |
+| C3 | [PRD 14: Favorites Strengthen Recommendations](prds/prd-14-favorites-strengthen-recommendations.md) | A — Saved/Favorites | 4 | **Planned** |
+| C4 | [PRD 15: Genre Taxonomy & Public Matching](prds/prd-15-genre-taxonomy-and-public-matching.md) | B — Genre | 6, 8 | **Planned** |
+| C5 | [PRD 16: Spotify Genre Signal](prds/prd-16-spotify-genre-signal.md) | B — Genre | 7 (completes 8) | **Planned** |
+
+Track A and Track B are independent and may interleave by priority. Within A, **C1 ships first** (the `saved_items` spine), then C2/C3 (independent of each other). Within B, **C4 ships first** (the genre taxonomy), then C5 (maps Spotify genres onto it). Recommended overall order: C1 → C4 → C2 → C3 → C5 — ship the two public/foundation wins early, then the deeper personalization. The initiative stays at `$0`, follows security-at-inception (Snyk), and requests **no new Spotify scopes**. Spotify library/playlist *write* actions (desired-outcome 9) are explicitly **parked**; see [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
+
+**C1 shipped:** the Saved/Favorites spine — a private, polymorphic `saved_items` table (signed-in only, `on delete cascade`, normalized-name identity for venues/artists shared with discovery scoring), a `lib/saved-items.ts` service (`saveItem`/`removeSavedItem`/`listSavedItems`/`getSavedKeys`), a `requireUserId()`-gated `GET/POST/DELETE /api/me/saved-items`, and a reusable `SaveButton` (bookmark, distinct from going/fire/remove) wired into the event board cards (events) and event detail page (event/venue/artist). Saving is signed-in only; anonymous users get a minimal sign-in affordance (the action-preserving nudge is C2). Saved data is private and never appears in public responses. Registered in the System Registry; Snyk-clean; $0. Unblocks C2 (Saved space) and C3 (favorites → recommendations).
 
 ## Scaling Milestones & Tracking
 

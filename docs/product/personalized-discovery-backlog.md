@@ -1,6 +1,6 @@
 # Personalized Discovery Backlog
 
-Updated: June 6, 2026
+Updated: June 15, 2026
 
 ## Current Baseline
 
@@ -66,6 +66,28 @@ Implemented in this pass:
 - Discovery scoring now uses recent personal signals in addition to public community signals and optional Spotify taste rows. Positive interactions can boost similar shows; removed-event patterns can downrank similar future shows without hiding them automatically.
 - **Real-Time Client Feedback:** Actions like removing or firing an event immediately update local `preferenceSignals`, causing the `EventBoard` to instantly re-rank similar events without a page reload.
 - Direct event URLs remain accessible after removal and include a restore affordance.
+
+## Personalized Discovery V3: Configurable Taste and Match Corrections
+
+Goal achieved: let a person tune *how* discovery weighs signals, and correct bad Spotify artist matches — explicit taste control that does not depend on imported Spotify rows.
+
+Implemented in this pass:
+
+- **Configurable preference weights.** `lib/listener-preferences.ts` defines nine weighted controls (`LISTENER_PREFERENCE_CONTROLS`): artist affinity, genre match, venue preference, date availability, social heat, local relevance, novelty, free/paid preference, and outdoor/indoor preference. Each is a per-`ListenerPreferenceKey` weight applied as a `preferenceAdjustment` in `lib/discovery.ts`.
+- **Custom signals.** Listeners can add ad-hoc boost/lower rules (`ListenerCustomSignal`: kind = `artist | venue | tag | keyword`, direction = `boost | lower`, weight) to nudge specific shows up or down without touching Spotify.
+- **Persistence + merged model.** Anonymous preferences live in `localStorage` (`LISTENER_PREFERENCE_STORAGE_KEY`); signed-in preferences persist to `listener_discovery_preferences` (`weights jsonb`, `custom_signals jsonb`) via `lib/listener-preferences-store.ts` and `GET`/`PUT /api/me/listener-preferences`. The control UI is in `components/ListenerProfileButton.tsx`, broadcasting changes via `LISTENER_PREFERENCE_CHANGE_EVENT` for instant re-ranking.
+- **Spotify match corrections.** `spotify_event_match_corrections` records per-person `reject`/`replace` corrections to artist matches; `lib/discovery.ts` consumes `spotifyMatchCorrections` so a rejected match no longer boosts and a replacement match does. Recorded via `/api/discovery/spotify-match-correction`.
+
+Schema added for V2/V3 (additive, in `db/schema.sql` + `db/migrate-missing-tables.sql`): `event_intents`, `event_interaction_events`, `event_person_event_state`, `listener_discovery_preferences`, `spotify_event_match_corrections`.
+
+## Observing Discovery (Admin Portal)
+
+The Admin Portal (Phase 7) now provides tools to inspect and debug discovery while iterating here:
+
+- **Recommendation Insight** tab — why each event ranks (live weighted components + reasons), anonymous-vs-signed-in comparison via a synthetic taste profile, and diversity/local-value/signal-mix/coverage metrics.
+- **Listener Trace** tab — a per-listener walk from identity → connected data → preferences → behavioral signals → taste settings → surfaced events, with the score breakdown attributed to *that* listener's inputs vs. the anonymous baseline.
+
+Use these to validate any scoring change against real ranking output rather than guesswork.
 
 ## Product Direction
 
@@ -136,14 +158,13 @@ Do not use raw Spotify OAuth tokens in client code or ranking responses. Discove
 
 ## Remaining Follow-Up
 
-- Explicit taste preferences outside imported Spotify profile rows.
-- Saved/favorite venues or tags.
-- More nuanced genre matching if AVLgo event metadata supports it.
-- Spotify save-to-library or playlist actions, with additional scopes requested only when those features exist.
-- Google/YouTube can add identity plus limited YouTube Data API signals only after scope setup is explicit.
+- ~~Explicit taste preferences outside imported Spotify profile rows.~~ **Done — see Personalized Discovery V3** (configurable weights + custom boost/lower signals).
+- **Saved/Favorites + richer genre matching — planned as Phase 8.** Direction is captured in [`saved-favorites-genre_desiredoutcomes.md`](saved-favorites-genre_desiredoutcomes.md) and decomposed into the [Saved/Favorites & Genre Initiative (Epic)](saved-favorites-genre-prd.md) — five cycle PRDs (12–16) across two tracks: **Saved/Favorites** (PRD 12 foundation + save actions, PRD 13 Saved space + sign-in nudges, PRD 14 favorites strengthen recommendations) and **Richer Genre** (PRD 15 taxonomy + public matching, PRD 16 Spotify genre signal). Decisions: favoritable **events, venues, and artists** (each its own list); **signed-in only**, with sign-in nudges when an anonymous user fires/plans/removes; genre matching gets **both** a curated taxonomy + aliases (helps everyone) **and** captured **Spotify artist genres** (no new scope; richer signal for connected users). Today only *partially* covered by V3 custom signals; no dedicated saved/favorites UI yet, and `scoreGenreMatch()` still scores a hardcoded ~15-term list against flat `events.tags[]`. See [`master-roadmap.md`](master-roadmap.md) Phase 8 for sequencing.
+- **Spotify save-to-library / playlist actions — PARKED for a future phase.** Not ready to write to Spotify yet. Requires new OAuth write scopes (`user-library-modify`, `user-follow-modify`, `playlist-modify-public`/`playlist-modify-private`) and **re-authentication of existing connected users**; revisit when the product is ready to write to Spotify.
+- Google/YouTube can add identity plus limited YouTube Data API signals only after scope setup is explicit (feature flags `AUTH_GOOGLE_YOUTUBE_ENABLED` exist but the provider is not implemented).
 - Do not claim YouTube Music listening history.
 - Apple identity is separate from Apple Music.
-- Apple Music requires MusicKit/developer-token setup before planning library access.
+- Apple Music requires MusicKit/developer-token setup before planning library access (`AUTH_APPLE_MUSIC_ENABLED` flag exists; not implemented).
 
 ## Auth Delay Fallback
 
