@@ -67,39 +67,46 @@ export async function seedSharedSongsForEvent(input: {
 
   const seededByUserId = toNullableUserId(input.userId);
 
-  await Promise.all(
-    seeds.map((seed) =>
-      query(
-        `
-          insert into public.event_shared_songs (
-            id, event_id, event_title, provider, provider_track_id, name, artist_names,
-            external_url, image_url, preview_url, seeded_by_user_id
-          )
-          values ($1, $2, $3, 'spotify', $4, $5, $6, $7, $8, $9, $10)
-          on conflict (event_id, provider, provider_track_id) do update
-            set share_count = public.event_shared_songs.share_count + 1,
-              last_shared_at = now(),
-              name = excluded.name,
-              artist_names = excluded.artist_names,
-              external_url = excluded.external_url,
-              image_url = excluded.image_url,
-              preview_url = excluded.preview_url
-        `,
-        [
-          randomUUID(),
-          input.event.id,
-          input.event.eventTitle,
-          seed.providerTrackId,
-          seed.name,
-          seed.artistNames,
-          seed.externalUrl,
-          seed.imageUrl,
-          seed.previewUrl,
-          seededByUserId,
-        ]
+  try {
+    await Promise.all(
+      seeds.map((seed) =>
+        query(
+          `
+            insert into public.event_shared_songs (
+              id, event_id, event_title, provider, provider_track_id, name, artist_names,
+              external_url, image_url, preview_url, seeded_by_user_id
+            )
+            values ($1, $2, $3, 'spotify', $4, $5, $6, $7, $8, $9, $10)
+            on conflict (event_id, provider, provider_track_id) do update
+              set share_count = public.event_shared_songs.share_count + 1,
+                last_shared_at = now(),
+                name = excluded.name,
+                artist_names = excluded.artist_names,
+                external_url = excluded.external_url,
+                image_url = excluded.image_url,
+                preview_url = excluded.preview_url
+          `,
+          [
+            randomUUID(),
+            input.event.id,
+            input.event.eventTitle,
+            seed.providerTrackId,
+            seed.name,
+            seed.artistNames,
+            seed.externalUrl,
+            seed.imageUrl,
+            seed.previewUrl,
+            seededByUserId,
+          ]
+        )
       )
-    )
-  );
+    );
+  } catch (error) {
+    if (!isMissingRelationError(error)) {
+      throw error;
+    }
+    // Table not migrated yet — silently skip seeding (reads degrade to empty).
+  }
 }
 
 /**
@@ -128,74 +135,102 @@ export async function getSharedSongSummariesByEvent(
     return {};
   }
 
-  const result = await query<SharedSongRow>(
-    `
-      select ${SHARED_SONG_COLUMNS}
-      from public.event_shared_songs
-      where event_id = any($1::text[])
-        and status = 'visible'
-      order by event_id, share_count desc, first_shared_at asc
-    `,
-    [uniqueIds]
-  );
+  try {
+    const result = await query<SharedSongRow>(
+      `
+        select ${SHARED_SONG_COLUMNS}
+        from public.event_shared_songs
+        where event_id = any($1::text[])
+          and status = 'visible'
+        order by event_id, share_count desc, first_shared_at asc
+      `,
+      [uniqueIds]
+    );
 
-  const summaries: Record<string, SharedSongSummary> = {};
-  for (const row of result.rows) {
-    const summary = (summaries[row.event_id] ??= { count: 0, thumbnails: [] });
-    summary.count += 1;
-    if (row.image_url && summary.thumbnails.length < 3) {
-      summary.thumbnails.push(row.image_url);
+    const summaries: Record<string, SharedSongSummary> = {};
+    for (const row of result.rows) {
+      const summary = (summaries[row.event_id] ??= { count: 0, thumbnails: [] });
+      summary.count += 1;
+      if (row.image_url && summary.thumbnails.length < 3) {
+        summary.thumbnails.push(row.image_url);
+      }
     }
-  }
 
-  return summaries;
+    return summaries;
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      return {};
+    }
+    throw error;
+  }
 }
 
 /** Admin listing (includes hidden rows). Still never reads `seeded_by_user_id`. */
 export async function listSharedSongsForAdmin(eventId?: string): Promise<SharedSong[]> {
-  const result = await query<SharedSongRow>(
-    `
-      select ${SHARED_SONG_COLUMNS}
-      from public.event_shared_songs
-      where ($1::text is null or event_id = $1)
-      order by last_shared_at desc
-    `,
-    [eventId ?? null]
-  );
+  try {
+    const result = await query<SharedSongRow>(
+      `
+        select ${SHARED_SONG_COLUMNS}
+        from public.event_shared_songs
+        where ($1::text is null or event_id = $1)
+        order by last_shared_at desc
+      `,
+      [eventId ?? null]
+    );
 
-  return result.rows.map(mapSharedSongRow);
+    return result.rows.map(mapSharedSongRow);
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function setSharedSongStatus(
   id: string,
   status: SharedSongStatus
 ): Promise<SharedSong | null> {
-  const result = await query<SharedSongRow>(
-    `
-      update public.event_shared_songs
-      set status = $2
-      where id = $1
-      returning ${SHARED_SONG_COLUMNS}
-    `,
-    [id, status]
-  );
+  try {
+    const result = await query<SharedSongRow>(
+      `
+        update public.event_shared_songs
+        set status = $2
+        where id = $1
+        returning ${SHARED_SONG_COLUMNS}
+      `,
+      [id, status]
+    );
 
-  return result.rows[0] ? mapSharedSongRow(result.rows[0]) : null;
+    return result.rows[0] ? mapSharedSongRow(result.rows[0]) : null;
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 async function listVisibleSharedSongs(eventId: string): Promise<SharedSong[]> {
-  const result = await query<SharedSongRow>(
-    `
-      select ${SHARED_SONG_COLUMNS}
-      from public.event_shared_songs
-      where event_id = $1
-        and status = 'visible'
-      order by share_count desc, first_shared_at asc
-    `,
-    [eventId]
-  );
+  try {
+    const result = await query<SharedSongRow>(
+      `
+        select ${SHARED_SONG_COLUMNS}
+        from public.event_shared_songs
+        where event_id = $1
+          and status = 'visible'
+        order by share_count desc, first_shared_at asc
+      `,
+      [eventId]
+    );
 
-  return result.rows.map(mapSharedSongRow);
+    return result.rows.map(mapSharedSongRow);
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 async function computeViewerLovedTrackIds(
@@ -247,4 +282,16 @@ function toNullableUserId(userId: string | null | undefined): number | null {
   }
   const parsed = Number(userId);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+// Tolerate a not-yet-migrated database (Postgres 42P01 "undefined_table") so the public board and
+// event pages degrade to "no shared songs" until db/migrate-missing-tables.sql is applied — same
+// resilience pattern the rest of the app uses (see lib/community.ts isMissingRelationError).
+function isMissingRelationError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "42P01"
+  );
 }
