@@ -192,6 +192,7 @@ Reads and writes a signed-in listener's private Saved/Favorites (events, venues,
 - **Ownership:** manual
 - **Flows to / depends on:**
   - → saved_items (flowsTo) — persist saves
+  - → Saved Space (flowsTo) — grouped saved lists
 - **Fed by / required by:**
   - ← Saved Items API (dependsOn) — save/list/remove
 
@@ -565,6 +566,20 @@ Signed-in-only endpoints to list, save, and un-save events, venues, and artists.
 - **Fed by / required by:**
   - ← Event Board (flowsTo) — save events/venues/artists
   - ← Event Detail (flowsTo) — save from detail
+  - ← Saved Space (flowsTo) — inline un-save
+
+#### Saved Space  `ui-saved-space`
+
+Signed-in-only /saved view with three private lists (events, venues, artists), inline un-save, and empty states. Anonymous visitors are redirected to sign-in.
+
+- **Kind:** Surface
+- **Source of truth:** `app/saved/page.tsx`
+- **Access:** public
+- **Ownership:** manual
+- **Flows to / depends on:**
+  - → Saved Items API (flowsTo) — inline un-save
+- **Fed by / required by:**
+  - ← Saved Items (flowsTo) — grouped saved lists
 
 ### Operations
 
@@ -731,6 +746,8 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | saved_items | → | users | dependsOn | owned by user (cascade) |
 | Event Board | → | Saved Items API | flowsTo | save events/venues/artists |
 | Event Detail | → | Saved Items API | flowsTo | save from detail |
+| Saved Items | → | Saved Space | flowsTo | grouped saved lists |
+| Saved Space | → | Saved Items API | flowsTo | inline un-save |
 | Event Board | → | Listener Profile | flowsTo | sign-in entry |
 | Image Cleanup (cron) | → | Vercel Blob | flowsTo | delete stale images |
 | AVLgo Sync (cron) | → | system_job_runs | flowsTo | records outcome |
@@ -748,4 +765,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_46 nodes, 57 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_47 nodes, 59 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

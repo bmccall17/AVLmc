@@ -22,6 +22,8 @@ type SaveButtonProps = {
   /** `chip` shows an icon + label; `icon` is compact for dense action bars. */
   variant?: "chip" | "icon";
   className?: string;
+  /** Notified after a successful toggle with the new saved state (e.g. to drop a Saved-list row). */
+  onToggle?: (saved: boolean) => void;
 };
 
 const TYPE_NOUN: Record<SavedItemType, string> = {
@@ -45,6 +47,7 @@ export function SaveButton({
   isSignedIn,
   variant = "icon",
   className,
+  onToggle,
 }: SaveButtonProps) {
   const [saved, setSaved] = useState(initialSaved);
   const [pending, setPending] = useState(false);
@@ -78,6 +81,8 @@ export function SaveButton({
       if (!response.ok) {
         throw new Error(`Save request failed (${response.status}).`);
       }
+
+      onToggle?.(nextSaved);
     } catch {
       // Roll back optimistic state on failure.
       setSaved(!nextSaved);

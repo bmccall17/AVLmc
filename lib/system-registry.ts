@@ -588,6 +588,16 @@ const NODES: RegistryNode[] = [
     access: "public",
     ownership: "automated",
   },
+  {
+    id: "ui-saved-space",
+    kind: "surface",
+    layer: "identity",
+    label: "Saved Space",
+    description: "Signed-in-only /saved view with three private lists (events, venues, artists), inline un-save, and empty states. Anonymous visitors are redirected to sign-in.",
+    sourceOfTruth: "app/saved/page.tsx",
+    access: "public",
+    ownership: "manual",
+  },
 
   /* ---- Operations ------------------------------------------------ */
   {
@@ -745,6 +755,8 @@ const EDGES: RegistryEdge[] = [
   { from: "db-saved-items", to: "db-users", kind: "dependsOn", label: "owned by user (cascade)" },
   { from: "ui-eventboard", to: "api-saved-items", kind: "flowsTo", label: "save events/venues/artists" },
   { from: "ui-event-detail", to: "api-saved-items", kind: "flowsTo", label: "save from detail" },
+  { from: "svc-saved-items", to: "ui-saved-space", kind: "flowsTo", label: "grouped saved lists" },
+  { from: "ui-saved-space", to: "api-saved-items", kind: "flowsTo", label: "inline un-save" },
   { from: "ui-eventboard", to: "ui-listener-profile", kind: "flowsTo", label: "sign-in entry" },
 
   // Operations

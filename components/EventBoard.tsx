@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Bell, CalendarCheck, ChevronRight, ExternalLink, Flame, Headphones, Search, Star, UserPlus, X } from "lucide-react";
+import { signIn } from "next-auth/react";
 import { SaveButton } from "@/components/SaveButton";
 import { resolveGenres, type CanonicalGenre } from "@/lib/genre-taxonomy";
 import type { CommunityCounts } from "@/lib/community";
@@ -84,6 +85,9 @@ type SpotifyMatchCorrectionResponse = {
 
 const TOOLTIP_DELAY_MS = 1500;
 const SKIP_REMOVE_CONFIRM_KEY = "avlmc:homepage:skip-remove-confirm";
+const SIGNIN_NUDGE_DISMISS_KEY = "avlmc:signin-nudge-dismissed";
+const KEEP_INTENT_PARAM = "keepIntent";
+const NUDGEABLE_ACTIONS = new Set<CardAction>(["fire", "planning", "remove"]);
 const RYAN_PLAYLIST_URL = "https://open.spotify.com/playlist/4fcdaCe97lEeEMe8rOhuSM?si=BcTWAtvxQqu3kRlZDlIuBQ";
 
 const actionHelp: Record<ActionKind, { body: string; impact: string; title: string }> = {
@@ -152,6 +156,9 @@ export function EventBoard({
   const top30EventIdSet = useMemo(() => new Set(top30EventIds), [top30EventIds]);
   const savedEventKeySet = useMemo(() => new Set(initialSavedEventKeys), [initialSavedEventKeys]);
   const [toastEvent, setToastEvent] = useState<EventRecord | null>(null);
+  const [signInNudge, setSignInNudge] = useState<{ event: EventRecord; action: CardAction } | null>(null);
+  const [saveOfferEvent, setSaveOfferEvent] = useState<EventRecord | null>(null);
+  const replayedIntent = useRef(false);
   const tooltipTimer = useRef<number | null>(null);
   const trackedImpressions = useRef(new Set<string>());
   const visibleEvents = useMemo(
@@ -161,6 +168,19 @@ export function EventBoard({
   const allVenues = useMemo(() => Array.from(new Set(visibleEvents.map((event) => event.venueName))).sort(), [visibleEvents]);
   const allTags = useMemo(
     () => Array.from(new Set(visibleEvents.flatMap((event) => event.tags).filter(isUsefulTag))).sort(),
+    [visibleEvents]
+  );
+  // Precompute each event's canonical genres once (keyed off the event list, not the search
+  // query) so genre quick filters are a cheap Set lookup rather than running the taxonomy's
+  // normalization regex inside the per-keystroke filter loop.
+  const eventGenres = useMemo(
+    () =>
+      new Map<string, Set<CanonicalGenre>>(
+        visibleEvents.map((event) => [
+          event.id,
+          new Set(resolveGenres([event.eventTitle, event.artistName, ...event.tags])),
+        ])
+      ),
     [visibleEvents]
   );
   const activeQuickFilters = useMemo(
@@ -224,6 +244,52 @@ export function EventBoard({
     };
   }, [isSignedIn]);
 
+  // Action-preserving sign-in replay (PRD 13 / C2): after an anonymous fire/plan/remove leads to
+  // sign-in, the pending action is carried in the `keepIntent` query param and replayed exactly
+  // once against the now-signed-in account (idempotent — skipped if already in that state), then
+  // we offer a one-tap save. The param is cleared so it never replays again.
+  useEffect(() => {
+    if (!isSignedIn || replayedIntent.current) {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get(KEEP_INTENT_PARAM);
+    if (!raw) {
+      return;
+    }
+    replayedIntent.current = true;
+
+    const separator = raw.indexOf(":");
+    const action = (separator === -1 ? raw : raw.slice(0, separator)) as CardAction;
+    const eventId = separator === -1 ? "" : raw.slice(separator + 1);
+
+    params.delete(KEEP_INTENT_PARAM);
+    const nextSearch = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`
+    );
+
+    const targetEvent = events.find((candidate) => candidate.id === eventId);
+    if (!targetEvent || !NUDGEABLE_ACTIONS.has(action)) {
+      return;
+    }
+
+    const state = discoveryStates[eventId];
+    const alreadyApplied =
+      (action === "fire" && Boolean(state?.fire)) ||
+      (action === "planning" && Boolean(state?.planning)) ||
+      (action === "remove" && Boolean(state?.removed));
+
+    if (!alreadyApplied) {
+      void recordCardAction(targetEvent, action, { silent: true });
+    }
+
+    setSaveOfferEvent(targetEvent);
+  }, [discoveryStates, events, isSignedIn]);
+
   useEffect(() => {
     setEventScores(
       scoreDiscoveryEvents({
@@ -263,15 +329,40 @@ export function EventBoard({
   }, [visibleEvents]);
 
   const filteredEvents = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    // Length-bound the user-typed query before it flows into any text matching (defense-in-depth
+    // against pathological inputs); a search term longer than this never adds signal.
+    const normalizedQuery = query.trim().toLowerCase().slice(0, 120);
+
+    const matchesQuickFilter = (event: EventRecord, filter: QuickFilterDefinition) => {
+      switch (filter.id) {
+        case "tonight":
+          return isTonight(event);
+        case "weekend":
+          return isThisWeekend(event);
+        case "free":
+          return eventContains(event, ["free", "no cover"]);
+        case "local":
+          return eventContains(event, ["local", "asheville"]);
+        case "outdoor":
+          return eventContains(event, ["outdoor", "patio"]);
+        case "dance":
+        case "rock":
+          return (filter.genres ?? []).some((genre) => eventGenres.get(event.id)?.has(genre));
+        default:
+          return true;
+      }
+    };
 
     return visibleEvents
-      .filter((event) => matchesSearch(event, normalizedQuery))
-      .filter((event) => (selectedVenues.length === 0 ? true : selectedVenues.includes(event.venueName)))
-      .filter((event) => (tag === "all" ? true : event.tags.includes(tag)))
-      .filter((event) => activeQuickFilters.every((filter) => filter.matches(event)))
+      .filter(
+        (event) =>
+          matchesSearch(event, normalizedQuery) &&
+          (selectedVenues.length === 0 || selectedVenues.includes(event.venueName)) &&
+          (tag === "all" || event.tags.includes(tag)) &&
+          activeQuickFilters.every((filter) => matchesQuickFilter(event, filter))
+      )
       .sort((a, b) => compareEvents(a, b, eventCounts, eventScores, sortMode));
-  }, [activeQuickFilters, eventCounts, eventScores, query, selectedVenues, sortMode, tag, visibleEvents]);
+  }, [activeQuickFilters, eventCounts, eventGenres, eventScores, query, selectedVenues, sortMode, tag, visibleEvents]);
 
   function clearFilters() {
     setQuery("");
@@ -428,10 +519,39 @@ export function EventBoard({
     }
   }
 
+  // Surface a gentle, session-dismissible sign-in nudge after an anonymous action. The action
+  // itself still applied (anonymous path); the nudge invites keeping it on an account.
+  function maybeShowSignInNudge(event: EventRecord, action: CardAction) {
+    if (isSignedIn || !NUDGEABLE_ACTIONS.has(action)) {
+      return;
+    }
+    if (typeof window !== "undefined" && window.sessionStorage.getItem(SIGNIN_NUDGE_DISMISS_KEY)) {
+      return;
+    }
+    setSignInNudge({ action, event });
+  }
+
+  function dismissSignInNudge() {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(SIGNIN_NUDGE_DISMISS_KEY, "1");
+    }
+    setSignInNudge(null);
+  }
+
+  function signInToKeep() {
+    if (!signInNudge) {
+      return;
+    }
+    const callbackUrl = `/?${KEEP_INTENT_PARAM}=${signInNudge.action}:${signInNudge.event.id}`;
+    void signIn("spotify", { callbackUrl });
+  }
+
   async function togglePositiveAction(event: EventRecord, action: Extract<ActionKind, "fire" | "going">) {
     clearTooltip();
     setToastEvent(null);
-    await recordCardAction(event, action === "going" ? "planning" : "fire");
+    const cardAction: CardAction = action === "going" ? "planning" : "fire";
+    await recordCardAction(event, cardAction);
+    maybeShowSignInNudge(event, cardAction);
   }
 
   async function trackAvlgoClick(event: EventRecord) {
@@ -446,6 +566,7 @@ export function EventBoard({
 
       if (removed) {
         setToastEvent(event);
+        maybeShowSignInNudge(event, "remove");
       }
       return;
     }
@@ -468,6 +589,7 @@ export function EventBoard({
 
     if (removed) {
       setToastEvent(confirmEvent);
+      maybeShowSignInNudge(confirmEvent, "remove");
       setConfirmEvent(null);
     }
   }
@@ -758,6 +880,44 @@ export function EventBoard({
           <button onClick={() => void undoRemove(toastEvent)} type="button">
             Undo
           </button>
+        </div>
+      ) : null}
+
+      {saveOfferEvent ? (
+        <div className="signin-nudge" role="status">
+          <p>
+            You&apos;re in. Want to save <strong>{saveOfferEvent.eventTitle}</strong> to your Saved
+            space?
+          </p>
+          <div className="signin-nudge-actions">
+            <SaveButton
+              eventId={saveOfferEvent.id}
+              initialSaved={false}
+              isSignedIn
+              itemKey={saveOfferEvent.id}
+              itemType="event"
+              label={saveOfferEvent.eventTitle}
+              onToggle={() => setSaveOfferEvent(null)}
+              variant="chip"
+            />
+            <button className="nudge-dismiss" onClick={() => setSaveOfferEvent(null)} type="button">
+              Not now
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {signInNudge && !isSignedIn ? (
+        <div className="signin-nudge" role="status">
+          <p>Sign in to keep this and tune your recommendations.</p>
+          <div className="signin-nudge-actions">
+            <button className="nudge-primary" onClick={signInToKeep} type="button">
+              Sign in
+            </button>
+            <button className="nudge-dismiss" onClick={dismissSignInNudge} type="button">
+              Dismiss
+            </button>
+          </div>
         </div>
       ) : null}
     </>
@@ -1597,10 +1757,13 @@ const sortLabels: Record<SortMode, string> = {
   venue: "Venue A-Z",
 };
 
+// Quick filters are pure data (no stored predicate). Matching is resolved by a concrete switch
+// on `id` in `filteredEvents`; genre filters carry canonical genres matched against each event's
+// precomputed genre set. Keeping this data-only avoids dynamic function dispatch in the hot path.
 type QuickFilterDefinition = {
   id: QuickFilterId;
   label: string;
-  matches: (event: EventRecord) => boolean;
+  genres?: CanonicalGenre[];
 };
 
 const quickFilterGroups: Array<{
@@ -1610,37 +1773,30 @@ const quickFilterGroups: Array<{
 }> = [
   {
     filters: [
-      { id: "tonight", label: "Tonight", matches: isTonight },
-      { id: "weekend", label: "This weekend", matches: isThisWeekend },
+      { id: "tonight", label: "Tonight" },
+      { id: "weekend", label: "This weekend" },
     ],
     id: "when",
     label: "When",
   },
   {
     filters: [
-      { id: "dance", label: "Dance", matches: (event) => eventMatchesGenres(event, ["dance", "electronic"]) },
-      { id: "rock", label: "Rock", matches: (event) => eventMatchesGenres(event, ["rock", "indie", "punk", "metal"]) },
+      { id: "dance", label: "Dance", genres: ["dance", "electronic"] },
+      { id: "rock", label: "Rock", genres: ["rock", "indie", "punk", "metal"] },
     ],
     id: "genre",
     label: "Genre",
   },
   {
     filters: [
-      { id: "free", label: "Free", matches: (event) => eventContains(event, ["free", "no cover"]) },
-      { id: "local", label: "Local", matches: (event) => eventContains(event, ["local", "asheville"]) },
-      { id: "outdoor", label: "Outdoor", matches: (event) => eventContains(event, ["outdoor", "patio"]) },
+      { id: "free", label: "Free" },
+      { id: "local", label: "Local" },
+      { id: "outdoor", label: "Outdoor" },
     ],
     id: "vibe",
     label: "Vibe",
   },
 ];
-
-// Route genre quick filters through the taxonomy (PRD 15 / C4) so alias-tagged events
-// (e.g. "dj"/"edm" → electronic) still match their canonical filter.
-function eventMatchesGenres(event: EventRecord, targets: CanonicalGenre[]): boolean {
-  const genres = resolveGenres([event.eventTitle, event.artistName, ...event.tags]);
-  return genres.some((genre) => targets.includes(genre));
-}
 
 function getDefaultQuickFilters(): QuickFilterSelections {
   return {

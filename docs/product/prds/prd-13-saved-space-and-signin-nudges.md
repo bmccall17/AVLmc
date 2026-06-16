@@ -8,7 +8,13 @@ Give the saves from C1 a home and a reason to exist. This cycle delivers the **S
 
 ## Implementation Status
 
-**Planned.** Depends on C1 (`saved_items`, `lib/saved-items.ts`, `/api/me/saved-items`).
+**Shipped.** Delivered:
+
+- **The Saved space** — `app/saved/page.tsx` (signed-in only, `force-dynamic`, `noindex`; anonymous visitors redirect to `/api/auth/signin?callbackUrl=/saved`, and a disabled-auth build falls back to `/`). Server-loads via `listSavedItems(userId)`; resolves saved events to title/date/venue (tolerating events that have left the board). `components/saved/SavedSpace.tsx` renders three labeled, scannable lists (Events/Venues/Artists) with per-section counts and helpful empty states; events link to detail, venues/artists link to a filtered board (`/?q=…`); each row has inline un-save (reusing C1's `SaveButton` with a new `onToggle` callback that drops the row optimistically). Mobile-first styles.
+- **Sign-in nudge (action-preserving)** — in `components/EventBoard.tsx`: an anonymous fire/plan/remove still applies via `/api/discovery/event-action`, then a gentle, session-dismissible nudge ("Sign in to keep this and tune your recommendations") appears (dismissal remembered in `sessionStorage`; never a blocking modal). Sign-in carries the pending action in a `keepIntent=<action>:<eventId>` `callbackUrl`; after sign-in the board replays it **exactly once** against the account — idempotent (skipped if the per-person state already reflects it) — then offers a one-tap save and clears the param via `history.replaceState`.
+- **Entry point** — a signed-in-only "View saved" link added to `components/ListenerProfileButton.tsx`.
+- **Hardening** — collapsed the board filter chain to a single pass with pure-data quick filters resolved by a concrete `switch` (no dynamic dispatch), and length-bounded the search query; cleared a Snyk ReDoS false positive on the prior dynamic `filter.matches` pattern.
+- **Architecture** — registered `ui-saved-space` (surface) + edges in `lib/system-registry.ts`; system map regenerated; `npm run test:registry` passes. New code Snyk-clean; $0. Browsing/reacting/contributing remain fully anonymous.
 
 ## Goals
 

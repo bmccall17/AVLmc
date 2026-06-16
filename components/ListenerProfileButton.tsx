@@ -1,9 +1,10 @@
 "use client";
 
 import { signIn, signOut } from "next-auth/react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Plus, RotateCcw, SlidersHorizontal, Trash2, UserCircle, X } from "lucide-react";
+import { Bookmark, Plus, RotateCcw, SlidersHorizontal, Trash2, UserCircle, X } from "lucide-react";
 import { MusicConnectionActions } from "@/components/MusicConnectionActions";
 import type { AuthFeatureFlags } from "@/lib/auth-flags";
 import type { DiscoveryScoreComponents } from "@/lib/discovery";
@@ -361,6 +362,12 @@ export function ListenerProfileButton({
                   ) : (
                     <p className="empty-copy">Spotify sign-in is not configured.</p>
                   )}
+                  {isSignedIn ? (
+                    <Link className="ghost-control saved-space-link" href="/saved">
+                      <Bookmark aria-hidden="true" size={15} strokeWidth={2.4} />
+                      View saved
+                    </Link>
+                  ) : null}
                   {isSignedIn ? (
                     <button
                       className="ghost-control"
