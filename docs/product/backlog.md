@@ -1,10 +1,20 @@
 # AVL Music Companion Backlog
 
-Updated: June 15, 2026
+Updated: June 16, 2026
 
 ## Urgent
 
 * _None open._ The analytics/WAU‑MAU dependency below is resolved. Active focus has moved to the Personalized Discovery follow-ups tracked in [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
+
+## Scheduled
+
+* **Decommission Aiven — unhook completely (trigger: on/after June 23, 2026, once Neon has run stable ≈1 week).** Production migrated Aiven → Neon on June 16, 2026 (see [Deployment and Auth Investigation](deployment-auth-investigation.md)); Aiven is being kept **only** as a rollback safety net for one week. Once Neon is confirmed healthy under real traffic, fully retire Aiven:
+  * Confirm Neon stability: no `53300`/connection errors, funnel writes landing, sign-in working, admin Health probe green for the week.
+  * Remove any lingering Aiven connection string from Vercel (all envs: Production/Preview/Development) and from any local `.env`.
+  * Delete / power down the Aiven PostgreSQL service so it can't be accidentally re-pointed.
+  * Rotate or invalidate the old Aiven credentials.
+  * Confirm no code/docs still reference Aiven as live (only the intentional historical notes in ADR 0001 and launch PRDs 04/05 should remain).
+  * Take a final Aiven `pg_dump` to cold storage before deleting, just in case.
 
 ## Parked
 
