@@ -1,3 +1,16 @@
+-- ============================================================
+-- AVL Music Companion — canonical database schema (single source of truth).
+--
+-- This file is the ONE place the schema is defined. Every column that earlier
+-- shipped as an incremental `ALTER TABLE ... ADD COLUMN` has been folded into its
+-- `CREATE TABLE`; one-time data backfills have been removed (they live in version
+-- history). Safe to run repeatedly: every statement is `IF NOT EXISTS`.
+--
+-- Hosting: Neon Postgres 17. Use the pooled (`-pooler`) connection string for the
+-- app runtime (Vercel `DATABASE_URL`); use the direct endpoint for migrations/dumps.
+-- ============================================================
+
+-- ---- Events (re-ingested daily from AVLgo; the source of truth for listings) ----
 create table if not exists public.events (
   id text primary key,
   avlgo_event_id text not null,
@@ -18,6 +31,7 @@ create table if not exists public.events (
 create index if not exists events_event_date_idx on public.events (event_date);
 create index if not exists events_starts_at_idx on public.events (starts_at);
 
+-- ---- Auth.js (NextAuth) identity tables ----------------------------------------
 create table if not exists public.users (
   id serial primary key,
   name text,
@@ -67,6 +81,7 @@ create table if not exists public.verification_token (
 create unique index if not exists verification_token_identifier_token_idx
   on public.verification_token (identifier, token);
 
+-- ---- Optional music identity / taste (Spotify) ---------------------------------
 create table if not exists public.music_connections (
   id text primary key,
   user_id integer not null references public.users(id) on delete cascade,
@@ -79,9 +94,6 @@ create table if not exists public.music_connections (
   unique (user_id, provider)
 );
 
-alter table if exists public.music_connections
-  add column if not exists taste_opt_out_at timestamptz;
-
 create index if not exists music_connections_user_id_idx
   on public.music_connections (user_id);
 
@@ -93,6 +105,7 @@ create table if not exists public.music_profile_items (
   provider_item_id text not null,
   name text not null,
   artist_names text[] not null default '{}',
+  genres text[] not null default '{}',
   external_url text,
   image_url text,
   rank integer not null,
@@ -117,6 +130,10 @@ create table if not exists public.listener_discovery_preferences (
 create index if not exists listener_discovery_preferences_user_id_idx
   on public.listener_discovery_preferences (user_id);
 
+-- ---- Community contributions & reactions ---------------------------------------
+-- Interaction tables keep their own copy of event metadata (event_title, etc.) and
+-- deliberately have NO FK to events: events are re-ingested daily from AVLgo, so the
+-- human/community layer must survive a refresh that rewrites the events table.
 create table if not exists public.contributions (
   id text primary key,
   event_id text not null,
@@ -138,19 +155,14 @@ create table if not exists public.contributions (
   status text not null default 'visible' check (status in ('visible', 'hidden', 'pending'))
 );
 
-alter table if exists public.contributions
-  add column if not exists music_provider text,
-  add column if not exists music_provider_item_id text,
-  add column if not exists music_provider_url text;
-
 create index if not exists contributions_event_id_status_idx
   on public.contributions (event_id, status, created_at desc);
-
 create index if not exists contributions_session_created_at_idx
   on public.contributions (session_id, created_at desc);
 create index if not exists contributions_user_id_idx
   on public.contributions (user_id);
 
+-- "fire" reactions live here; "going" intent lives in event_intents (below).
 create table if not exists public.reactions (
   id text primary key,
   event_id text not null,
@@ -185,31 +197,9 @@ create index if not exists event_intents_user_id_idx
 create index if not exists event_intents_source_idx
   on public.event_intents (source);
 
-insert into public.event_intents (
-  id,
-  event_id,
-  event_title,
-  source,
-  session_id,
-  user_id,
-  identity_key,
-  created_at,
-  updated_at
-)
-select
-  id,
-  event_id,
-  event_title,
-  'avlmc',
-  session_id,
-  user_id,
-  coalesce('user:' || user_id::text, 'session:' || session_id),
-  created_at,
-  created_at
-from public.reactions
-where type = 'going'
-on conflict (event_id, identity_key) do nothing;
-
+-- ---- Personalized discovery memory ---------------------------------------------
+-- Append-only learning stream. Grows unbounded — prune old rows on a retention
+-- window via the `cleanup` job (see lib/admin / system_job_runs) to control bloat.
 create table if not exists public.event_interaction_events (
   id text primary key,
   event_id text not null,
@@ -245,6 +235,10 @@ create index if not exists event_interaction_events_event_id_idx
   on public.event_interaction_events (event_id);
 create index if not exists event_interaction_events_action_idx
   on public.event_interaction_events (action);
+-- Listener-Trace (admin) filters this log by user_id directly; without this index
+-- those queries seq-scan a fast-growing table.
+create index if not exists event_interaction_events_user_id_idx
+  on public.event_interaction_events (user_id);
 
 create table if not exists public.event_person_event_state (
   id text primary key,
@@ -294,45 +288,7 @@ create index if not exists spotify_event_match_corrections_identity_idx
 create index if not exists spotify_event_match_corrections_user_id_idx
   on public.spotify_event_match_corrections (user_id);
 
-create table if not exists public.system_job_runs (
-  id text primary key,
-  job text not null check (job in ('avlgo_sync', 'cleanup')),
-  status text not null check (status in ('success', 'failure')),
-  detail text,
-  items_processed integer,
-  started_at timestamptz not null,
-  finished_at timestamptz not null default now(),
-  duration_ms integer
-);
-
-create index if not exists system_job_runs_job_finished_idx
-  on public.system_job_runs (job, finished_at desc);
-
-create table if not exists public.admin_resources (
-  id text primary key,
-  type text not null check (type in (
-    'source', 'playlist', 'venue_partner', 'community_org', 'press_media',
-    'playlist_collaborator', 'sponsor', 'venue_contact', 'artist_resource', 'other'
-  )),
-  name text not null,
-  description text,
-  url text,
-  status text not null default 'active' check (status in ('active', 'prospect', 'archived')),
-  linked_venue_name text,
-  linked_source text,
-  surfaced_publicly boolean not null default false,
-  notes text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create index if not exists admin_resources_type_status_idx
-  on public.admin_resources (type, status);
-
--- Spotify top-artist genres captured at sync (PRD 16 / C5). Additive; empty until next sync.
-alter table if exists public.music_profile_items
-  add column if not exists genres text[] not null default '{}';
-
+-- ---- Saved/Favorites (private, signed-in only) ---------------------------------
 create table if not exists public.saved_items (
   id text primary key,
   user_id integer not null references public.users(id) on delete cascade,
@@ -347,9 +303,9 @@ create table if not exists public.saved_items (
 create index if not exists saved_items_user_type_idx
   on public.saved_items (user_id, item_type);
 
--- Shared listening (PRD 17 / Phase 9 C1): public, deduped song list per event, seeded when a
--- signed-in Spotify listener Goes/Fires. Separate from contributions so it never feeds discovery
--- scoring. seeded_by_user_id is server-only (future inner-circle attribution) and never exposed.
+-- ---- Shared Listening (PRD 17): public, deduped song list per event, seeded when
+-- a signed-in Spotify listener Goes/Fires. Separate from contributions so it never
+-- feeds discovery scoring. seeded_by_user_id is server-only and never exposed. ----
 create table if not exists public.event_shared_songs (
   id text primary key,
   event_id text not null,
@@ -371,3 +327,40 @@ create table if not exists public.event_shared_songs (
 
 create index if not exists event_shared_songs_event_status_idx
   on public.event_shared_songs (event_id, status, share_count desc);
+
+-- ---- Operations: scheduled-job observability -----------------------------------
+create table if not exists public.system_job_runs (
+  id text primary key,
+  job text not null check (job in ('avlgo_sync', 'cleanup')),
+  status text not null check (status in ('success', 'failure')),
+  detail text,
+  items_processed integer,
+  started_at timestamptz not null,
+  finished_at timestamptz not null default now(),
+  duration_ms integer
+);
+
+create index if not exists system_job_runs_job_finished_idx
+  on public.system_job_runs (job, finished_at desc);
+
+-- ---- Admin-managed partner/resource directory ----------------------------------
+create table if not exists public.admin_resources (
+  id text primary key,
+  type text not null check (type in (
+    'source', 'playlist', 'venue_partner', 'community_org', 'press_media',
+    'playlist_collaborator', 'sponsor', 'venue_contact', 'artist_resource', 'other'
+  )),
+  name text not null,
+  description text,
+  url text,
+  status text not null default 'active' check (status in ('active', 'prospect', 'archived')),
+  linked_venue_name text,
+  linked_source text,
+  surfaced_publicly boolean not null default false,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists admin_resources_type_status_idx
+  on public.admin_resources (type, status);
