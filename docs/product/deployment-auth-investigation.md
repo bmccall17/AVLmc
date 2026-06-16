@@ -1,6 +1,6 @@
 # Deployment and Auth Investigation
 
-Updated: June 6, 2026
+Updated: June 16, 2026
 
 ## Recommendation
 
@@ -9,20 +9,26 @@ Launch the first public prototype lean and low-cost with:
 - Hosting: Vercel Hobby for the Next.js app.
 - Source control/deploys: GitHub repo connected to Vercel.
 - Scheduled sync: Vercel Cron once daily at `/api/sync/avlgo`.
-- Database: Aiven Free PostgreSQL for events, contributions, reactions, moderation state, Auth.js sessions, and optional music taste data.
+- Database: **Neon** (free tier, Postgres 17) for events, contributions, reactions, moderation state, Auth.js sessions, and optional music taste data — using the **pooled** (`-pooler`) connection endpoint.
 - Storage: none for the first production release.
 - Voice memos: deferred until an object-storage path is selected.
 - Optional auth: anonymous public use remains default; Spotify sign-in is live for future personalized discovery.
 - MVP auth now: server-issued anonymous sessions for public actions plus one admin password.
 
-The deployed production path should use Aiven for persistent event/community data. Do not rely on local JSON or local file uploads on Vercel.
+The deployed production path should use Neon for persistent event/community data. Do not rely on local JSON or local file uploads on Vercel.
+
+## Database: migrated Aiven → Neon (June 16, 2026)
+
+The first launch ran on **Aiven Free PostgreSQL**. Aiven's free tier has **no connection pooler** and a low connection cap; under a community traffic spike, Vercel's many concurrent serverless Lambdas each pinned a connection and exhausted the cap (`53300 too_many_connections`), taking the site down. Connection pooling is an Aiven startup-plan feature, breaking the `$0` constraint.
+
+Production moved to **Neon free**, whose free tier **includes a built-in connection pooler** (PgBouncer via a `-pooler` host) and a serverless driver — the exact capability needed for Vercel serverless at `$0`. App `DATABASE_URL` points at the pooled endpoint; migrations/dumps use the direct endpoint. Full data (accounts, OAuth links, community, taste) was migrated via `pg_dump`/`pg_restore`.
 
 ## Source Notes
 
 - Vercel Hobby is the current `$0` hosting target for this personal prototype.
 - Vercel Cron supports the daily AVLgo refresh cadence used by this app.
-- Aiven Free PostgreSQL is the current `$0` database target.
-- Aiven Free has no connection pooling and a low connection cap, so the app keeps a tiny Node Postgres pool and short queries.
+- Neon free (Postgres 17) is the current `$0` database target.
+- The app keeps a tiny Node Postgres pool (`max: 1`) with a short idle timeout per Lambda; **Neon's server-side pooler** multiplexes those onto a small set of backend connections, which is what prevents connection-cap exhaustion under serverless concurrency.
 
 ## Cost Table
 
@@ -30,7 +36,7 @@ The deployed production path should use Aiven for persistent event/community dat
 | --- | --- | --- | --- |
 | App hosting | Vercel Hobby | Good for a personal prototype Next.js app. | Commercial launch, traffic limits, team workflow, or paid observability. |
 | Daily sync | Vercel Cron | Good because the app only needs once-daily AVLgo refresh. | More frequent or precise sync timing. |
-| Database | Aiven Free PostgreSQL | Good for normalized event/community records with low early traffic. | Connection pressure, more storage, backups/branching needs, or sustained usage. |
+| Database | Neon free (Postgres 17) | Built-in connection pooler + serverless driver fit Vercel serverless; good for normalized event/community records. | Storage/compute beyond free tier, or sustained high write volume. |
 | Audio storage | Deferred | Best fit for launch because voice memos are excluded. | Add Vercel Blob, S3, Cloudflare R2, or similar when audio returns. |
 | Public auth | Optional Spotify | Anonymous remains default; Spotify can seed taste profiles when enabled. | Google/YouTube signals, Apple Music, saved preferences, stronger abuse controls. |
 | Admin auth | Single password secret | Good enough for one trusted admin. | Multiple admins, audit logs, role-based moderation. |
@@ -63,7 +69,7 @@ Verified June 6, 2026:
 - `/api/me` remains anonymous by default for public visitors and returns authenticated account/music connection state only inside a signed-in session.
 - Spotify profile sync via `/api/me/music-profile` stores 20 top artists and 20 top tracks for the signed-in test account.
 
-Aiven tables:
+Production tables (Neon):
 
 - `events`: normalized AVLgo event records keyed by stable AVLgo-derived IDs.
 - `users`, `accounts`, `sessions`, `verification_token`: Auth.js adapter-owned tables.
@@ -73,8 +79,8 @@ Aiven tables:
 
 Operational notes:
 
-- Aiven production initially had only `events`, `contributions`, and `reactions`; Auth.js callback failed with `relation "users" does not exist` until the schema was applied.
-- Apply `db/schema.sql` before enabling auth on a fresh database.
+- (Historical, Aiven) Production initially had only `events`, `contributions`, and `reactions`; Auth.js callback failed with `relation "users" does not exist` until the schema was applied. The lesson — apply the full schema before depending on it — recurred during Phase 9 and drove consolidation to a single idempotent `db/schema.sql`.
+- Apply `db/schema.sql` before enabling auth on a fresh database (it is idempotent: `psql "$DATABASE_URL" -f db/schema.sql`).
 - If `contributions` or `reactions` already exist before auth is added, also add nullable `user_id` columns and their indexes because `create table if not exists` will not alter existing tables.
 - Keep OAuth access and refresh tokens server-only in Auth.js `accounts`. Do not expose token values through `/api/me`, music profile routes, or personalized discovery responses.
 - Future schema work should be formalized as migrations before the next production database reset or environment clone.

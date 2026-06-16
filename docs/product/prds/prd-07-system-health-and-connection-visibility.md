@@ -41,7 +41,7 @@ Probe ids map to the System Registry `healthProbeId` fields reserved in PRD 06. 
 
 Provide cheap, time-boxed, individually-failing probes for:
 
-- **Database (Aiven Postgres):** a trivial `select 1` round-trip with latency; classify `connected` / `slow` / `down`.
+- **Database (Neon Postgres):** a trivial `select 1` round-trip with latency; classify `connected` / `slow` / `down`.
 - **AVLgo feed:** reachability of the configured feed source (`getAvlgoFeedSource()`), distinguishing the built-in export from a custom `AVLGO_API_URL`, without forcing a full ingest.
 - **Auth providers:** whether Auth.js is enabled and, when Spotify is enabled, whether the required `AUTH_SECRET` / `AUTH_SPOTIFY_ID` / `AUTH_SPOTIFY_SECRET` are configured and internally consistent.
 - **Spotify integration:** presence of active `music_connections` and whether stored access tokens are expired/near-expiry (token *expiry metadata* only — never token values), so "Spotify connected but all tokens stale" is visible.
@@ -60,7 +60,7 @@ Each probe returns `{ status, severity, detail, checkedAt, latencyMs? }`. Probes
 
 ### Cron Observability
 
-- Record the outcome of `/api/sync/avlgo` and `/api/sync/cleanup` runs (start, finish, success/failure, items processed) so the portal can show "last run / last success / last error." Proposed lightweight store: a small `system_job_runs` table (append-only) or reuse of an existing log surface — chosen to stay within $0 and Aiven limits.
+- Record the outcome of `/api/sync/avlgo` and `/api/sync/cleanup` runs (start, finish, success/failure, items processed) so the portal can show "last run / last success / last error." Proposed lightweight store: a small `system_job_runs` table (append-only) or reuse of an existing log surface — chosen to stay within $0 and Neon free-tier limits.
 - Show the configured schedule (from `vercel.json`: AVLgo `0 10 * * *`, cleanup `0 11 * * *`) next to actual last-run data so "scheduled but not running" is detectable.
 
 ### Configuration Conflict Detection
@@ -85,7 +85,7 @@ Each probe returns `{ status, severity, detail, checkedAt, latencyMs? }`. Probes
 
 - **Probes adding latency or cost** to the admin page — mitigated by time-boxing, parallelism, and short-TTL caching.
 - **Rate-limiting / side effects** from probing external providers — mitigated by reachability-only checks (no full ingest, no token refresh) and caching.
-- **Cron observability storage** could grow — mitigated by append-only with retention/pruning (reuse the cleanup job) within Aiven free limits.
+- **Cron observability storage** could grow — mitigated by append-only with retention/pruning (reuse the cleanup job) within Neon free-tier limits.
 - **False positives** (e.g., transient feed blip shown as "down") — mitigated by severity levels and short retries within the time box.
 
 ## Acceptance Criteria

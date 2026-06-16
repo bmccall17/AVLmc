@@ -14,11 +14,11 @@ Updated: June 6, 2026
 
 ### Events
 
-- `lib/events.ts` reads upcoming events from Aiven Postgres.
-- If the rolling window has no stored events, `lib/events.ts` fetches AVLgo's public JSON export and upserts normalized events into Aiven.
+- `lib/events.ts` reads upcoming events from Neon Postgres.
+- If the rolling window has no stored events, `lib/events.ts` fetches AVLgo's public JSON export and upserts normalized events into Neon.
 - Default query uses `dateFilter=custom`, today through 21 days out, and `tagsInclude=Live Music`.
 - Events are normalized into `EventRecord`.
-- Homepage and detail pages fall back to seed events only if Aiven has no matching records and AVLgo fetch fails.
+- Homepage and detail pages fall back to seed events only if Neon has no matching records and AVLgo fetch fails.
 - `/api/sync/avlgo` forces an AVLgo refresh/upsert and is scheduled daily in `vercel.json`.
 
 ### Discovery Board
@@ -35,7 +35,7 @@ Updated: June 6, 2026
 
 ### Community
 
-- `lib/community.ts` reads/writes Aiven Postgres.
+- `lib/community.ts` reads/writes Neon Postgres.
 - Production tables: `contributions` and `reactions`.
 - Public contribution API: `/api/community/contributions`.
 - Reaction API: `/api/community/reactions`.
@@ -46,7 +46,7 @@ Updated: June 6, 2026
 
 ### Optional Music Auth
 
-- Auth route: `/api/auth/*`, backed by Auth.js and the Aiven Postgres adapter tables.
+- Auth route: `/api/auth/*`, backed by Auth.js and the Neon Postgres adapter tables.
 - Account status route: `/api/me`.
 - Music connection route: `/api/me/music-connections`.
 - Music profile route: `/api/me/music-profile`.
@@ -76,7 +76,7 @@ Updated: June 6, 2026
 
 ## Production Persistence
 
-The app now uses Aiven Postgres for production persistence.
+The app now uses Neon Postgres for production persistence.
 
 - `events`: normalized AVLgo event records.
 - `users`, `accounts`, `sessions`, `verification_token`: Auth.js-managed account/session data.
@@ -106,7 +106,7 @@ Schema setup note:
 - PRD 02: song recs, text notes, going/fire reactions, counts on homepage/detail, anonymous session IDs, spam controls.
 - PRD 03: password-protected admin, recent contribution list, visible/hidden/pending filters, hide/unhide controls.
 - PRD 04: deferred for production until an object-storage path is selected.
-- PRD 05: `$0` deployment/auth decision memo in `docs/product/deployment-auth-investigation.md`, updated for Aiven.
+- PRD 05: `$0` deployment/auth decision memo in `docs/product/deployment-auth-investigation.md`, updated for Neon.
 - Phase 5: anonymous Best Bets, Spotify-backed Best Match, ranked filters, recommendation reasons, privacy controls, and Spotify-linked song selection.
 - Phase 6: per-person learning actions, hidden card-action sandbox, removed-event memory, and account-plus-cookie discovery state.
 

@@ -25,7 +25,7 @@ Optional Spotify auth is live:
 - Verified signed-in account route: `/api/me`.
 - Verified sync route: `POST /api/me/music-profile` with `{ "provider": "spotify" }`.
 
-Aiven production now has the required auth and music schema:
+Neon production (Postgres 17, pooled) has the required auth and music schema:
 
 - Auth.js tables: `users`, `accounts`, `sessions`, `verification_token`.
 - Music tables: `music_connections`, `music_profile_items`.
@@ -118,7 +118,7 @@ Use Spotify rows only when signed in:
 - `music_connections.last_synced_at` for freshness.
 - `music_connections.disconnected_at` to disable taste scoring when disconnected.
 
-Do not use raw Spotify OAuth tokens in client code or ranking responses. Discovery should consume normalized rows from Aiven.
+Do not use raw Spotify OAuth tokens in client code or ranking responses. Discovery should consume normalized rows from Neon.
 
 ## Completed Build
 

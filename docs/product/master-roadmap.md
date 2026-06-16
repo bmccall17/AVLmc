@@ -107,7 +107,7 @@ Current production inputs as of June 6, 2026:
 
 - Anonymous browsing, reactions, and contributions remain live and do not require login.
 - Optional Spotify sign-in is live on `https://avlmc.vercel.app/`.
-- Auth.js, anonymous sessions, community tables, music connection tables, and Spotify profile tables exist in Aiven production.
+- Auth.js, anonymous sessions, community tables, music connection tables, and Spotify profile tables exist in Neon production (migrated from Aiven June 16, 2026 for connection pooling; see [Deployment and Auth Investigation](deployment-auth-investigation.md)).
 - A signed-in Spotify account can sync 20 top artists and 20 top tracks into `music_profile_items`.
 - OAuth tokens stay server-side in Auth.js `accounts`; discovery code should use normalized profile rows.
 
@@ -206,7 +206,7 @@ Analytics are actively running via **Umami Cloud** to monitor Unique Visitors (p
 
 ## Implementation Reference
 
-See [Architecture Reference](architecture-reference.md) for current routes, components, storage behavior, and the Aiven production persistence path.
+See [Architecture Reference](architecture-reference.md) for current routes, components, storage behavior, and the Neon production persistence path.
 
 ## Architecture Decision Records (ADRs)
 

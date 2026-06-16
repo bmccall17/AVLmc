@@ -103,7 +103,7 @@ Spotify's `/v1/me/top/artists` already returns `genres[]` per artist under the *
 ### Cross-cutting requirements (apply to every cycle)
 
 - **Security at inception (mandatory).** All new first-party code passes a Snyk code scan before "done"; fix and rescan until clean.
-- **$0 constraint.** No new paid hosting, database, storage, or API. Stack stays Vercel Hobby + Aiven Free Postgres. Anything approaching a free tier degrades gracefully and is flagged against the roadmap [Scaling Milestones](master-roadmap.md).
+- **$0 constraint.** No new paid hosting, database, storage, or API. Stack stays Vercel Hobby + Neon free Postgres. Anything approaching a free tier degrades gracefully and is flagged against the roadmap [Scaling Milestones](master-roadmap.md).
 - **Privacy / PII.** Saved data and Spotify genres are private to the person; never exposed in public/community responses, never in OG images, never alongside `session_id`/`user_id`. OAuth tokens never leave the server. No public user profiles.
 - **Architecture registration.** Any new table/service/route is registered in `lib/system-registry.ts` with a correct `sourceOfTruth`; `npm run generate:system-map` is re-run and `npm run test:registry` must pass.
 - **Admin observability reuse.** Scoring changes (C3, C4, C5) are validated in the **Recommendation Insight** and **Listener Trace** tabs (PRDs 09/10), not by guesswork; new signals should appear in those breakdowns.
