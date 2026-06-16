@@ -32,6 +32,7 @@ re-auth, $0.**
 - **Frontend** — a **Shared listening** section on the event detail page (`components/SharedListening.tsx`) rendering Spotify embeds + "Open in Spotify" links + the "you already love this one" badge, and a compact, lazy-loaded board-card affordance (`components/SharedSongsCard.tsx`). Both refresh on a `SHARED_SONGS_REFRESH_EVENT` dispatched after Going/Fire. Homepage feeds summaries via `getSharedSongSummariesByEvent`.
 - **Security** — Snyk-clean: iframe `src` and the "Open in Spotify" `href` are built at the sink from a base62-validated track id via `encodeURIComponent`, never from fetched URL fields, removing the DOM-XSS taint path.
 - **Architecture & validation** — registered `svc-shared-songs` + `db-shared-songs` (with `countKey`) and the sharing flow in `lib/system-registry.ts`; count query in `lib/admin/registry.ts`; system map regenerated. `npm run test:registry`, `npm run test:shared-songs`, typecheck, lint, and `next build` all green. $0.
+- **Post-ship resilience hardening** (`lib/shared-songs.ts`) — the public reads (`getSharedSongSummariesByEvent`, `listVisibleSharedSongs`, `listSharedSongsForAdmin`, `setSharedSongStatus`) and the seed now tolerate a not-yet-migrated table (Postgres `42P01`), degrading to empty instead of throwing, matching the `lib/community.ts` pattern. This closes the deploy-before-migrate gap that briefly white-screened the board on first deploy. **Apply `db/migrate-missing-tables.sql` (section 9, `event_shared_songs`) to production before/with the deploy.**
 
 ## Goals
 
