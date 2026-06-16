@@ -431,7 +431,7 @@ const NODES: RegistryNode[] = [
     kind: "datastore",
     layer: "data",
     label: "music_profile_items",
-    description: "A listener's top artists/tracks pulled from their provider; the raw material of taste.",
+    description: "A listener's top artists/tracks pulled from their provider (incl. per-artist genres captured at sync); the raw material of taste.",
     sourceOfTruth: "music_profile_items",
     access: "internal",
     ownership: "automated",

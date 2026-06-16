@@ -16,6 +16,7 @@ const connectedSpotify = {
 
 const elizaProfileItem = {
   artistNames: [],
+  genres: [],
   externalUrl: "https://open.spotify.com/artist/eliza",
   id: "profile-eliza",
   imageUrl: null,
@@ -290,4 +291,64 @@ test("a favorite plus an equivalent boost custom signal do not double-count", ()
 test("venuePreference base stays within its ceiling", () => {
   const withVenue = scoreWithFavorites([{ itemType: "venue", itemKey: VENUE_KEY }]);
   assert.ok(withVenue.components.venuePreference.base <= 36);
+});
+
+// --- Spotify genre signal for connected listeners (PRD 16 / C5) ---------------------------------
+
+const folkArtistItem = {
+  ...elizaProfileItem,
+  id: "profile-folk",
+  providerItemId: "spotify-folk",
+  name: "A Folk Act",
+  genres: ["indie folk", "singer-songwriter"], // resolve to folk via the C4 taxonomy
+} satisfies MusicProfileItem;
+
+function scoreWithSpotifyGenres(
+  profileItems: MusicProfileItem[],
+  options: { connections?: MusicConnection[]; preferences?: object } = {}
+) {
+  return scoreDiscoveryEvents({
+    counts: {},
+    events: [francesElizaEvent], // tags include "Folk Storytelling" → folk
+    connections: options.connections ?? [connectedSpotify],
+    profileItems,
+    listenerPreferences: options.preferences ?? {},
+    now: new Date("2026-06-07T12:00:00.000Z"),
+  })[francesElizaEvent.id];
+}
+
+test("Spotify genre affinity raises the genreMatch base for aligned events", () => {
+  const base = scoreWithSpotifyGenres([]);
+  const withGenres = scoreWithSpotifyGenres([folkArtistItem]);
+
+  assert.ok(withGenres.components.genreMatch.base > base.components.genreMatch.base);
+  assert.ok(hasReason(withGenres.reasons, "matches your top genres"));
+});
+
+test("the genreMatch weight tunes the Spotify genre boost", () => {
+  const dialed = scoreWithSpotifyGenres([folkArtistItem], {
+    preferences: { weights: { genreMatch: 200 } },
+  });
+  const muted = scoreWithSpotifyGenres([folkArtistItem], {
+    preferences: { weights: { genreMatch: 0 } },
+  });
+
+  assert.ok(dialed.bestMatchScore > muted.bestMatchScore);
+});
+
+test("opting out of Spotify taste disables the genre boost", () => {
+  const optedOut: MusicConnection = { ...connectedSpotify, tasteOptOutAt: "2026-06-02T00:00:00.000Z" };
+  const base = scoreWithSpotifyGenres([], { connections: [optedOut] });
+  const withGenres = scoreWithSpotifyGenres([folkArtistItem], { connections: [optedOut] });
+
+  assert.equal(withGenres.components.genreMatch.base, base.components.genreMatch.base);
+  assert.ok(!hasReason(withGenres.reasons, "matches your top genres"));
+});
+
+test("empty Spotify genres (pre re-sync) fall back to taxonomy-only matching", () => {
+  const noGenres = { ...folkArtistItem, genres: [] } satisfies MusicProfileItem;
+  const base = scoreWithSpotifyGenres([]);
+  const withEmpty = scoreWithSpotifyGenres([noGenres]);
+
+  assert.equal(withEmpty.components.genreMatch.base, base.components.genreMatch.base);
 });

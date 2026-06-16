@@ -8,7 +8,14 @@ Turn a connected listener's actual Spotify taste into genre signal. Spotify alre
 
 ## Implementation Status
 
-**Planned.** Depends on C4 (`lib/genre-taxonomy.ts`). Final cycle of Track B.
+**Shipped.** Delivered:
+
+- **Genre capture at sync** (`lib/music.ts`) — `SpotifyTopArtistsResponse` now keeps each artist's `genres[]`; `normalizeArtists` retains them; `MusicProfileItem` / `MusicProfileItemRow` carry `genres`. An additive `genres text[] not null default '{}'` column was added to `music_profile_items` (`db/schema.sql` + `db/migrate-missing-tables.sql`). `replaceSpotifyProfileItems` persists genres and `listMusicProfileItems` reads them, both via a `runWithMissingColumnFallback` helper so a not-yet-migrated database degrades gracefully (empty genres until next sync). **No new OAuth scope, no re-auth.**
+- **Per-listener genre affinity** (`lib/discovery.ts`) — `buildSpotifyGenreAffinity` resolves a connected listener's top-artist genres through the C4 taxonomy (`resolveGenres`) into canonical genres; `scoreSpotifyGenreMatch` scores an event's genres against that affinity using `genreRelationStrength` (near matches count partially), bounded by `SPOTIFY_GENRE_CEILING`.
+- **Layered genre matching** — the Spotify affinity raises the `genreMatch` base on top of the public C4 match, capped at `GENRE_MATCH_CEILING` so the component stays calibrated; tuned by the existing `genreMatch` weight (no new control) and gated by the Spotify connection's `taste_opt_out_at` / `disconnected_at` exactly like other Spotify signals.
+- **Private-safe reason** — a compact `matches your top genres` reason appears when the affinity drives a boost; the listener's genre list never leaves the server and no token value is exposed.
+- **Admin observability** — because Insight (synthetic signed profile) and Listener Trace already pass `connections` + `profileItems` to scoring, the contribution surfaces in the `genreMatch` component breakdown and the trace's reasons, distinct from public taxonomy match and artist-name affinity.
+- **Validation** — unit-tested in `tests/discovery-scoring.test.ts` (affinity raises the base, weight tuning, opt-out disables, empty-genres fallback); all 17 discovery tests green. Registry note updated; system map regenerated; `npm run test:registry` passes. New code Snyk-clean; $0.
 
 ## Goals
 

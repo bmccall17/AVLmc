@@ -329,6 +329,10 @@ create table if not exists public.admin_resources (
 create index if not exists admin_resources_type_status_idx
   on public.admin_resources (type, status);
 
+-- Spotify top-artist genres captured at sync (PRD 16 / C5). Additive; empty until next sync.
+alter table if exists public.music_profile_items
+  add column if not exists genres text[] not null default '{}';
+
 create table if not exists public.saved_items (
   id text primary key,
   user_id integer not null references public.users(id) on delete cascade,

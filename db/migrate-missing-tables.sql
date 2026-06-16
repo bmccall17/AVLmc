@@ -167,6 +167,11 @@ create index if not exists admin_resources_type_status_idx
   on public.admin_resources (type, status);
 
 
+-- 8. music_profile_items.genres — Spotify top-artist genres captured at sync (PRD 16 / C5)
+alter table if exists public.music_profile_items
+  add column if not exists genres text[] not null default '{}';
+
+
 -- 7. saved_items — private, polymorphic Saved/Favorites for signed-in listeners (PRD 12 / C1)
 create table if not exists public.saved_items (
   id text primary key,

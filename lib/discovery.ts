@@ -13,6 +13,7 @@ import {
 } from "./listener-preferences";
 import type { MusicConnection, MusicProfileItem } from "@/lib/music";
 import {
+  bestRelationStrength,
   GENRE_LABELS,
   isGenericGenreTerm,
   resolveGenres,
@@ -126,6 +127,7 @@ export function scoreDiscoveryEvents({
       !connection.tasteOptOutAt
   );
   const profileTerms = spotifyEnabled ? buildProfileTerms(profileItems) : [];
+  const spotifyGenreAffinity = spotifyEnabled ? buildSpotifyGenreAffinity(profileItems) : [];
   const preferences = normalizeListenerPreferences(listenerPreferences);
 
   // Dedupe favorites against equivalent ad-hoc boost custom signals so a saved venue/artist and
@@ -153,13 +155,17 @@ export function scoreDiscoveryEvents({
       );
       const personalScore = scorePersonalSignals(event, preferenceSignals);
       const genreResult = scoreGenreMatch(event);
+      // Layer the connected listener's Spotify genre affinity on top of the public taxonomy match
+      // (PRD 16 / C5), bounded within the genreMatch ceiling so weighting stays calibrated.
+      const spotifyGenreScore = scoreSpotifyGenreMatch(genreResult.genres, spotifyGenreAffinity);
+      const genreMatchBase = Math.min(GENRE_MATCH_CEILING, genreResult.score + spotifyGenreScore);
       const favoriteScore = scoreFavorites(event, savedVenues, savedArtists);
       const componentBases = getPreferenceComponentBases({
         counts: eventCounts,
         event,
         favoriteArtistScore: favoriteScore.artist,
         favoriteVenueScore: favoriteScore.venue,
-        genreMatchBase: genreResult.score,
+        genreMatchBase,
         personalScore,
         profileScore,
         publicScore,
@@ -175,6 +181,7 @@ export function scoreDiscoveryEvents({
         ...personalScore.reasons,
         ...publicScore.reasons,
         ...profileScore.reasons,
+        ...getSpotifyGenreReasons(spotifyGenreScore),
         ...getPreferenceReasons(bestMatchTuning),
         // Genre is supplementary: it surfaces for everyone (esp. anonymous) but yields the
         // limited reason budget to stronger personalized signals when space is tight.
@@ -391,6 +398,14 @@ function getFavoriteReasons(favoriteScore: { artist: number; venue: number }): D
   return reasons;
 }
 
+/**
+ * Privacy-safe reason for a Spotify genre-affinity boost (PRD 16). Names no private genre value —
+ * the listener's genre list never leaves the server.
+ */
+function getSpotifyGenreReasons(spotifyGenreScore: number): DiscoveryReason[] {
+  return spotifyGenreScore > 0 ? [simpleReason("matches your top genres")] : [];
+}
+
 /** Compact, truthful genre reason naming up to two matched canonical genres (public data only). */
 function getGenreReasons(genres: CanonicalGenre[]): DiscoveryReason[] {
   if (genres.length === 0) {
@@ -437,6 +452,39 @@ function scoreGenreMatch(event: EventRecord): { score: number; genres: Canonical
 
 const VENUE_PREFERENCE_CEILING = 36;
 const ARTIST_FAVORITE_CEILING = 30;
+const GENRE_MATCH_CEILING = 36;
+const SPOTIFY_GENRE_CEILING = 16;
+
+/**
+ * Derive a connected listener's canonical genre affinity (PRD 16 / C5) by resolving the genres on
+ * their Spotify top-artist rows through the C4 taxonomy. Returns unique canonical genres; empty
+ * when genres are absent (e.g. not yet re-synced) so matching degrades to taxonomy-only.
+ */
+function buildSpotifyGenreAffinity(profileItems: MusicProfileItem[]): CanonicalGenre[] {
+  const rawGenres = profileItems
+    .filter((item) => item.itemType === "top_artist")
+    .flatMap((item) => item.genres);
+
+  return resolveGenres(rawGenres);
+}
+
+/**
+ * Score how well an event's canonical genres align with a connected listener's Spotify genre
+ * affinity, using taxonomy relationship strength for near matches. Bounded so it layers on the
+ * public genre match without inflating the genreMatch component beyond its ceiling.
+ */
+function scoreSpotifyGenreMatch(eventGenres: CanonicalGenre[], affinity: CanonicalGenre[]): number {
+  if (eventGenres.length === 0 || affinity.length === 0) {
+    return 0;
+  }
+
+  let strength = 0;
+  for (const genre of eventGenres) {
+    strength = Math.max(strength, bestRelationStrength(genre, affinity));
+  }
+
+  return Math.round(strength * SPOTIFY_GENRE_CEILING);
+}
 
 /**
  * Score a listener's saved venues/artists against this event (PRD 14 / C3). A saved venue that

@@ -278,6 +278,7 @@ function buildSyntheticProfile(artists: string[]): {
     providerItemId: `synthetic-${index}`,
     name,
     artistNames: [name],
+    genres: [],
     externalUrl: null,
     imageUrl: null,
     rank: index + 1,

@@ -22,6 +22,7 @@ export type MusicProfileItem = {
   providerItemId: string;
   name: string;
   artistNames: string[];
+  genres: string[];
   externalUrl: string | null;
   imageUrl: string | null;
   rank: number;
@@ -63,6 +64,7 @@ type MusicProfileItemRow = {
   provider_item_id: string;
   name: string;
   artist_names: string[] | string | null;
+  genres: string[] | string | null;
   external_url: string | null;
   image_url: string | null;
   rank: number;
@@ -81,6 +83,7 @@ type SpotifyTopArtistsResponse = {
   items?: Array<{
     id?: string;
     name?: string;
+    genres?: string[];
     external_urls?: {
       spotify?: string;
     };
@@ -195,25 +198,32 @@ export async function listMusicConnections(userId: string): Promise<MusicConnect
 }
 
 export async function listMusicProfileItems(userId: string): Promise<MusicProfileItem[]> {
-  const result = await query<MusicProfileItemRow>(
-    `
-      select
-        id,
-        provider,
-        item_type,
-        provider_item_id,
-        name,
-        artist_names,
-        external_url,
-        image_url,
-        rank,
-        time_range,
-        synced_at
-      from public.music_profile_items
-      where user_id = $1
-      order by item_type, rank
-    `,
-    [toDatabaseUserId(userId)]
+  const databaseUserId = toDatabaseUserId(userId);
+  const result = await runWithMissingColumnFallback(
+    () =>
+      query<MusicProfileItemRow>(
+        `
+          select
+            id, provider, item_type, provider_item_id, name,
+            artist_names, genres, external_url, image_url, rank, time_range, synced_at
+          from public.music_profile_items
+          where user_id = $1
+          order by item_type, rank
+        `,
+        [databaseUserId]
+      ),
+    () =>
+      query<MusicProfileItemRow>(
+        `
+          select
+            id, provider, item_type, provider_item_id, name,
+            artist_names, '{}'::text[] as genres, external_url, image_url, rank, time_range, synced_at
+          from public.music_profile_items
+          where user_id = $1
+          order by item_type, rank
+        `,
+        [databaseUserId]
+      )
   );
 
   return result.rows.map(mapProfileItemRow);
@@ -617,6 +627,8 @@ function normalizeArtists(response: SpotifyTopArtistsResponse) {
     return [
       {
         artistNames: [],
+        // Keep Spotify's per-artist genres (PRD 16 / C5); already returned under user-top-read.
+        genres: (item.genres ?? []).filter(isString),
         externalUrl: item.external_urls?.spotify ?? null,
         imageUrl: item.images?.[0]?.url ?? null,
         itemType: "top_artist" as const,
@@ -637,6 +649,7 @@ function normalizeTracks(response: SpotifyTopTracksResponse) {
     return [
       {
         artistNames: item.artists?.map((artist) => artist.name).filter(isString) ?? [],
+        genres: [],
         externalUrl: item.external_urls?.spotify ?? null,
         imageUrl: item.album?.images?.[0]?.url ?? null,
         itemType: "top_track" as const,
@@ -652,6 +665,7 @@ async function replaceSpotifyProfileItems(
   userId: string,
   items: Array<{
     artistNames: string[];
+    genres: string[];
     externalUrl: string | null;
     imageUrl: string | null;
     itemType: MusicProfileItemType;
@@ -673,38 +687,44 @@ async function replaceSpotifyProfileItems(
   );
 
   await Promise.all(
-    items.map((item) =>
-      query(
-        `
-          insert into public.music_profile_items (
-            id,
-            user_id,
-            provider,
-            item_type,
-            provider_item_id,
-            name,
-            artist_names,
-            external_url,
-            image_url,
-            rank,
-            time_range
+    items.map((item) => {
+      const baseValues = [
+        randomUUID(),
+        databaseUserId,
+        item.itemType,
+        item.providerItemId,
+        item.name,
+        item.artistNames,
+      ];
+      const tailValues = [item.externalUrl, item.imageUrl, item.rank, SPOTIFY_TIME_RANGE];
+
+      // Persist genres when the column exists; fall back to the pre-C5 shape on older databases
+      // that haven't run the migration yet (column defaults to '{}', degrading gracefully).
+      return runWithMissingColumnFallback(
+        () =>
+          query(
+            `
+              insert into public.music_profile_items (
+                id, user_id, provider, item_type, provider_item_id, name,
+                artist_names, genres, external_url, image_url, rank, time_range
+              )
+              values ($1, $2, 'spotify', $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            `,
+            [...baseValues, item.genres, ...tailValues]
+          ),
+        () =>
+          query(
+            `
+              insert into public.music_profile_items (
+                id, user_id, provider, item_type, provider_item_id, name,
+                artist_names, external_url, image_url, rank, time_range
+              )
+              values ($1, $2, 'spotify', $3, $4, $5, $6, $7, $8, $9, $10)
+            `,
+            [...baseValues, ...tailValues]
           )
-          values ($1, $2, 'spotify', $3, $4, $5, $6, $7, $8, $9, $10)
-        `,
-        [
-          randomUUID(),
-          databaseUserId,
-          item.itemType,
-          item.providerItemId,
-          item.name,
-          item.artistNames,
-          item.externalUrl,
-          item.imageUrl,
-          item.rank,
-          SPOTIFY_TIME_RANGE,
-        ]
-      )
-    )
+      );
+    })
   );
 }
 
@@ -731,6 +751,18 @@ async function queryMusicConnections(sql: string, legacySql: string, values: unk
   }
 }
 
+/** Run a query, retrying with a fallback if the primary fails due to a not-yet-migrated column. */
+async function runWithMissingColumnFallback<T>(primary: () => Promise<T>, fallback: () => Promise<T>) {
+  try {
+    return await primary();
+  } catch (error) {
+    if (!isMissingColumnError(error)) {
+      throw error;
+    }
+    return fallback();
+  }
+}
+
 async function updateMusicConnectionWithLegacyFallback(sql: string, legacySql: string, values: unknown[]) {
   try {
     await query(sql, values);
@@ -751,6 +783,7 @@ function mapProfileItemRow(row: MusicProfileItemRow): MusicProfileItem {
     providerItemId: row.provider_item_id,
     name: row.name,
     artistNames: toStringArray(row.artist_names),
+    genres: toStringArray(row.genres),
     externalUrl: row.external_url,
     imageUrl: row.image_url,
     rank: row.rank,

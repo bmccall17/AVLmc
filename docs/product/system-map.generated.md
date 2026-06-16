@@ -346,7 +346,7 @@ A listener's connected music providers, scopes, sync state, and taste opt-out.
 
 #### music_profile_items  `db-music-profile-items`
 
-A listener's top artists/tracks pulled from their provider; the raw material of taste.
+A listener's top artists/tracks pulled from their provider (incl. per-artist genres captured at sync); the raw material of taste.
 
 - **Kind:** Data store
 - **Source of truth:** `music_profile_items`
