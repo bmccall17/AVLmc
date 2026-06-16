@@ -76,6 +76,14 @@ export function AnalyticsSection({ initial }: { initial: SystemAnalytics }) {
           <div className="admin-health-attention-body">
             <strong>Umami web traffic not shown</strong>
             <p>{analytics.umamiMessage ?? "Umami is not configured."} First-party usage below is live.</p>
+            <a 
+              href="https://cloud.umami.is/share/FYw7wAxefKRH1ZRK" 
+              target="_blank" 
+              rel="noreferrer"
+              style={{ display: "inline-block", marginTop: 8 }}
+            >
+              https://cloud.umami.is/share/FYw7wAxefKRH1ZRK
+            </a>
           </div>
         </div>
       )}
