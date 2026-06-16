@@ -67,39 +67,45 @@ export async function seedSharedSongsForEvent(input: {
 
   const seededByUserId = toNullableUserId(input.userId);
 
+  // One batched multi-row upsert (a single DB round-trip / connection acquire) instead of one
+  // query per track — keeps the hot Going/Fire path from holding the connection for ~10 inserts
+  // under load. Seeds are already deduped by track id, so no within-batch conflict-target clash.
+  const params: unknown[] = [];
+  const valueRows = seeds.map((seed, index) => {
+    const base = index * 10;
+    params.push(
+      randomUUID(),
+      input.event.id,
+      input.event.eventTitle,
+      seed.providerTrackId,
+      seed.name,
+      seed.artistNames,
+      seed.externalUrl,
+      seed.imageUrl,
+      seed.previewUrl,
+      seededByUserId
+    );
+    return `($${base + 1}, $${base + 2}, $${base + 3}, 'spotify', $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10})`;
+  });
+
   try {
-    await Promise.all(
-      seeds.map((seed) =>
-        query(
-          `
-            insert into public.event_shared_songs (
-              id, event_id, event_title, provider, provider_track_id, name, artist_names,
-              external_url, image_url, preview_url, seeded_by_user_id
-            )
-            values ($1, $2, $3, 'spotify', $4, $5, $6, $7, $8, $9, $10)
-            on conflict (event_id, provider, provider_track_id) do update
-              set share_count = public.event_shared_songs.share_count + 1,
-                last_shared_at = now(),
-                name = excluded.name,
-                artist_names = excluded.artist_names,
-                external_url = excluded.external_url,
-                image_url = excluded.image_url,
-                preview_url = excluded.preview_url
-          `,
-          [
-            randomUUID(),
-            input.event.id,
-            input.event.eventTitle,
-            seed.providerTrackId,
-            seed.name,
-            seed.artistNames,
-            seed.externalUrl,
-            seed.imageUrl,
-            seed.previewUrl,
-            seededByUserId,
-          ]
+    await query(
+      `
+        insert into public.event_shared_songs (
+          id, event_id, event_title, provider, provider_track_id, name, artist_names,
+          external_url, image_url, preview_url, seeded_by_user_id
         )
-      )
+        values ${valueRows.join(", ")}
+        on conflict (event_id, provider, provider_track_id) do update
+          set share_count = public.event_shared_songs.share_count + 1,
+            last_shared_at = now(),
+            name = excluded.name,
+            artist_names = excluded.artist_names,
+            external_url = excluded.external_url,
+            image_url = excluded.image_url,
+            preview_url = excluded.preview_url
+      `,
+      params
     );
   } catch (error) {
     if (!isMissingRelationError(error)) {
