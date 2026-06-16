@@ -6,7 +6,9 @@ import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Bell, CalendarCheck, ChevronRight, ExternalLink, Flame, Headphones, Search, Star, UserPlus, X } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { SaveButton } from "@/components/SaveButton";
+import { SharedSongsCard, type SharedSongSummary } from "@/components/SharedSongsCard";
 import { resolveGenres, type CanonicalGenre } from "@/lib/genre-taxonomy";
+import { SHARED_SONGS_REFRESH_EVENT } from "@/lib/shared-songs-core";
 import type { CommunityCounts } from "@/lib/community";
 import { scoreDiscoveryEvents, type DiscoveryReason, type DiscoveryScore, type DiscoveryScoresByEvent, type SavedFavorite } from "@/lib/discovery";
 import type {
@@ -50,6 +52,7 @@ type EventBoardProps = {
   musicConnections: MusicConnection[];
   musicProfileItems: MusicProfileItem[];
   preferenceSignals: DiscoveryPreferenceSignal[];
+  sharedSongSummaries: Record<string, SharedSongSummary | undefined>;
   spotifyMatchCorrections: SpotifyMatchCorrection[];
   top30EventIds: string[];
   top30SourceUrl: string;
@@ -127,6 +130,7 @@ export function EventBoard({
   musicConnections,
   musicProfileItems,
   preferenceSignals,
+  sharedSongSummaries,
   spotifyMatchCorrections,
   top30EventIds,
   top30SourceUrl,
@@ -495,6 +499,15 @@ export function EventBoard({
         }));
       }
 
+      // Shared Listening (PRD 17): Going/Fire may have seeded shared songs server-side (only for
+      // signed-in connected listeners; a no-op otherwise). Nudge any mounted shared-song surface
+      // for this event to re-fetch. `action` is a parameter, so recordCardAction stays stable.
+      if (action === "fire" || action === "planning") {
+        window.dispatchEvent(
+          new CustomEvent(SHARED_SONGS_REFRESH_EVENT, { detail: { eventId: event.id } })
+        );
+      }
+
       // Append a taste signal so the scoring engine re-ranks similar events immediately.
       if (action !== "avlgo_click") {
         setLocalPreferenceSignals((current) => [
@@ -859,6 +872,7 @@ export function EventBoard({
                 onTrackAvlgoClick={trackAvlgoClick}
                 reasons={reasons}
                 score={score}
+                sharedSongSummary={sharedSongSummaries[event.id]}
                 state={state}
               />
             );
@@ -947,6 +961,7 @@ function DiscoveryEventCard({
   onTrackAvlgoClick,
   reasons,
   score,
+  sharedSongSummary,
   state,
 }: {
   activeTooltip: ActiveTooltip | null;
@@ -967,6 +982,7 @@ function DiscoveryEventCard({
   onTrackAvlgoClick: (event: EventRecord) => void;
   reasons: DiscoveryReason[];
   score: DiscoveryScore | undefined;
+  sharedSongSummary: SharedSongSummary | undefined;
   state: DiscoveryPersonEventState | undefined;
 }) {
   const date = parseEventDate(event);
@@ -1074,6 +1090,7 @@ function DiscoveryEventCard({
               AVLgo <ExternalLink aria-hidden="true" size={13} strokeWidth={2.4} />
             </a>
           </div>
+          <SharedSongsCard eventId={event.id} initialSummary={sharedSongSummary} />
         </div>
       </div>
 

@@ -5964,3 +5964,95 @@ button.primary-action {
   gap: 7px;
   text-decoration: none;
 }
+
+/* ---- Shared Listening (PRD 17 / Phase 9 C1) ---------------------------- */
+
+.shared-listening {
+  margin-top: 28px;
+}
+
+.shared-listening-head h2 {
+  margin: 0 0 4px;
+}
+
+.shared-listening-head p {
+  margin: 0 0 14px;
+  color: var(--muted, #6b7280);
+  font-size: 0.92rem;
+}
+
+.shared-song-list,
+.card-shared-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.shared-song,
+.card-shared-list > li {
+  display: grid;
+  gap: 6px;
+}
+
+.shared-song-embed,
+.card-shared-embed {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+}
+
+.shared-song-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+
+.shared-song-love {
+  color: #e0245e;
+  font-weight: 600;
+}
+
+.shared-song-link {
+  color: #1db954;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.shared-song-link:hover {
+  text-decoration: underline;
+}
+
+/* Compact board-card affordance */
+.card-shared-songs {
+  margin-top: 10px;
+}
+
+.card-shared-toggle {
+  appearance: none;
+  background: rgba(29, 185, 84, 0.12);
+  border: 1px solid rgba(29, 185, 84, 0.35);
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 12px;
+}
+
+.card-shared-toggle:hover {
+  background: rgba(29, 185, 84, 0.2);
+}
+
+.card-shared-list {
+  margin-top: 10px;
+}
+
+.card-shared-status {
+  margin: 8px 0 0;
+  color: var(--muted, #6b7280);
+  font-size: 0.82rem;
+}

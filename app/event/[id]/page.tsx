@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { CommunityPanel } from "@/components/CommunityPanel";
 import { EventImage } from "@/components/EventImage";
 import { SaveButton } from "@/components/SaveButton";
+import { SharedListening } from "@/components/SharedListening";
 import { TicketIntentLink } from "@/components/TicketIntentLink";
 import {
   ANONYMOUS_SESSION_COOKIE_NAME,
@@ -18,6 +19,7 @@ import { getEventById } from "@/lib/events";
 import { formatLongDate } from "@/lib/format";
 import { listMusicConnections } from "@/lib/music";
 import { getSavedKeys } from "@/lib/saved-items";
+import { listPublicSharedSongs } from "@/lib/shared-songs";
 
 type EventPageProps = {
   params: Promise<{
@@ -71,10 +73,11 @@ export default async function EventPage({ params }: EventPageProps) {
   const sessionId = getAnonymousSessionIdFromCookieValue(
     cookieStore.get(ANONYMOUS_SESSION_COOKIE_NAME)?.value
   );
-  const [musicConnections, discoveryStates, savedKeys] = await Promise.all([
+  const [musicConnections, discoveryStates, savedKeys, sharedSongs] = await Promise.all([
     userId ? listMusicConnections(userId) : Promise.resolve([]),
     listDiscoveryStates([event.id], { sessionId, userId }),
     userId ? getSavedKeys(userId) : Promise.resolve([]),
+    listPublicSharedSongs(event.id, userId),
   ]);
   const spotifySearchEnabled = musicConnections.some(
     (connection) => connection.provider === "spotify" && !connection.disconnectedAt
@@ -177,6 +180,8 @@ export default async function EventPage({ params }: EventPageProps) {
         initialCommunity={publicCommunity}
         spotifySearchEnabled={spotifySearchEnabled}
       />
+
+      <SharedListening eventId={event.id} initialSongs={sharedSongs} />
     </main>
   );
 }

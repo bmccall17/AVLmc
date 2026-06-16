@@ -73,6 +73,10 @@ const COUNT_QUERIES: Array<{ key: DerivedCountKey; text: string }> = [
     text: "select count(*)::int as count from public.admin_resources where status <> 'archived'",
   },
   { key: "saved_items", text: "select count(*)::int as count from public.saved_items" },
+  {
+    key: "event_shared_songs",
+    text: "select count(*)::int as count from public.event_shared_songs where status = 'visible'",
+  },
 ];
 
 async function loadCounts(): Promise<Partial<Record<DerivedCountKey, number>>> {

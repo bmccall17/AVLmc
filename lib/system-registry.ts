@@ -73,7 +73,8 @@ export type DerivedCountKey =
   | "spotify_event_match_corrections"
   | "system_job_runs"
   | "admin_resources"
-  | "saved_items";
+  | "saved_items"
+  | "event_shared_songs";
 
 export type RegistryNode = {
   /** Stable identifier; referenced by edges and by later cycles. Never reuse or repurpose. */
@@ -233,6 +234,17 @@ const NODES: RegistryNode[] = [
     description:
       "Pulls a connected listener's Spotify profile into music_connections and music_profile_items, and matches event artists to Spotify.",
     sourceOfTruth: "lib/music.ts",
+    access: "internal",
+    ownership: "automated",
+  },
+  {
+    id: "svc-shared-songs",
+    kind: "service",
+    layer: "processing",
+    label: "Shared Listening",
+    description:
+      "When a signed-in listener Goes/Fires an event, resolves the artist's Spotify top tracks and seeds them into the public event_shared_songs list (read-only Spotify; no writes). Computes the per-viewer 'you already love this one' overlap.",
+    sourceOfTruth: "lib/shared-songs.ts",
     access: "internal",
     ownership: "automated",
   },
@@ -469,6 +481,17 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "manual",
     countKey: "saved_items",
+  },
+  {
+    id: "db-shared-songs",
+    kind: "datastore",
+    layer: "data",
+    label: "event_shared_songs",
+    description: "Public, deduped per-event song list seeded when a signed-in Spotify listener Goes/Fires. Outside discovery scoring. seeded_by_user_id is server-only and never exposed.",
+    sourceOfTruth: "event_shared_songs",
+    access: "public",
+    ownership: "hybrid",
+    countKey: "event_shared_songs",
   },
 
   /* ---- Public experience ----------------------------------------- */
@@ -734,6 +757,13 @@ const EDGES: RegistryEdge[] = [
   { from: "db-listener-prefs", to: "svc-discovery", kind: "flowsTo", label: "custom weights" },
   { from: "svc-genre-taxonomy", to: "svc-discovery", kind: "flowsTo", label: "genre matching" },
   { from: "db-spotify-corrections", to: "svc-music", kind: "flowsTo", label: "refines matching" },
+
+  // Shared Listening (PRD 17)
+  { from: "int-spotify", to: "svc-shared-songs", kind: "flowsTo", label: "artist top tracks" },
+  { from: "api-discovery", to: "svc-shared-songs", kind: "flowsTo", label: "seed on going/fire" },
+  { from: "svc-shared-songs", to: "db-shared-songs", kind: "flowsTo", label: "upsert shared songs" },
+  { from: "db-shared-songs", to: "ui-event-detail", kind: "flowsTo", label: "shared listening" },
+  { from: "db-shared-songs", to: "ui-eventboard", kind: "flowsTo", label: "compact affordance" },
 
   // Community
   { from: "ui-community-panel", to: "api-community", kind: "flowsTo", label: "writes" },

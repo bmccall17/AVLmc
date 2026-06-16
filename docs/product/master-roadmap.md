@@ -20,6 +20,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 5 | [Personalized Discovery Backlog](personalized-discovery-backlog.md) | Built | Add best-bet filters, sorting, and optional Spotify taste-aware recommendations. |
 | 7 | [Admin Portal Initiative (Epic)](admin-portal-prd.md) | Shipped | Turn `/admin` into a visual, live, explainable operating system; PRDs 06–11 across six cycles. |
 | 8 | [Saved/Favorites & Genre Initiative (Epic)](saved-favorites-genre-prd.md) | Shipped | Private Saved space (events/venues/artists) + richer genre matching (taxonomy + Spotify genres); PRDs 12–16 across five cycles. |
+| 9 | [Shared Listening (PRD 17)](prds/prd-17-shared-listening.md) | Shipped | Going/Fire by a signed-in Spotify listener auto-populates the event page with a public, playable shared song list (read-only Spotify; no writes). Opens the Social Music Sharing track. |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
@@ -175,6 +176,23 @@ Track A and Track B are independent and may interleave by priority. Within A, **
 **C3 shipped:** favorites strengthen recommendations — `scoreDiscoveryEvents` now takes the listener's saved venues/artists (`savedFavorites`) and feeds them into the existing `venuePreference` / `artistAffinity` bases via `fieldMatchStrength`, with a direct baseline term (default-effective, mirroring the Spotify match) that the existing weights dial 0×–2× and can cancel. Bounded by existing ceilings, deduped against equivalent ad-hoc custom signals, and surfaced as `saved venue` / `saved artist` reasons. Loaded for the traced listener so the contribution is attributable in Listener Trace; threaded into the board's client re-score. No new control; anonymous ranking unchanged. Unit-tested; Snyk-clean; $0.
 
 **C4 shipped:** a real genre taxonomy — `lib/genre-taxonomy.ts` (20 canonical genres, alias/synonym map, symmetric parent/child relationships; pure and client-safe) replaces discovery's hardcoded 15-term list. `scoreGenreMatch` resolves event title/artist/tags into canonical genres (catching alias-tagged events like `rnb`→soul, `singer-songwriter`→folk) while preserving its calibrated output ceiling, emits compact truthful reasons (`genre match: jazz / soul`) for everyone including anonymous users, and still respects the existing `genreMatch` weight (no new control). Board genre quick filters route through the taxonomy. Unit-tested (`test:taxonomy`) and validated against the discovery suite; registered in the System Registry; Snyk-clean; $0. Unblocks C5 (Spotify genres map onto this taxonomy).
+
+### Phase 9: Social Music Sharing
+
+Purpose: turn an engaged listener's taste into a shared, social layer on the board — starting
+with making the event page **immediately listenable** when someone signals interest.
+
+**C1 shipped — [PRD 17: Shared Listening](prds/prd-17-shared-listening.md):** when a signed-in,
+Spotify-connected listener clicks **Going** or **Fire**, the app resolves the event artist's own
+Spotify top tracks (read-only; `getSpotifyArtistTopTracks`) and seeds them into a public, deduped
+`event_shared_songs` list rendered as Spotify embeds on the event detail page and a compact,
+lazy-loaded affordance on board cards. A signed-in viewer's own top tracks badge matches with
+"you already love this one" (per-viewer, server-side, never sent to anonymous viewers). Seeding is
+best-effort (a Spotify failure never breaks the reaction); the list is **unattributed** this cycle,
+with `seeded_by_user_id` stored server-side only as the on-ramp to a future **inner-circle**
+attribution layer. Save stays private (it does not trigger sharing). No new OAuth scope, no re-auth;
+outside discovery scoring; admin-moderatable; Snyk-clean; $0. This is a **read/share** feature and
+remains distinct from the parked Spotify *write* Outcome 9.
 
 ## Scaling Milestones & Tracking
 

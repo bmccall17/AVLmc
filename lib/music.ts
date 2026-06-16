@@ -48,6 +48,17 @@ export type SpotifyArtistSearchResult = {
   providerItemId: string;
 };
 
+export type SpotifyArtistTopTrack = {
+  albumName: string | null;
+  artistNames: string[];
+  externalUrl: string;
+  imageUrl: string | null;
+  name: string;
+  previewUrl: string | null;
+  provider: "spotify";
+  providerItemId: string;
+};
+
 type MusicConnectionRow = {
   provider: MusicProvider;
   scopes: string[] | string | null;
@@ -145,6 +156,26 @@ type SpotifySearchArtistsResponse = {
       name?: string;
     } | null>;
   };
+};
+
+type SpotifyArtistTopTracksResponse = {
+  tracks?: Array<{
+    album?: {
+      images?: Array<{
+        url?: string;
+      }>;
+      name?: string;
+    };
+    artists?: Array<{
+      name?: string;
+    }>;
+    external_urls?: {
+      spotify?: string;
+    };
+    id?: string;
+    name?: string;
+    preview_url?: string | null;
+  } | null>;
 };
 
 const SPOTIFY_TIME_RANGE = "medium_term";
@@ -425,6 +456,102 @@ export async function searchSpotifyArtists(userId: string, queryText: string) {
       },
     ];
   });
+}
+
+/**
+ * Resolve an event artist's own popular tracks from Spotify (PRD 17 / Phase 9 C1).
+ * Reads only — searches for the artist, then fetches their top tracks. Uses the existing
+ * `user-read-private` scope (`market=from_token`); no new scope. Returns [] when the artist
+ * can't be resolved. Throws `SpotifyLimitedBetaAccessError` on a 403 like the other reads.
+ */
+export async function getSpotifyArtistTopTracks(
+  userId: string,
+  artistName: string
+): Promise<SpotifyArtistTopTrack[]> {
+  const flags = getAuthFeatureFlags();
+
+  if (!flags.spotify) {
+    throw new Error("Spotify auth is not enabled.");
+  }
+
+  const trimmed = artistName.trim();
+  if (trimmed.length < 2) {
+    return [];
+  }
+
+  const account = await getSpotifyAccount(userId);
+  const accessToken = await getUsableSpotifyAccessToken(userId, account);
+
+  const matches = await fetchSpotifyArtistMatches(accessToken, trimmed);
+  const artist = pickBestArtistMatch(matches, trimmed);
+  if (!artist?.id) {
+    return [];
+  }
+
+  const url = new URL(`https://api.spotify.com/v1/artists/${artist.id}/top-tracks`);
+  url.searchParams.set("market", "from_token");
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    await throwSpotifyApiError(response, "Could not load Spotify artist tracks.");
+  }
+
+  const payload = (await response.json()) as SpotifyArtistTopTracksResponse;
+
+  return (payload.tracks ?? []).flatMap((item): SpotifyArtistTopTrack[] => {
+    if (!item?.id || !item.name || !item.external_urls?.spotify) {
+      return [];
+    }
+
+    return [
+      {
+        albumName: item.album?.name ?? null,
+        artistNames: item.artists?.map((entry) => entry.name).filter(isString) ?? [],
+        externalUrl: item.external_urls.spotify,
+        imageUrl: item.album?.images?.[0]?.url ?? null,
+        name: item.name,
+        previewUrl: item.preview_url ?? null,
+        provider: "spotify",
+        providerItemId: item.id,
+      },
+    ];
+  });
+}
+
+async function fetchSpotifyArtistMatches(accessToken: string, queryText: string) {
+  const url = new URL("https://api.spotify.com/v1/search");
+  url.searchParams.set("q", queryText.slice(0, 120));
+  url.searchParams.set("type", "artist");
+  url.searchParams.set("limit", "5");
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    await throwSpotifyApiError(response, "Could not search Spotify artists.");
+  }
+
+  const payload = (await response.json()) as SpotifySearchArtistsResponse;
+  return (payload.artists?.items ?? []).filter(
+    (item): item is { id: string; name: string } => Boolean(item?.id && item?.name)
+  );
+}
+
+/** Prefer an exact (case-insensitive) name match; otherwise fall back to Spotify's top hit. */
+function pickBestArtistMatch(
+  matches: Array<{ id: string; name: string }>,
+  artistName: string
+) {
+  const normalized = artistName.trim().toLowerCase();
+  return matches.find((item) => item.name.trim().toLowerCase() === normalized) ?? matches[0] ?? null;
 }
 
 async function upsertMusicConnection(input: {

@@ -18,6 +18,7 @@ import {
   type DiscoveryEventAction,
 } from "@/lib/discovery-memory";
 import { getEventById } from "@/lib/events";
+import { seedSharedSongsForEvent } from "@/lib/shared-songs";
 
 const ACTIONS = new Set<DiscoveryEventAction>([
   "impression",
@@ -95,6 +96,20 @@ export async function POST(request: Request) {
     recordedState ??
     (await listDiscoveryStates([event.id], { sessionId, userId }))[event.id] ??
     emptyDiscoveryState(event.id);
+
+  // Shared Listening (PRD 17): a signed-in listener Going/Firing shares the artist's top tracks
+  // onto the event page. Awaited so the client's follow-up fetch finds the songs, but fully
+  // failure-safe — a Spotify error (incl. limited-beta) must never break the reaction.
+  if ((action === "fire" || action === "planning") && userId) {
+    try {
+      await seedSharedSongsForEvent({
+        event: { id: event.id, eventTitle: event.eventTitle, artistName: event.artistName },
+        userId,
+      });
+    } catch (error) {
+      console.error("Shared songs seed failed (non-fatal):", error);
+    }
+  }
 
   const response = NextResponse.json({ counts, state });
   setAnonymousSessionCookie(response, sessionId);

@@ -11,6 +11,7 @@ import type {
 } from "@/lib/community";
 import type { DiscoveryPersonEventState } from "@/lib/discovery-memory";
 import type { SpotifyTrackSearchResult } from "@/lib/music";
+import { SHARED_SONGS_REFRESH_EVENT } from "@/lib/shared-songs-core";
 
 type EventSummary = {
   id: string;
@@ -112,6 +113,11 @@ export function CommunityPanel({
       if (data.state) {
         setDiscoveryState(data.state);
       }
+      // Shared Listening (PRD 17): Going/Fire may have seeded the artist's tracks server-side;
+      // nudge the SharedListening surface to re-fetch and reveal them.
+      window.dispatchEvent(
+        new CustomEvent(SHARED_SONGS_REFRESH_EVENT, { detail: { eventId: event.id } })
+      );
       setReactionState({
         kind: "success",
         message: getIntentMessage(type, source),

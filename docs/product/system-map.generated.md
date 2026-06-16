@@ -60,6 +60,7 @@ Optional. Supplies a signed-in listener's top artists/tracks for taste and power
 - **Reference:** https://developer.spotify.com/documentation/web-api
 - **Flows to / depends on:**
   - → Music Taste Sync (flowsTo) — top artists/tracks
+  - → Shared Listening (flowsTo) — artist top tracks
 
 ### Processing
 
@@ -110,6 +111,20 @@ Pulls a connected listener's Spotify profile into music_connections and music_pr
   - ← Spotify Web API (flowsTo) — top artists/tracks
   - ← spotify_event_match_corrections (flowsTo) — refines matching
   - ← Listener (me) API (dependsOn) — sync taste
+
+#### Shared Listening  `svc-shared-songs`
+
+When a signed-in listener Goes/Fires an event, resolves the artist's Spotify top tracks and seeds them into the public event_shared_songs list (read-only Spotify; no writes). Computes the per-viewer 'you already love this one' overlap.
+
+- **Kind:** Service
+- **Source of truth:** `lib/shared-songs.ts`
+- **Access:** internal
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → event_shared_songs (flowsTo) — upsert shared songs
+- **Fed by / required by:**
+  - ← Spotify Web API (flowsTo) — artist top tracks
+  - ← Discovery Action API (flowsTo) — seed on going/fire
 
 #### Discovery Scoring  `svc-discovery`
 
@@ -400,6 +415,21 @@ Private, polymorphic Saved/Favorites for signed-in listeners: events, venues, an
 - **Fed by / required by:**
   - ← Saved Items (flowsTo) — persist saves
 
+#### event_shared_songs  `db-shared-songs`
+
+Public, deduped per-event song list seeded when a signed-in Spotify listener Goes/Fires. Outside discovery scoring. seeded_by_user_id is server-only and never exposed.
+
+- **Kind:** Data store
+- **Source of truth:** `event_shared_songs`
+- **Access:** public
+- **Ownership:** hybrid
+- **Live count:** `event_shared_songs` (resolved in portal/API)
+- **Flows to / depends on:**
+  - → Event Detail (flowsTo) — shared listening
+  - → Event Board (flowsTo) — compact affordance
+- **Fed by / required by:**
+  - ← Shared Listening (flowsTo) — upsert shared songs
+
 ### Public Experience
 
 _What listeners see._
@@ -435,6 +465,7 @@ Card grid of events with date/venue/tags, reactions, community, and discovery or
 - **Fed by / required by:**
   - ← Discovery Scoring (flowsTo) — ranked order
   - ← events (flowsTo) — event rows
+  - ← event_shared_songs (flowsTo) — compact affordance
 
 #### Event Detail  `ui-event-detail`
 
@@ -450,6 +481,7 @@ Per-event page with full context, community panel, and share metadata.
 - **Fed by / required by:**
   - ← Homepage (flowsTo) — navigates to
   - ← events (flowsTo) — event by id
+  - ← event_shared_songs (flowsTo) — shared listening
 
 ### Community
 
@@ -492,6 +524,7 @@ Logs event interactions and Spotify match corrections that train discovery.
 - **Flows to / depends on:**
   - → Signal Memory (flowsTo) — logs actions
   - → spotify_event_match_corrections (flowsTo) — match corrections
+  - → Shared Listening (flowsTo) — seed on going/fire
 - **Fed by / required by:**
   - ← Event Board (flowsTo) — interaction events
 
@@ -729,6 +762,11 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | listener_discovery_preferences | → | Discovery Scoring | flowsTo | custom weights |
 | Genre Taxonomy | → | Discovery Scoring | flowsTo | genre matching |
 | spotify_event_match_corrections | → | Music Taste Sync | flowsTo | refines matching |
+| Spotify Web API | → | Shared Listening | flowsTo | artist top tracks |
+| Discovery Action API | → | Shared Listening | flowsTo | seed on going/fire |
+| Shared Listening | → | event_shared_songs | flowsTo | upsert shared songs |
+| event_shared_songs | → | Event Detail | flowsTo | shared listening |
+| event_shared_songs | → | Event Board | flowsTo | compact affordance |
 | Community Panel | → | Community API | flowsTo | writes |
 | Community API | → | Community Service | dependsOn |  |
 | Community Service | → | contributions | flowsTo | songs/notes/voices |
@@ -765,4 +803,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_47 nodes, 59 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_49 nodes, 64 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

@@ -346,3 +346,28 @@ create table if not exists public.saved_items (
 
 create index if not exists saved_items_user_type_idx
   on public.saved_items (user_id, item_type);
+
+-- Shared listening (PRD 17 / Phase 9 C1): public, deduped song list per event, seeded when a
+-- signed-in Spotify listener Goes/Fires. Separate from contributions so it never feeds discovery
+-- scoring. seeded_by_user_id is server-only (future inner-circle attribution) and never exposed.
+create table if not exists public.event_shared_songs (
+  id text primary key,
+  event_id text not null,
+  event_title text not null,
+  provider text not null check (provider in ('spotify')),
+  provider_track_id text not null,
+  name text not null,
+  artist_names text[] not null default '{}',
+  external_url text,
+  image_url text,
+  preview_url text,
+  share_count integer not null default 1,
+  seeded_by_user_id integer references public.users(id) on delete set null,
+  first_shared_at timestamptz not null default now(),
+  last_shared_at timestamptz not null default now(),
+  status text not null default 'visible' check (status in ('visible', 'hidden', 'pending')),
+  unique (event_id, provider, provider_track_id)
+);
+
+create index if not exists event_shared_songs_event_status_idx
+  on public.event_shared_songs (event_id, status, share_count desc);
