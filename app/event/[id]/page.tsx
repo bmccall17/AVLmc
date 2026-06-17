@@ -22,6 +22,7 @@ import { listMusicConnections } from "@/lib/music";
 import { getSavedKeys } from "@/lib/saved-items";
 import { listPublicSharedSongs } from "@/lib/shared-songs";
 import { attributeSharedSongs, getCircleEventActivity } from "@/lib/social-activity";
+import { getCuratedByForEvents } from "@/lib/curators";
 
 type EventPageProps = {
   params: Promise<{
@@ -75,17 +76,25 @@ export default async function EventPage({ params }: EventPageProps) {
   const sessionId = getAnonymousSessionIdFromCookieValue(
     cookieStore.get(ANONYMOUS_SESSION_COOKIE_NAME)?.value
   );
-  const [musicConnections, discoveryStates, savedKeys, publicSharedSongs, circleActivityByEvent] =
-    await Promise.all([
-      userId ? listMusicConnections(userId) : Promise.resolve([]),
-      listDiscoveryStates([event.id], { sessionId, userId }),
-      userId ? getSavedKeys(userId) : Promise.resolve([]),
-      listPublicSharedSongs(event.id, userId),
-      getCircleEventActivity(userId, [event.id]),
-    ]);
+  const [
+    musicConnections,
+    discoveryStates,
+    savedKeys,
+    publicSharedSongs,
+    circleActivityByEvent,
+    curatedByEvent,
+  ] = await Promise.all([
+    userId ? listMusicConnections(userId) : Promise.resolve([]),
+    listDiscoveryStates([event.id], { sessionId, userId }),
+    userId ? getSavedKeys(userId) : Promise.resolve([]),
+    listPublicSharedSongs(event.id, userId),
+    getCircleEventActivity(userId, [event.id]),
+    getCuratedByForEvents([event.id]),
+  ]);
   // Attribute in-circle seeders server-side at the gate (no-op for anonymous viewers).
   const sharedSongs = await attributeSharedSongs(userId, event.id, publicSharedSongs);
   const circleActivity = circleActivityByEvent[event.id] ?? null;
+  const curatedBy = curatedByEvent[event.id] ?? [];
   const spotifySearchEnabled = musicConnections.some(
     (connection) => connection.provider === "spotify" && !connection.disconnectedAt
   );
@@ -187,6 +196,18 @@ export default async function EventPage({ params }: EventPageProps) {
         initialCommunity={publicCommunity}
         spotifySearchEnabled={spotifySearchEnabled}
       />
+
+      {curatedBy.length > 0 ? (
+        <section className="curated-by-detail" aria-label="Curated by">
+          <span>★ Curated by</span>
+          {curatedBy.map((curator, index) => (
+            <span key={curator.handle}>
+              {index > 0 ? ", " : " "}
+              <Link href={`/curator/${encodeURIComponent(curator.handle)}`}>{curator.displayName}</Link>
+            </span>
+          ))}
+        </section>
+      ) : null}
 
       <CirclePresence activity={circleActivity} />
 

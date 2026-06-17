@@ -26,6 +26,7 @@ import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
 import { getSavedKeys } from "@/lib/saved-items";
 import { getSharedSongSummariesByEvent } from "@/lib/shared-songs";
 import { getCircleEventActivity } from "@/lib/social-activity";
+import { getCuratedByForEvents } from "@/lib/curators";
 import { SPOTIFY_LIMITED_BETA_CODE } from "@/lib/spotify-limited-access";
 
 // Reads cookies/auth and queries the DB on render. Force dynamic so Next.js skips the
@@ -91,6 +92,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     savedKeys,
     sharedSongSummaries,
     circleActivityByEvent,
+    curatedByEvent,
   ] =
     await Promise.all([
       getCommunityCountsByEvent(eventIds),
@@ -106,6 +108,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       getSharedSongSummariesByEvent(eventIds),
       // Batched one-query-per-page "your people" activity; empty for anonymous viewers (PRD 24 / C2).
       getCircleEventActivity(userId, eventIds),
+      // Batched "curated by" lookup for the board signal (PRD 25 / C3); public, anonymous-safe.
+      getCuratedByForEvents(eventIds),
     ]);
   const savedEventKeys = savedKeys
     .filter((key) => key.itemType === "event")
@@ -192,6 +196,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           initialSavedEventKeys={savedEventKeys}
           initialSavedFavorites={savedFavorites}
           circleActivityByEvent={circleActivityByEvent}
+          curatedByEvent={curatedByEvent}
           isSignedIn={Boolean(userId)}
           musicConnections={musicConnections}
           musicProfileItems={musicProfileItems}

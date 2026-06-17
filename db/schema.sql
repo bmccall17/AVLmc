@@ -155,6 +155,44 @@ create table if not exists public.listener_follows (
 create index if not exists listener_follows_followee_idx
   on public.listener_follows (followee_user_id, status);
 
+-- ---- Curator & Influencer Profiles (PRD 25 / C3): admin-promoted public personas. ----------
+-- A curator is an admin-granted public persona layered on an existing user (one row per user).
+-- Promotion is admin-only (no self-serve, no pay-to-play). Following a curator reuses the
+-- listener_follows edge above — a curator is just a special followee.
+create table if not exists public.curators (
+  id text primary key,
+  user_id integer not null unique references public.users(id) on delete cascade,
+  handle text not null unique,
+  display_name text not null,
+  bio text,
+  avatar_url text,
+  status text not null default 'active' check (status in ('active', 'hidden')),
+  promoted_by_admin boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists curators_status_idx on public.curators (status);
+
+-- A curator's deliberate, attributed per-show pick. Like contributions/person-event-state this
+-- deliberately has NO FK to events (events are re-ingested daily and would cascade-delete picks);
+-- it snapshots event_title and resolves live event metadata via a tolerant join at read time.
+create table if not exists public.curator_picks (
+  id text primary key,
+  curator_id text not null references public.curators(id) on delete cascade,
+  event_id text not null,
+  event_title text not null default '',
+  note text,
+  status text not null default 'visible' check (status in ('visible', 'hidden')),
+  created_at timestamptz not null default now(),
+  unique (curator_id, event_id)
+);
+
+create index if not exists curator_picks_event_status_idx
+  on public.curator_picks (event_id, status);
+create index if not exists curator_picks_curator_idx
+  on public.curator_picks (curator_id, status);
+
 -- ---- Community contributions & reactions ---------------------------------------
 -- Interaction tables keep their own copy of event metadata (event_title, etc.) and
 -- deliberately have NO FK to events: events are re-ingested daily from AVLgo, so the

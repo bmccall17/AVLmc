@@ -14,7 +14,17 @@ A small additive `curators` table records the **public persona** for an admin-pr
 
 ## Implementation Status
 
-**Planned — not yet started.**
+**Shipped — June 17, 2026.**
+
+Admin-promoted curator profiles are live; following a curator reuses the C1 edge:
+
+- **Data.** `curators` (one row per promoted user — `handle` URL-safe + unique, `display_name`, `bio`, `status` active/hidden, `promoted_by_admin`) and `curator_picks` in `db/schema.sql`. **Deviation from the PRD's literal FK:** `curator_picks` has **no FK to events** (events re-ingest daily and a FK would cascade-delete picks) — it follows the established contributions/person-event-state precedent, snapshotting `event_title` and resolving live metadata via a tolerant `left join events` at read time. 42P01/42703-tolerant.
+- **Pure core.** `lib/curators-core.ts` — `isValidHandle`/`normalizeHandle` (URL-safe, blocks traversal), `cleanDisplayName`/`cleanBio`, `buildCuratorTopList` (ranks most-picked artists/venues/genres). Unit-tested in `tests/curators.test.ts`.
+- **Service.** `lib/curators.ts` (`server-only`) — public reads `listCurators`, `getCuratorProfile` (persona + derived top-list + visible picks), `getCuratedByForEvents` (batched board lookup, active+visible only); admin writes `promoteCurator` (idempotent upsert, rejects unsafe/duplicate handles + non-existent user), `setCuratorStatus`, `addCuratorPick`, `setPickStatus`, `listCuratorsForAdmin`. Public reads expose only the persona + visible picks — never private going/firing, never a non-curator listener.
+- **APIs.** Public `GET /api/curators` (directory) + `GET /api/curators/[handle]` (profile, 404 for hidden/unknown/invalid); admin `POST/PATCH /api/admin/curators` (admin-cookie gated, mirrors `app/api/admin/resources`).
+- **UI.** Public `app/curator/[handle]/page.tsx` (persona, top-list, picks, **FollowButton** on the C1 edge) + `app/curators/page.tsx` directory; a **"curated by [handle]"** signal on `EventBoard` cards and the event detail page (batched `getCuratedByForEvents` in `app/page.tsx` / the detail page); the "Curators — Coming soon" callout replaced by a live "Browse curators" entry point. Admin management via `app/admin/curators/page.tsx` + `components/admin/CuratorAdminPanel.tsx` (promote by user id, hide/show) — a focused admin sub-page rather than threading the heavy tabbed AdminPortal.
+- **Architecture & quality.** `svc-curators`, `db-curators` + `db-curator-picks` (+ counts), `api-curators`, `api-admin-curators`, `ui-curator-profile` registered (+ edges, incl. `ui-curator-profile → api-follows`); admin count queries added; system map regenerated; `test:registry`, `test:curators`, typecheck, lint, `next build`, and Snyk all green; $0.
+- **Privacy verified.** `lib/curators.ts` is `server-only` and not imported by any client component (the board imports the `CuratedBy` type from the pure core); no curator data in `app/api/community/*` or OG responses; public curator responses carry no tokens and no non-curator listener; ranking is unchanged this cycle (curator signal enters in C4).
 
 ## Goals
 

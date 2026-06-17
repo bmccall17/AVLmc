@@ -81,6 +81,14 @@ const COUNT_QUERIES: Array<{ key: DerivedCountKey; text: string }> = [
     key: "listener_follows",
     text: "select count(*)::int as count from public.listener_follows where status = 'active'",
   },
+  {
+    key: "curators",
+    text: "select count(*)::int as count from public.curators where status = 'active'",
+  },
+  {
+    key: "curator_picks",
+    text: "select count(*)::int as count from public.curator_picks where status = 'visible'",
+  },
 ];
 
 async function loadCounts(): Promise<Partial<Record<DerivedCountKey, number>>> {

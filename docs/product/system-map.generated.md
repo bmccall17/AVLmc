@@ -243,6 +243,24 @@ Inner-circle attribution (PRD 24): a live READ layer that joins the C1 follow gr
   - ← Circle Activity API (dependsOn) — your-people going/firing
   - ← Circle Share API (dependsOn) — share with circle
 
+#### Curators  `svc-curators`
+
+Admin-promoted curator personas + per-show picks (PRD 25). Public reads expose only the persona + visible picks (never private going/firing, never a non-curator listener, never tokens/PII); admin writes promote/demote/hide and manage picks. Following a curator reuses the C1 listener_follows edge.
+
+- **Kind:** Service
+- **Source of truth:** `lib/curators.ts`
+- **Access:** public
+- **Ownership:** hybrid
+- **Flows to / depends on:**
+  - → curators (flowsTo) — persona persistence
+  - → curator_picks (flowsTo) — per-show picks
+  - → Curator Profile (flowsTo) — profile + top-list + picks
+  - → Event Board (flowsTo) — curated-by board signal
+  - → Event Detail (flowsTo) — curated-by detail signal
+- **Fed by / required by:**
+  - ← Curators API (dependsOn) — directory + profile
+  - ← Admin Curators API (dependsOn) — promote/hide + picks
+
 ### Data Stores
 
 _Postgres tables of record._
@@ -367,6 +385,7 @@ Auth.js user records for signed-in listeners.
   - ← Auth.js (flowsTo) — user records
   - ← saved_items (dependsOn) — owned by user (cascade)
   - ← listener_follows (dependsOn) — follower/followee (cascade)
+  - ← curators (dependsOn) — persona over a user (cascade)
 
 #### accounts  `db-accounts`
 
@@ -465,6 +484,32 @@ Private, one-way follow edges (follower → followee) for the Social / Curator G
   - ← Social Graph (flowsTo) — persist follow edges
   - ← Social Activity (Inner-Circle) (dependsOn) — follow edges (gate)
 
+#### curators  `db-curators`
+
+Admin-promoted public curator personas layered on a user (PRD 25). One row per promoted user; handle is URL-safe + unique. Public persona only — no private/account fields exposed.
+
+- **Kind:** Data store
+- **Source of truth:** `curators`
+- **Access:** public
+- **Ownership:** hybrid
+- **Live count:** `curators` (resolved in portal/API)
+- **Flows to / depends on:**
+  - → users (dependsOn) — persona over a user (cascade)
+- **Fed by / required by:**
+  - ← Curators (flowsTo) — persona persistence
+
+#### curator_picks  `db-curator-picks`
+
+A curator's deliberate, attributed per-show picks (PRD 25). No FK to events (events re-ingest daily) — snapshots event_title and resolves live metadata via a tolerant join at read time.
+
+- **Kind:** Data store
+- **Source of truth:** `curator_picks`
+- **Access:** public
+- **Ownership:** hybrid
+- **Live count:** `curator_picks` (resolved in portal/API)
+- **Fed by / required by:**
+  - ← Curators (flowsTo) — per-show picks
+
 #### event_shared_songs  `db-shared-songs`
 
 Public, deduped per-event song list seeded when a signed-in Spotify listener Goes/Fires. Outside discovery scoring. seeded_by_user_id is server-only and never exposed.
@@ -518,6 +563,7 @@ Card grid of events with date/venue/tags, reactions, community, and discovery or
   - ← events (flowsTo) — event rows
   - ← event_shared_songs (flowsTo) — compact affordance
   - ← Social Activity (Inner-Circle) (flowsTo) — circle badge (signed-in)
+  - ← Curators (flowsTo) — curated-by board signal
 
 #### Event Detail  `ui-event-detail`
 
@@ -535,6 +581,31 @@ Per-event page with full context, community panel, and share metadata.
   - ← events (flowsTo) — event by id
   - ← event_shared_songs (flowsTo) — shared listening
   - ← Social Activity (Inner-Circle) (flowsTo) — people-you-follow strip + attribution
+  - ← Curators (flowsTo) — curated-by detail signal
+
+#### Curators API  `api-curators`
+
+Public curator directory + per-handle profile (PRD 25). Active curators + visible picks only; no private data, no non-curator listeners, no tokens/PII.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/curators/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → Curators (dependsOn) — directory + profile
+
+#### Curator Profile  `ui-curator-profile`
+
+Public curator profile page (/curator/[handle]) — persona, top-list, per-show picks, and a Follow button (C1 edge). Plus the /curators directory. Regular listeners never get a public profile.
+
+- **Kind:** Surface
+- **Source of truth:** `app/curator/[handle]/page.tsx`
+- **Access:** public
+- **Ownership:** manual
+- **Flows to / depends on:**
+  - → Follows API (flowsTo) — follow a curator (C1 edge)
+- **Fed by / required by:**
+  - ← Curators (flowsTo) — profile + top-list + picks
 
 ### Community
 
@@ -664,6 +735,8 @@ Signed-in-only endpoints to follow, unfollow, and list who the caller follows (+
 - **Ownership:** automated
 - **Flows to / depends on:**
   - → Social Graph (dependsOn) — follow/unfollow/list
+- **Fed by / required by:**
+  - ← Curator Profile (flowsTo) — follow a curator (C1 edge)
 
 #### Circle Activity API  `api-circle-activity`
 
@@ -703,6 +776,17 @@ Signed-in-only /saved view with three private lists (events, venues, artists), i
 ### Operations
 
 _Jobs, admin, observability._
+
+#### Admin Curators API  `api-admin-curators`
+
+Admin-cookie-gated curator management (PRD 25): promote/demote/hide curators, add/hide picks. Admin-only — no self-serve, no pay-to-play.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/admin/curators/route.ts`
+- **Access:** internal
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → Curators (dependsOn) — promote/hide + picks
 
 #### AVLgo Sync (cron)  `job-avlgo-sync`
 
@@ -883,6 +967,15 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | Social Activity (Inner-Circle) | → | event_shared_songs | dependsOn | seeder attribution (gated) |
 | Social Activity (Inner-Circle) | → | Event Board | flowsTo | circle badge (signed-in) |
 | Social Activity (Inner-Circle) | → | Event Detail | flowsTo | people-you-follow strip + attribution |
+| Curators API | → | Curators | dependsOn | directory + profile |
+| Admin Curators API | → | Curators | dependsOn | promote/hide + picks |
+| Curators | → | curators | flowsTo | persona persistence |
+| Curators | → | curator_picks | flowsTo | per-show picks |
+| curators | → | users | dependsOn | persona over a user (cascade) |
+| Curators | → | Curator Profile | flowsTo | profile + top-list + picks |
+| Curators | → | Event Board | flowsTo | curated-by board signal |
+| Curators | → | Event Detail | flowsTo | curated-by detail signal |
+| Curator Profile | → | Follows API | flowsTo | follow a curator (C1 edge) |
 | Event Board | → | Listener Profile | flowsTo | sign-in entry |
 | Image Cleanup (cron) | → | Vercel Blob | flowsTo | delete stale images |
 | AVLgo Sync (cron) | → | system_job_runs | flowsTo | records outcome |
@@ -900,4 +993,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_55 nodes, 75 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_61 nodes, 84 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

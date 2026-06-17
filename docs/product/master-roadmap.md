@@ -295,7 +295,7 @@ and novel shows. These are the two feature initiatives the Phase 10 benchmark ex
   | --- | --- | --- | --- |
   | C1 | [PRD 23 — Opt-In Social Graph](prds/prd-23-opt-in-social-graph.md) | 1 | **Shipped (Jun 17, 2026)** |
   | C2 | [PRD 24 — Inner-Circle Attribution](prds/prd-24-inner-circle-attribution.md) | 2 | **Shipped (Jun 17, 2026)** |
-  | C3 | [PRD 25 — Curator & Influencer Profiles](prds/prd-25-curator-profiles.md) | 3 | **Planned** |
+  | C3 | [PRD 25 — Curator & Influencer Profiles](prds/prd-25-curator-profiles.md) | 3 | **Shipped (Jun 17, 2026)** |
   | C4 | [PRD 26 — Social Signal in Discovery](prds/prd-26-social-signal-in-discovery.md) | 4 | **Planned** |
   | C5 | [PRD 27 — Guardrails & Social Benchmark](prds/prd-27-social-guardrails-and-benchmark.md) | 5 (+ Phase 10 Outcome 3) | **Planned** |
 
@@ -324,7 +324,19 @@ and novel shows. These are the two feature initiatives the Phase 10 benchmark ex
   `/api/events/[id]/shared-songs` attributes only for entitled viewers (anonymous stays the PRD 17
   shape). Gating at read time means turning sharing off / unfollowing removes visibility instantly.
   Registry (`svc-social-activity`, `api-circle-activity`, `api-circle-share`) + map updated; tests,
-  typecheck, lint, build, and Snyk green; $0. **C3 (PRD 25 — Curator & Influencer Profiles) is next.**
+  typecheck, lint, build, and Snyk green; $0.
+
+  **C3 shipped (Jun 17, 2026):** admin-promoted curator profiles are live. New `curators` +
+  `curator_picks` tables (picks carry **no FK to events** — daily re-ingest would cascade-delete them —
+  snapshotting `event_title` and resolving live metadata via a tolerant join, per the contributions
+  precedent). `lib/curators.ts` serves a public directory (`/curators`), per-handle profiles
+  (`/curator/[handle]` with top-list + picks + a Follow button on the C1 edge), and a batched
+  "curated by [handle]" board/detail signal; admin promote/hide + pick management via
+  `/api/admin/curators` + `/admin/curators`. The "Curators — Coming soon" callout is replaced by the
+  live surface. Public reads expose only the persona + visible picks (never private going/firing, never
+  a non-curator listener). Registry (`svc-curators`, `db-curators`, `db-curator-picks`, `api-curators`,
+  `api-admin-curators`, `ui-curator-profile`) + map updated; tests, typecheck, lint, build, and Snyk
+  green; ranking unchanged this cycle; $0. **C4 (PRD 26 — Social Signal in Discovery) is next.**
 
 Both initiatives decompose into epic PRDs + cycle PRDs (Phase 11: PRDs 18–21, shipped; Phase 12: PRDs
 23–27, scoped). Recommended overall build order interleaved the tracks: Phase 11 skips→ranking first
@@ -332,14 +344,15 @@ Both initiatives decompose into epic PRDs + cycle PRDs (Phase 11: PRDs 18–21, 
 needs both the scoring model and the graph).
 
 > **▶ WHAT'S NEXT (hand-off, June 17, 2026).** Phase 11 (Deeper Personalization, C1–C4) is **fully
-> shipped**, **Phase 10 C1 (PRD 22 — Discovery Baseline) is shipped**, and **Phase 12 C1 + C2 are now
-> shipped** — the follow-graph spine (PRD 23) and the inner-circle attribution read layer (PRD 24:
-> `lib/social-activity.ts`, the "People you follow" strip, `sharedBy` attribution, the board badge,
-> `/api/me/circle-activity` + `/api/me/circle-share`). The dependency-unblocked candidates now are:
-> 1. **Phase 12 C3 — PRD 25 (Curator & Influencer Profiles)** *(recommended next — build)*. Admin-promoted,
->    first-class curator profiles with public top-lists + per-show picks, a "curated by" board signal,
->    and follow-a-curator (a curator is a special followee on the same C1 edge). Unblocked by C1. Start:
->    [`prds/prd-25-curator-profiles.md`](prds/prd-25-curator-profiles.md) (then C4→C5).
+> shipped**, **Phase 10 C1 (PRD 22 — Discovery Baseline) is shipped**, and **Phase 12 C1 + C2 + C3 are
+> now shipped** — the follow-graph spine (PRD 23), inner-circle attribution (PRD 24), and admin-promoted
+> curator profiles + "curated by" signal (PRD 25). The graph, its activity reads, and curators all
+> exist; ranking is still untouched. The dependency-unblocked candidate now is:
+> 1. **Phase 12 C4 — PRD 26 (Social Signal in Discovery)** *(recommended next — build)*. The first cycle
+>    that touches ranking: a new, **off-by-default**, **capped** `socialCircle` scoring component
+>    (distinct from `socialHeat`) fed by the C1–C3 graph and built on the Phase 11 model, explainable in
+>    Insight / Trace. Needs C1 + C2 + C3 (all shipped) + the Phase 11 model. Start:
+>    [`prds/prd-26-social-signal-in-discovery.md`](prds/prd-26-social-signal-in-discovery.md) (then C5).
 > 2. **Phase 10 Outcome 2** (Deeper Personalization Benchmark). Extends the shipped baseline; stays
 >    **unscoped** until prioritized. (Outcome 3 — Social & Curator Benchmark — is now scoped as Phase
 >    12 C5 / PRD 27.) Start: [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md).

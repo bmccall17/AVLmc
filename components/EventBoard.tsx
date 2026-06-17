@@ -8,6 +8,7 @@ import { signIn } from "next-auth/react";
 import { SaveButton } from "@/components/SaveButton";
 import { SharedSongsCard, type SharedSongSummary } from "@/components/SharedSongsCard";
 import { circleBadgeCount, type CircleEventActivity } from "@/lib/social-activity-core";
+import type { CuratedBy } from "@/lib/curators-core";
 import { resolveGenres, type CanonicalGenre } from "@/lib/genre-taxonomy";
 import { SHARED_SONGS_REFRESH_EVENT } from "@/lib/shared-songs-core";
 import type { CommunityCounts } from "@/lib/community";
@@ -42,6 +43,7 @@ type ActiveTooltip = {
 
 type EventBoardProps = {
   circleActivityByEvent?: Record<string, CircleEventActivity | undefined>;
+  curatedByEvent?: Record<string, CuratedBy[] | undefined>;
   counts: Record<string, CommunityCounts | undefined>;
   discoveryScores: DiscoveryScoresByEvent;
   events: EventRecord[];
@@ -94,7 +96,6 @@ const SKIP_REMOVE_CONFIRM_KEY = "avlmc:homepage:skip-remove-confirm";
 const SIGNIN_NUDGE_DISMISS_KEY = "avlmc:signin-nudge-dismissed";
 const KEEP_INTENT_PARAM = "keepIntent";
 const NUDGEABLE_ACTIONS = new Set<CardAction>(["fire", "planning", "remove"]);
-const RYAN_PLAYLIST_URL = "https://open.spotify.com/playlist/4fcdaCe97lEeEMe8rOhuSM?si=BcTWAtvxQqu3kRlZDlIuBQ";
 
 const actionHelp: Record<ActionKind, { body: string; impact: string; title: string }> = {
   going: {
@@ -121,6 +122,7 @@ const actionHelp: Record<ActionKind, { body: string; impact: string; title: stri
 
 export function EventBoard({
   circleActivityByEvent,
+  curatedByEvent,
   counts,
   discoveryScores,
   events,
@@ -875,6 +877,7 @@ export function EventBoard({
                 onTogglePositiveAction={togglePositiveAction}
                 onTrackAvlgoClick={trackAvlgoClick}
                 circleActivity={circleActivityByEvent?.[event.id]}
+                curatedBy={curatedByEvent?.[event.id]}
                 reasons={reasons}
                 score={score}
                 sharedSongSummary={sharedSongSummaries[event.id]}
@@ -950,6 +953,7 @@ export function EventBoard({
 function DiscoveryEventCard({
   activeTooltip,
   circleActivity,
+  curatedBy,
   counts,
   event,
   index,
@@ -972,6 +976,7 @@ function DiscoveryEventCard({
 }: {
   activeTooltip: ActiveTooltip | null;
   circleActivity: CircleEventActivity | undefined;
+  curatedBy: CuratedBy[] | undefined;
   counts: CommunityCounts | undefined;
   event: EventRecord;
   index: number;
@@ -1105,6 +1110,17 @@ function DiscoveryEventCard({
             >
               👥 {circleBadgeCount(circleActivity)} from your circle
             </span>
+          ) : null}
+          {curatedBy && curatedBy.length > 0 ? (
+            <a
+              className="curated-by-badge"
+              href={`/curator/${encodeURIComponent(curatedBy[0].handle)}`}
+              onClick={(clickEvent) => clickEvent.stopPropagation()}
+              title={`Curated by ${curatedBy.map((c) => c.displayName).join(", ")}`}
+            >
+              ★ curated by {curatedBy[0].displayName}
+              {curatedBy.length > 1 ? ` +${curatedBy.length - 1}` : ""}
+            </a>
           ) : null}
         </div>
       </div>
@@ -1427,20 +1443,20 @@ function CuratorComingSoon() {
     "mailto:?subject=AVLmc%20curator%20recommendation&body=I%27d%20like%20to%20recommend%20a%20curator%20for%20AVLmc.%0A%0AName%3A%0ALinks%3A%0AWhy%20they%20matter%3A";
 
   return (
-    <section className="curator-callout" id="curators" aria-label="Curators coming soon">
+    <section className="curator-callout" id="curators" aria-label="Curators">
       <div className="curator-callout-copy">
         <span className="curator-status">
           <Bell aria-hidden="true" size={14} strokeWidth={2.6} />
-          Coming soon
+          Now live
         </span>
         <h2>Curators</h2>
         <p>
-          Follow local tastemakers, friends, and music circles so their show signals can carry more weight in your discovery feed.
+          Follow local tastemakers and music circles so their show picks carry into your discovery feed.
         </p>
       </div>
       <div className="curator-actions">
-        <a className="curator-action is-playlist" href={RYAN_PLAYLIST_URL} rel="noreferrer" target="_blank">
-          Ryan&apos;s playlist
+        <a className="curator-action is-playlist" href="/curators">
+          Browse curators
           <ExternalLink aria-hidden="true" size={13} strokeWidth={2.4} />
         </a>
         <a className="curator-action" href={signupHref}>

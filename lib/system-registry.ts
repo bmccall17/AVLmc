@@ -75,7 +75,9 @@ export type DerivedCountKey =
   | "admin_resources"
   | "saved_items"
   | "event_shared_songs"
-  | "listener_follows";
+  | "listener_follows"
+  | "curators"
+  | "curator_picks";
 
 export type RegistryNode = {
   /** Stable identifier; referenced by edges and by later cycles. Never reuse or repurpose. */
@@ -337,6 +339,17 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "manual",
   },
+  {
+    id: "svc-curators",
+    kind: "service",
+    layer: "processing",
+    label: "Curators",
+    description:
+      "Admin-promoted curator personas + per-show picks (PRD 25). Public reads expose only the persona + visible picks (never private going/firing, never a non-curator listener, never tokens/PII); admin writes promote/demote/hide and manage picks. Following a curator reuses the C1 listener_follows edge.",
+    sourceOfTruth: "lib/curators.ts",
+    access: "public",
+    ownership: "hybrid",
+  },
 
   /* ---- Data stores ----------------------------------------------- */
   {
@@ -517,6 +530,28 @@ const NODES: RegistryNode[] = [
     countKey: "listener_follows",
   },
   {
+    id: "db-curators",
+    kind: "datastore",
+    layer: "data",
+    label: "curators",
+    description: "Admin-promoted public curator personas layered on a user (PRD 25). One row per promoted user; handle is URL-safe + unique. Public persona only — no private/account fields exposed.",
+    sourceOfTruth: "curators",
+    access: "public",
+    ownership: "hybrid",
+    countKey: "curators",
+  },
+  {
+    id: "db-curator-picks",
+    kind: "datastore",
+    layer: "data",
+    label: "curator_picks",
+    description: "A curator's deliberate, attributed per-show picks (PRD 25). No FK to events (events re-ingest daily) — snapshots event_title and resolves live metadata via a tolerant join at read time.",
+    sourceOfTruth: "curator_picks",
+    access: "public",
+    ownership: "hybrid",
+    countKey: "curator_picks",
+  },
+  {
     id: "db-shared-songs",
     kind: "datastore",
     layer: "data",
@@ -674,6 +709,36 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/me/circle-share/route.ts",
     access: "public",
     ownership: "automated",
+  },
+  {
+    id: "api-curators",
+    kind: "surface",
+    layer: "experience",
+    label: "Curators API",
+    description: "Public curator directory + per-handle profile (PRD 25). Active curators + visible picks only; no private data, no non-curator listeners, no tokens/PII.",
+    sourceOfTruth: "app/api/curators/route.ts",
+    access: "public",
+    ownership: "automated",
+  },
+  {
+    id: "api-admin-curators",
+    kind: "surface",
+    layer: "operations",
+    label: "Admin Curators API",
+    description: "Admin-cookie-gated curator management (PRD 25): promote/demote/hide curators, add/hide picks. Admin-only — no self-serve, no pay-to-play.",
+    sourceOfTruth: "app/api/admin/curators/route.ts",
+    access: "internal",
+    ownership: "automated",
+  },
+  {
+    id: "ui-curator-profile",
+    kind: "surface",
+    layer: "experience",
+    label: "Curator Profile",
+    description: "Public curator profile page (/curator/[handle]) — persona, top-list, per-show picks, and a Follow button (C1 edge). Plus the /curators directory. Regular listeners never get a public profile.",
+    sourceOfTruth: "app/curator/[handle]/page.tsx",
+    access: "public",
+    ownership: "manual",
   },
   {
     id: "ui-saved-space",
@@ -862,6 +927,15 @@ const EDGES: RegistryEdge[] = [
   { from: "svc-social-activity", to: "db-shared-songs", kind: "dependsOn", label: "seeder attribution (gated)" },
   { from: "svc-social-activity", to: "ui-eventboard", kind: "flowsTo", label: "circle badge (signed-in)" },
   { from: "svc-social-activity", to: "ui-event-detail", kind: "flowsTo", label: "people-you-follow strip + attribution" },
+  { from: "api-curators", to: "svc-curators", kind: "dependsOn", label: "directory + profile" },
+  { from: "api-admin-curators", to: "svc-curators", kind: "dependsOn", label: "promote/hide + picks" },
+  { from: "svc-curators", to: "db-curators", kind: "flowsTo", label: "persona persistence" },
+  { from: "svc-curators", to: "db-curator-picks", kind: "flowsTo", label: "per-show picks" },
+  { from: "db-curators", to: "db-users", kind: "dependsOn", label: "persona over a user (cascade)" },
+  { from: "svc-curators", to: "ui-curator-profile", kind: "flowsTo", label: "profile + top-list + picks" },
+  { from: "svc-curators", to: "ui-eventboard", kind: "flowsTo", label: "curated-by board signal" },
+  { from: "svc-curators", to: "ui-event-detail", kind: "flowsTo", label: "curated-by detail signal" },
+  { from: "ui-curator-profile", to: "api-follows", kind: "flowsTo", label: "follow a curator (C1 edge)" },
   { from: "ui-eventboard", to: "ui-listener-profile", kind: "flowsTo", label: "sign-in entry" },
 
   // Operations

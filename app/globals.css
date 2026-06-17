@@ -6013,6 +6013,164 @@ button.primary-action {
   opacity: 0.8;
 }
 
+/* Curator & influencer profiles (PRD 25 / C3). */
+.curated-by-badge {
+  background: rgba(250, 204, 21, 0.12);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  border-radius: 999px;
+  color: #fde68a;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.curated-by-badge:hover {
+  background: rgba(250, 204, 21, 0.2);
+}
+
+.curated-by-detail {
+  color: #fde68a;
+  font-size: 0.86rem;
+  font-weight: 700;
+  margin: 12px 0;
+}
+
+.curated-by-detail a {
+  color: #fcd34d;
+}
+
+.curator-hero {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin: 16px 0 24px;
+}
+
+.curator-eyebrow {
+  color: #fcd34d;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.curator-handle {
+  color: #a1a1aa;
+  font-size: 0.86rem;
+}
+
+.curator-bio {
+  color: #d4d4d8;
+  margin-top: 8px;
+  max-width: 60ch;
+}
+
+.curator-toplist ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+}
+
+.curator-toplist-item {
+  align-items: center;
+  background: rgba(39, 39, 42, 0.9);
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px 12px;
+}
+
+.curator-toplist-kind {
+  color: #a5b4fc;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.curator-picks ul,
+.curators-directory-list {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+}
+
+.curator-pick,
+.curators-directory-card {
+  background: rgba(24, 24, 27, 0.9);
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  border-radius: 10px;
+  display: block;
+  padding: 12px 14px;
+}
+
+.curator-pick-link {
+  color: #fafafa;
+  text-decoration: none;
+}
+
+.curator-pick-link small {
+  color: #a1a1aa;
+  display: block;
+}
+
+.curator-pick-note {
+  color: #d4d4d8;
+  font-style: italic;
+  margin-top: 6px;
+}
+
+.curators-directory-card strong {
+  color: #fafafa;
+}
+
+.curators-directory-card small {
+  color: #a1a1aa;
+  display: block;
+}
+
+.curators-directory-count {
+  color: #fcd34d;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+/* Admin curators management (PRD 25 / C3). */
+.admin-curators-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.admin-curators-form input {
+  background: rgba(9, 9, 11, 0.6);
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  border-radius: 6px;
+  color: #fafafa;
+  padding: 6px 10px;
+}
+
+.admin-curators-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+}
+
+.admin-curators-list li {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
 /* Saved space (PRD 13 / C2) */
 .saved-shell {
   display: flex;
