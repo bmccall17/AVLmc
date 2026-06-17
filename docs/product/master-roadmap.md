@@ -21,7 +21,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 7 | [Admin Portal Initiative (Epic)](admin-portal-prd.md) | Shipped | Turn `/admin` into a visual, live, explainable operating system; PRDs 06–11 across six cycles. |
 | 8 | [Saved/Favorites & Genre Initiative (Epic)](saved-favorites-genre-prd.md) | Shipped | Private Saved space (events/venues/artists) + richer genre matching (taxonomy + Spotify genres); PRDs 12–16 across five cycles. |
 | 9 | [Shared Listening (PRD 17)](prds/prd-17-shared-listening.md) | Shipped | Going/Fire by a signed-in Spotify listener auto-populates the event page with a public, playable shared song list (read-only Spotify; no writes). Opens the Social Music Sharing track. |
-| 10 | [Discovery Benchmarking (Desired Outcomes)](discovery-benchmark_desiredoutcomes.md) | C1 Shipped | Turn the shipped Recommendation Insight + Listener Trace surfaces into a repeatable, fixed-methodology discovery benchmark (live-only / $0; no new tab). Validation layer for the deeper-personalization and social/curator future directions. **C1 (PRD 22, Discovery Baseline) shipped**; Outcomes 2–3 remain unscoped. |
+| 10 | [Discovery Benchmarking (Desired Outcomes)](discovery-benchmark_desiredoutcomes.md) | Shipped | Turn the shipped Recommendation Insight + Listener Trace surfaces into a repeatable, fixed-methodology discovery benchmark (live-only / $0; no new tab). Validation layer for the deeper-personalization and social/curator future directions. **All three outcomes now have a shipped surface:** Outcome 1 (PRD 22, Discovery Baseline), Outcome 2 (PRD 28, Deeper Personalization Benchmark), Outcome 3 (PRD 27, Social & Curator Benchmark). |
 | 11 | [Deeper Personalization Initiative (Epic)](deeper-personalization-prd.md) | Shipped | Learn from what a listener *skips*, not just taps: move from the flat "recent 240 actions" model to a time-decayed, per-dimension taste model that safely uses implicit signals, stays explainable/correctable, and is loop-proof. Initiative A of the discovery North Star; PRDs 18–21 across four cycles. |
 | 12 | [Social / Curator Graph (Epic)](social-curator-prd.md) | Shipped | Opt-in follow/curator graph + inner-circle attribution; trusted-circle/curator activity as an optional, bounded ranking input distinct from public heat. Privacy-first, no pay-to-play, no Spotify writes. Initiative B of the discovery North Star; PRDs 23–27 across five cycles — **all shipped (Jun 17, 2026)**. |
 
@@ -224,8 +224,24 @@ with a plain-language definition. **Recording without storage**: a `serializeBas
 helper + a "Copy baseline reading as markdown" button emit a dated, paste-ready snapshot (first one
 recorded in [PRD 22](prds/prd-22-discovery-baseline.md)). An **Overview discovery-health card** links
 into Insight. Descriptive framing only (never a single quality score). Unit-tested; Snyk-clean; $0;
-no new table/route/tab. Outcomes 2 (Deeper Personalization Benchmark) and 3 (Social & Curator
-Benchmark) remain unscoped until those tracks are prioritized.
+no new table/route/tab. (Outcome 3 — Social & Curator Benchmark — shipped inside PRD 27; Outcome 2
+— Deeper Personalization Benchmark — shipped as PRD 28, below.)
+
+**C2 shipped (PRD 28 — Deeper Personalization Benchmark):** Recommendation Insight now carries a
+**Deeper Personalization** strip (`lib/admin/personalization-benchmark.ts`,
+`components/admin/InsightSection.tsx`, pure helpers in `lib/admin/insight-metrics.ts`) — a
+**real-listener aggregate roll-up** answering whether real listeners get meaningfully different and
+more useful rankings than the anonymous baseline. It reuses the per-listener Listener Trace scoring
+(extracted into `scoreListenerAgainstAnonymous` in `lib/admin/listener-graph.ts`, behavior-preserving)
+across a bounded set of traceable listeners and rolls up: **lift/displacement** (share whose top-N
+differs + mean/median rank movement), the **skip-influence** headline (listeners seeing a "you tend
+to skip…" reason — implicit cooling, capped below explicit `remove`), **signal attribution** (ranked
+explainable reasons), **coverage**, and a **novelty-floor guardrail** (personalized novelty vs the
+anonymous baseline — loop-protection). Aggregate-only (no listener identities/tokens), descriptive
+(never a quality score), copyable as a dated markdown snapshot. The reproducible **synthetic-behavior
+fixture** is intentionally **parked** (PRD 28 records why/when). `test:personalization-benchmark` (9)
++ suites, typecheck, lint, build, Snyk green; $0; no new table/route/tab/dependency. **This completes
+the Discovery Benchmark initiative (Phase 10, all three outcomes).**
 
 ### Phases 11–12: Discovery North Star — Deeper Personalization & Social/Curator (planned)
 
@@ -365,25 +381,26 @@ Both initiatives decompose into epic PRDs + cycle PRDs (Phase 11: PRDs 18–21, 
 (highest leverage, shipped), then the social graph foundation, and the social ranking signal last (it
 needs both the scoring model and the graph).
 
-> **▶ WHAT'S NEXT (hand-off, June 17, 2026).** Phase 11 (Deeper Personalization) is **fully shipped**,
-> **Phase 10 C1 (PRD 22 — Discovery Baseline) is shipped**, and **Phase 12 (Social / Curator Graph) is
-> now fully shipped — all five cycles (PRDs 23–27)**: the follow-graph spine (23), inner-circle
-> attribution (24), curator profiles (25), the off-by-default capped `socialCircle` ranking component
-> (26), and the guardrails + Social & Curator Benchmark (27, which also delivers Phase 10 Outcome 3).
-> Both discovery North-Star initiatives (A: Deeper Personalization; B: Social / Curator) are complete.
-> The dependency-unblocked candidates now are:
-> 1. **Phase 10 Outcome 2** (Deeper Personalization Benchmark) — extends the shipped baseline; still
->    **unscoped** until prioritized. Start: [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md).
-> 2. **Small follow-up:** the deferred Phase-11 taste dimensions (time-of-week / price / indoor-outdoor)
->    — see [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md) → Remaining Follow-Up.
-> 3. **Candidate follow-ups from Phase 12:** self-serve curator onboarding (deferred), finer
->    friend-vs-curator weighting within `socialCircle`, and tuning the concentration threshold against
->    real data — see [`social-curator-prd.md`](social-curator-prd.md) → Open Decisions.
-> 2. **Phase 10 Outcome 2** (Deeper Personalization Benchmark). Extends the shipped baseline; stays
->    **unscoped** until prioritized. (Outcome 3 — Social & Curator Benchmark — is now scoped as Phase
->    12 C5 / PRD 27.) Start: [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md).
-> 3. **Small follow-up:** the deferred Phase-11 taste dimensions (time-of-week / price / indoor-outdoor)
->    — see [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md) → Remaining Follow-Up.
+> **▶ WHAT'S NEXT (hand-off, June 17, 2026).** Phase 11 (Deeper Personalization), Phase 12 (Social /
+> Curator Graph, PRDs 23–27), and **Phase 10 (Discovery Benchmarking) are all fully shipped** — Phase
+> 10's three outcomes now each have a shipped surface: Outcome 1 (PRD 22, Discovery Baseline), Outcome
+> 2 (PRD 28, Deeper Personalization Benchmark), Outcome 3 (PRD 27, Social & Curator Benchmark). Both
+> discovery North-Star initiatives (A: Deeper Personalization; B: Social / Curator) and their
+> benchmark validation layer are complete. **The active scoped queue is empty.** The remaining
+> dependency-unblocked candidates are small/optional follow-ups:
+> 1. **Parked — reproducible synthetic-behavior fixture** for the Deeper Personalization Benchmark:
+>    implement before the next change to Phase 11 implicit/taste scoring (`scoreImplicitSignals` /
+>    `buildTasteModel`) or `SCORER_VERSION` bump, so a fixed reading can be diffed across the change.
+>    See [PRD 28](prds/prd-28-deeper-personalization-benchmark.md) → Parked.
+> 2. **Deferred Phase-11 taste dimensions** (time-of-week / price / indoor-outdoor) —
+>    see [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md) → Remaining Follow-Up.
+> 3. **Phase 12 follow-ups:** self-serve curator onboarding (deferred), finer friend-vs-curator
+>    weighting within `socialCircle`, and tuning the concentration threshold against real data —
+>    see [`social-curator-prd.md`](social-curator-prd.md) → Open Decisions.
+>
+> **Snapshot debt (open):** PRD 28's first Deeper-Personalization snapshot is still a template —
+> paste the live "Copy personalization benchmark as markdown" output into the PRD at next admin login.
+> Likewise PRD 22's baseline snapshot should be re-recorded after any discovery-change milestone.
 >
 > **Baseline-seed note:** the Discovery Baseline's `SYNTHETIC_TASTE_SEED` (`lib/admin/insight.ts`)
 > is pinned to recurring Asheville series; re-derive it from frequent listings at future

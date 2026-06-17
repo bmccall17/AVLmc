@@ -58,6 +58,16 @@ Most of these already exist in `lib/admin/insight.ts`; "done" means they are pre
 
 ### 2. Deeper Personalization Benchmark
 
+> **Shipped — PRD 28 (June 17, 2026).** Recommendation Insight carries a **Deeper Personalization**
+> strip: a **real-listener aggregate roll-up** (reusing the per-listener Listener Trace scoring across
+> a bounded set of traceable listeners) reporting lift/displacement, the skip-influence headline
+> (implicit cooling capped below explicit `remove`), ranked signal attribution, coverage, and a
+> novelty-floor loop-protection guardrail — aggregate-only, descriptive, copyable as a dated markdown
+> snapshot. The reproducible **synthetic-behavior fixture** (a committed skip/engage fixture that moves
+> only when the algorithm changes) is **parked**: implement it before the next change to the Phase 11
+> implicit/taste scoring or `SCORER_VERSION` bump, so a fixed reading can be diffed across the change.
+> See [`prds/prd-28-deeper-personalization-benchmark.md`](prds/prd-28-deeper-personalization-benchmark.md).
+
 Done looks like the Admin Portal showing whether **real listeners** are receiving meaningfully different and more useful rankings than the anonymous baseline established in Outcome 1 — not just that personalization *runs*, but that it *helps*.
 
 Specifically, done looks like being able to read: whether **skipped / unconverted events** (today's ignored `impression` stream) measurably influence a listener's future recommendations; **which signals** caused a given listener's rank changes (attributed per component, as Listener Trace already does per event); and whether personalization stays **diverse, explainable, and protected from runaway feedback loops** — i.e., the system is not quietly burying everything a person hasn't clicked yet. The aggregate view lives in Recommendation Insight; the evidence for any single listener lives in Listener Trace. This is the validation surface named in the backlog's *Deeper Personalization* direction, and it remains unscoped until that work is prioritized.

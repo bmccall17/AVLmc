@@ -1,6 +1,6 @@
 # Personalized Discovery Backlog
 
-Updated: June 16, 2026
+Updated: June 17, 2026
 
 ## Current Baseline
 
@@ -158,6 +158,7 @@ Do not use raw Spotify OAuth tokens in client code or ranking responses. Discove
 
 ## Remaining Follow-Up
 
+- **Discovery Benchmark — reproducible synthetic-behavior fixture — OPEN (parked, small follow-up to PRD 28).** Phase 10 Outcome 2 (Deeper Personalization Benchmark) shipped as **[PRD 28](prds/prd-28-deeper-personalization-benchmark.md)** using a **real-listener aggregate roll-up** in Recommendation Insight (lift/displacement, skip influence, signal attribution, coverage, novelty-floor guardrail). The reproducible **synthetic skip/engage fixture** — a fixed reading that moves only when the algorithm changes — was **parked**: implement it before the next change to `scoreImplicitSignals` / `buildTasteModel` in `lib/discovery.ts` or the next `SCORER_VERSION` bump, so a fixed reading can be diffed across the change. It would feed the same pure helpers in `lib/admin/insight-metrics.ts` (no new table). **This completes the Discovery Benchmark initiative (Phase 10, all three outcomes).**
 - **Deeper Personalization extra taste dimensions — OPEN (small follow-up to Phase 11).** C2 (PRD 19) shipped the recency-decayed, confidence-weighted per-dimension taste model for **artist / venue / genre** only. The **time-of-week / price (free-paid) / indoor-outdoor** dimensions were deferred: their component bases (`dateAvailability` is timing-only, `freePaidPreference`, `outdoorIndoorPreference`) are latent at default dials, so they add little default-ranking value until paired with weighting/floor work. Pick up by extending `buildTasteModel`/`scoreTaste*` in `lib/discovery.ts` (and `listDiscoveryPreferenceSignals` would need `event_date`/`event_time` for the time dimension). Lower priority than the Phase 10 benchmark and Phase 12.
 - ~~Explicit taste preferences outside imported Spotify profile rows.~~ **Done — see Personalized Discovery V3** (configurable weights + custom boost/lower signals).
 - **Saved/Favorites + richer genre matching — planned as Phase 8.** Direction is captured in [`saved-favorites-genre_desiredoutcomes.md`](saved-favorites-genre_desiredoutcomes.md) and decomposed into the [Saved/Favorites & Genre Initiative (Epic)](saved-favorites-genre-prd.md) — five cycle PRDs (12–16) across two tracks: **Saved/Favorites** (PRD 12 foundation + save actions, PRD 13 Saved space + sign-in nudges, PRD 14 favorites strengthen recommendations) and **Richer Genre** (PRD 15 taxonomy + public matching, PRD 16 Spotify genre signal). Decisions: favoritable **events, venues, and artists** (each its own list); **signed-in only**, with sign-in nudges when an anonymous user fires/plans/removes; genre matching gets **both** a curated taxonomy + aliases (helps everyone) **and** captured **Spotify artist genres** (no new scope; richer signal for connected users). Today only *partially* covered by V3 custom signals; no dedicated saved/favorites UI yet, and `scoreGenreMatch()` still scores a hardcoded ~15-term list against flat `events.tags[]`. See [`master-roadmap.md`](master-roadmap.md) Phase 8 for sequencing.
