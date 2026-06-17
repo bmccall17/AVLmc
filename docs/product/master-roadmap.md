@@ -23,7 +23,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 9 | [Shared Listening (PRD 17)](prds/prd-17-shared-listening.md) | Shipped | Going/Fire by a signed-in Spotify listener auto-populates the event page with a public, playable shared song list (read-only Spotify; no writes). Opens the Social Music Sharing track. |
 | 10 | [Discovery Benchmarking (Desired Outcomes)](discovery-benchmark_desiredoutcomes.md) | C1 Shipped | Turn the shipped Recommendation Insight + Listener Trace surfaces into a repeatable, fixed-methodology discovery benchmark (live-only / $0; no new tab). Validation layer for the deeper-personalization and social/curator future directions. **C1 (PRD 22, Discovery Baseline) shipped**; Outcomes 2–3 remain unscoped. |
 | 11 | [Deeper Personalization Initiative (Epic)](deeper-personalization-prd.md) | Shipped | Learn from what a listener *skips*, not just taps: move from the flat "recent 240 actions" model to a time-decayed, per-dimension taste model that safely uses implicit signals, stays explainable/correctable, and is loop-proof. Initiative A of the discovery North Star; PRDs 18–21 across four cycles. |
-| 12 | [Social / Curator Graph (Epic)](social-curator-prd.md) | Planned (scoped) | Opt-in follow/curator graph + inner-circle attribution; trusted-circle/curator activity as an optional, bounded ranking input distinct from public heat. Privacy-first, no pay-to-play, no Spotify writes. Initiative B of the discovery North Star; PRDs 23–27 across five cycles. |
+| 12 | [Social / Curator Graph (Epic)](social-curator-prd.md) | Shipped | Opt-in follow/curator graph + inner-circle attribution; trusted-circle/curator activity as an optional, bounded ranking input distinct from public heat. Privacy-first, no pay-to-play, no Spotify writes. Initiative B of the discovery North Star; PRDs 23–27 across five cycles — **all shipped (Jun 17, 2026)**. |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
@@ -297,7 +297,7 @@ and novel shows. These are the two feature initiatives the Phase 10 benchmark ex
   | C2 | [PRD 24 — Inner-Circle Attribution](prds/prd-24-inner-circle-attribution.md) | 2 | **Shipped (Jun 17, 2026)** |
   | C3 | [PRD 25 — Curator & Influencer Profiles](prds/prd-25-curator-profiles.md) | 3 | **Shipped (Jun 17, 2026)** |
   | C4 | [PRD 26 — Social Signal in Discovery](prds/prd-26-social-signal-in-discovery.md) | 4 | **Shipped (Jun 17, 2026)** |
-  | C5 | [PRD 27 — Guardrails & Social Benchmark](prds/prd-27-social-guardrails-and-benchmark.md) | 5 (+ Phase 10 Outcome 3) | **Planned** |
+  | C5 | [PRD 27 — Guardrails & Social Benchmark](prds/prd-27-social-guardrails-and-benchmark.md) | 5 (+ Phase 10 Outcome 3) | **Shipped (Jun 17, 2026)** |
 
   C1 ships the follow-graph spine; C2 (attribution) and C3 (curators) both build on it and are
   independent of each other; C4 adds the off-by-default, capped `socialCircle` ranking component (needs
@@ -347,25 +347,38 @@ and novel shows. These are the two feature initiatives the Phase 10 benchmark ex
   (board byte-for-byte unchanged); `SCORER_VERSION` bumped to 12.4; reasons attribute in-circle
   friends/curators only ("3 people you follow are going", "picked by [curator]"), surfaced in
   Insight/Trace. `test:discovery` extended (cap-below-floor, saturation, ⊥`socialHeat`, anonymous-0);
-  tests, typecheck, lint, build, and Snyk green; no pay-to-play; $0. **C5 (PRD 27 — Guardrails &
-  Social Benchmark) is next — the accountability capstone.**
+  tests, typecheck, lint, build, and Snyk green; no pay-to-play; $0.
+
+  **C5 shipped (Jun 17, 2026) — Phase 12 complete.** The accountability capstone: Recommendation
+  Insight now carries a **Social & Curator** strip — "your people" lift read **separately** from
+  anonymous popularity, an **influence-concentration** early-warning flag (threshold 0.6), and a
+  **floor-holds** confirmation — all on the fixed PRD 22 synthetic methodology, copyable as a dated
+  markdown snapshot. The cross-cutting invariants are enforced + unit-tested: **no money buys rank**
+  (a fabricated payment field leaves ranking identical; source carries no payment pathway) and
+  **social never drowns local/novel** (`SOCIAL_CIRCLE_CAP < EXPLORATION_FLOOR_BASE`). A codified
+  **PII/leak audit** confirms no seeder id / follow / circle / social token in any anonymous
+  community or OG surface. Delivers the Discovery Benchmark's **Outcome 3 (Social & Curator
+  Benchmark)**. `test:social-guardrails` (9) + suites, typecheck, lint, build, Snyk green; $0.
 
 Both initiatives decompose into epic PRDs + cycle PRDs (Phase 11: PRDs 18–21, shipped; Phase 12: PRDs
 23–27, scoped). Recommended overall build order interleaved the tracks: Phase 11 skips→ranking first
 (highest leverage, shipped), then the social graph foundation, and the social ranking signal last (it
 needs both the scoring model and the graph).
 
-> **▶ WHAT'S NEXT (hand-off, June 17, 2026).** Phase 11 (Deeper Personalization, C1–C4) is **fully
-> shipped**, **Phase 10 C1 (PRD 22 — Discovery Baseline) is shipped**, and **Phase 12 C1–C4 are now
-> shipped** — the follow-graph spine (PRD 23), inner-circle attribution (PRD 24), curator profiles
-> (PRD 25), and the off-by-default, capped `socialCircle` ranking component (PRD 26). The social signal
-> now exists in ranking; only the accountability capstone remains. The dependency-unblocked candidate is:
-> 1. **Phase 12 C5 — PRD 27 (Guardrails & Social Benchmark)** *(recommended next — build)*. Grades and
->    enforces the C4 signal: a benchmark read of social-driven lift **separate from** popularity, an
->    influence-concentration early warning, the unit-tested "no money buys rank" + "social never drowns
->    local/novel floor" invariants, and a PII/leak audit. Delivers the Discovery Benchmark's Social &
->    Curator Benchmark (Phase 10, Outcome 3). Needs C4 (shipped). Start:
->    [`prds/prd-27-social-guardrails-and-benchmark.md`](prds/prd-27-social-guardrails-and-benchmark.md).
+> **▶ WHAT'S NEXT (hand-off, June 17, 2026).** Phase 11 (Deeper Personalization) is **fully shipped**,
+> **Phase 10 C1 (PRD 22 — Discovery Baseline) is shipped**, and **Phase 12 (Social / Curator Graph) is
+> now fully shipped — all five cycles (PRDs 23–27)**: the follow-graph spine (23), inner-circle
+> attribution (24), curator profiles (25), the off-by-default capped `socialCircle` ranking component
+> (26), and the guardrails + Social & Curator Benchmark (27, which also delivers Phase 10 Outcome 3).
+> Both discovery North-Star initiatives (A: Deeper Personalization; B: Social / Curator) are complete.
+> The dependency-unblocked candidates now are:
+> 1. **Phase 10 Outcome 2** (Deeper Personalization Benchmark) — extends the shipped baseline; still
+>    **unscoped** until prioritized. Start: [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md).
+> 2. **Small follow-up:** the deferred Phase-11 taste dimensions (time-of-week / price / indoor-outdoor)
+>    — see [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md) → Remaining Follow-Up.
+> 3. **Candidate follow-ups from Phase 12:** self-serve curator onboarding (deferred), finer
+>    friend-vs-curator weighting within `socialCircle`, and tuning the concentration threshold against
+>    real data — see [`social-curator-prd.md`](social-curator-prd.md) → Open Decisions.
 > 2. **Phase 10 Outcome 2** (Deeper Personalization Benchmark). Extends the shipped baseline; stays
 >    **unscoped** until prioritized. (Outcome 3 — Social & Curator Benchmark — is now scoped as Phase
 >    12 C5 / PRD 27.) Start: [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md).

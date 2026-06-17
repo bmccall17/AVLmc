@@ -14,7 +14,28 @@ Extending the fixed-methodology Discovery Baseline (PRD 22), this cycle adds a *
 
 ## Implementation Status
 
-**Planned — not yet started.**
+**Shipped — June 17, 2026. Completes Phase 12 (all five cycles) and delivers Discovery Benchmark Outcome 3.**
+
+The accountability layer — measurement, early warning, and enforced invariants — is live:
+
+- **Pure metrics (`lib/admin/insight-metrics.ts`).** `computeSocialLift` (sums `socialCircle` vs `socialHeat` component totals across the top-N — reported **separately** so "your people" lift is never read as crowd popularity), `computeInfluenceConcentration` (share of social-driven movement from the single largest source + early-warning flag at `INFLUENCE_CONCENTRATION_THRESHOLD = 0.6`), and `computeFloorHolds` (novelty share with social on vs. the anonymous baseline). `BaselineReading` + `serializeBaselineMarkdown` extended with an optional dated **social block**. All unit-tested.
+- **Live read (`lib/admin/insight.ts`).** `computeSocialBenchmark` runs the fixed PRD 22 methodology with a deterministic synthetic circle (a friend cohort + one followed curator) and the `socialCircle` dial maxed, then composes the pure metrics. Added to `RecommendationInsight.social`; flows into the existing copy-as-markdown affordance automatically.
+- **Presentation (`components/admin/InsightSection.tsx`).** A **Social & Curator** strip: "your people" lift vs. popularity, the concentration metric + early-warning flag, and the floor-holds read — each with a plain-language definition and the PRD 22 "descriptive, not a quality score" caveat.
+- **Enforced invariants (`tests/social-guardrails.test.ts`).** **No money buys rank** — a fabricated `payment`/`paidBoost`/`purchasedRank` on preferences leaves ranking identical (ignored), plus a source-scan asserting `lib/discovery.ts` / `lib/curators.ts` / `lib/listener-preferences.ts` carry no payment pathway. **Social never drowns local/novel** — re-asserts `SOCIAL_CIRCLE_CAP < EXPLORATION_FLOOR_BASE`.
+- **PII / leak audit (codified tests).** `toPublicSharedSong` never carries `seeded_by_user_id` and `sharedBy` is absent on the public projection; the anonymous community + OG surfaces (`app/api/community/*`, `opengraph-image`, `twitter-image`) reference **no** follow/circle/social token. Snyk-clean across the touch points.
+- **Quality.** `test:social-guardrails` (9), `test:insight`, `test:discovery`, `test:registry`, typecheck, lint, `next build`, and Snyk all green. No new tab, no new storage, no new dependency; live-only / $0.
+
+### First social benchmark snapshot (format)
+
+The dated live reading is captured in production via **"Copy baseline reading as markdown"** (now including the social block); the serialized format is:
+
+```
+**Social & Curator (PRD 27):**
+- "Your people" lift: <n> · anonymous popularity (socialHeat): <n> — read separately, never combined.
+- Influence concentration: <p>% from the single largest source[ · ⚠ early-warning threshold crossed].
+- Exploration floor holds with social maxed: yes (novelty <p>% vs baseline <p>%).
+- _Descriptive synthetic-circle reading — not a quality score; no money buys rank._
+```
 
 ## Goals
 

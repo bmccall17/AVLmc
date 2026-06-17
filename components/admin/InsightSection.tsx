@@ -36,6 +36,8 @@ export function InsightSection({ insight }: { insight: RecommendationInsight }) 
 
       <MetricsRow insight={insight} />
 
+      <SocialStrip insight={insight} />
+
       {insight.movers.length > 0 && (
         <div className="admin-subsection">
           <h3>What changes when signed in</h3>
@@ -143,6 +145,47 @@ function MethodologyStrip({ insight }: { insight: RecommendationInsight }) {
         <div className="admin-mini-row">
           <span>Synthetic profile</span>
           <strong>{m.syntheticProfileNote}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Social & Curator Benchmark strip (PRD 27 / C5): "your people" lift read SEPARATELY from anonymous
+ * popularity, the influence-concentration early warning, and the floor-holds confirmation. Synthetic,
+ * descriptive — never a quality score; no money buys rank.
+ */
+function SocialStrip({ insight }: { insight: RecommendationInsight }) {
+  const s = insight.social;
+  if (!s) {
+    return null;
+  }
+
+  return (
+    <div className="admin-subsection admin-social-strip">
+      <h3>Social &amp; Curator benchmark</h3>
+      <p className="admin-meta">
+        Synthetic-circle reading on the fixed methodology — <em>descriptive, not a quality score; no money buys rank.</em>
+      </p>
+      <div className="admin-stat-row">
+        <div className="admin-stat-card">
+          <span className="admin-stat-value">{s.socialLift}</span>
+          <span className="admin-stat-label">&ldquo;Your people&rdquo; lift</span>
+          <small className="admin-stat-detail">vs. anonymous popularity {s.popularityLift}</small>
+          <small className="admin-stat-def">socialCircle vs socialHeat across the top-N — read separately, never combined.</small>
+        </div>
+        <div className={`admin-stat-card${s.concentrationFlag ? " warning" : ""}`}>
+          <span className="admin-stat-value">{Math.round(s.concentrationShare * 100)}%</span>
+          <span className="admin-stat-label">Influence concentration</span>
+          <small className="admin-stat-detail">{s.concentrationFlag ? "⚠ early-warning threshold crossed" : "within range"}</small>
+          <small className="admin-stat-def">Share of social-driven movement from the single largest source (person / curator / network).</small>
+        </div>
+        <div className={`admin-stat-card${s.floorHolds ? "" : " warning"}`}>
+          <span className="admin-stat-value">{s.floorHolds ? "Holds" : "⚠ regressed"}</span>
+          <span className="admin-stat-label">Local/novel floor (social maxed)</span>
+          <small className="admin-stat-detail">novelty {s.socialNoveltyShare}% vs baseline {s.baselineNoveltyShare}%</small>
+          <small className="admin-stat-def">Confirms the Phase 11 exploration floor isn&apos;t crowded out with social on.</small>
         </div>
       </div>
     </div>

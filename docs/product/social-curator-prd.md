@@ -2,6 +2,8 @@
 
 Updated: June 17, 2026
 
+**Status: Shipped (June 17, 2026).** All five cycles (PRDs 23–27) are delivered — the opt-in follow graph (C1), inner-circle attribution (C2), admin-promoted curator profiles (C3), the off-by-default capped `socialCircle` ranking component (C4), and the guardrails + Social & Curator Benchmark (C5, which also delivers Discovery Benchmark Outcome 3). The initiative shipped at $0, privacy-first, with no pay-to-play and no Spotify writes; the anonymous board ranking and payload are byte-for-byte unchanged.
+
 ## One-Sentence Goal
 
 Let a signed-in listener **optionally follow friends and curators**, see and act on what their trusted circle is into, and make that trusted-circle / followed-curator activity an **optional, clearly-distinct, bounded discovery input** — privacy-first, opt-in, no pay-to-play, no Spotify writes, and never overpowering local and novel discovery.

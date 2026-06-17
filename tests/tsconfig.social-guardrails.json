@@ -1,0 +1,22 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "/tmp/avlmc-social-guardrails-tests",
+    "rootDir": "..",
+    "target": "es2022"
+  },
+  "include": [
+    "../next-env.d.ts",
+    "social-guardrails.test.ts",
+    "../lib/admin/insight-metrics.ts",
+    "../lib/discovery.ts",
+    "../lib/genre-taxonomy.ts",
+    "../lib/social-activity-core.ts",
+    "../lib/curators-core.ts",
+    "../lib/shared-songs-core.ts"
+  ]
+}

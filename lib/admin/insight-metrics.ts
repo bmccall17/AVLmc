@@ -63,6 +63,76 @@ export function computeEngagement(
   };
 }
 
+/* ------------------------------------------------------------------ */
+/*  Social & Curator Benchmark (PRD 27 / C5)                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Default early-warning threshold for influence concentration: flag when a single person / curator /
+ * network drives more than this share of total social-driven movement. Descriptive, not a grade;
+ * stated on the panel + snapshot and tuned against real data.
+ */
+export const INFLUENCE_CONCENTRATION_THRESHOLD = 0.6;
+
+export type SocialBenchmark = {
+  /** Aggregate "your people" lift across the top-N (sum of socialCircle component totals). */
+  socialLift: number;
+  /** Aggregate anonymous popularity contribution (sum of socialHeat component totals) — reported separately. */
+  popularityLift: number;
+  /** Share of social-driven movement attributable to the single largest source, [0,1]. */
+  concentrationShare: number;
+  /** True when concentrationShare crosses the early-warning threshold. */
+  concentrationFlag: boolean;
+  /** True when the novel/local exploration floor still holds with social maxed (no regression). */
+  floorHolds: boolean;
+  baselineNoveltyShare: number;
+  socialNoveltyShare: number;
+};
+
+/**
+ * "Your people" lift vs. anonymous popularity — reported SEPARATELY so social-driven movement is
+ * never read as crowd popularity. Sums the per-event `socialCircle` and `socialHeat` component totals
+ * across the (top-N) ranking. Pure; the caller supplies the already-scored components.
+ */
+export function computeSocialLift(
+  rows: Array<{ socialCircle: number; socialHeat: number }>
+): { socialLift: number; popularityLift: number } {
+  let socialLift = 0;
+  let popularityLift = 0;
+  for (const row of rows) {
+    socialLift += Math.max(0, row.socialCircle);
+    popularityLift += Math.max(0, row.socialHeat);
+  }
+  return { socialLift: Math.round(socialLift), popularityLift: Math.round(popularityLift) };
+}
+
+/**
+ * Influence concentration: of total social-driven movement, the share attributable to the single
+ * largest source (a person / curator / network). Returns the share in [0,1] and an early-warning
+ * flag when it crosses `threshold`. Zero movement → 0 share, unflagged.
+ */
+export function computeInfluenceConcentration(
+  contributions: number[],
+  threshold = INFLUENCE_CONCENTRATION_THRESHOLD
+): { concentrationShare: number; concentrationFlag: boolean } {
+  const positive = contributions.map((value) => Math.max(0, value));
+  const total = positive.reduce((sum, value) => sum + value, 0);
+  if (total <= 0) {
+    return { concentrationShare: 0, concentrationFlag: false };
+  }
+  const max = Math.max(...positive);
+  const share = max / total;
+  return {
+    concentrationShare: Math.round(share * 100) / 100,
+    concentrationFlag: share > threshold,
+  };
+}
+
+/** The exploration floor holds when novelty share with social on is not below the anonymous baseline. */
+export function computeFloorHolds(baselineNoveltyShare: number, socialNoveltyShare: number): boolean {
+  return socialNoveltyShare >= baselineNoveltyShare;
+}
+
 /** Minimal shape `serializeBaselineMarkdown` reads — satisfied structurally by `RecommendationInsight`. */
 export type BaselineReading = {
   generatedAt: string;
@@ -92,6 +162,8 @@ export type BaselineReading = {
     impressionNonConversionShare: number;
   };
   anonymous: Array<{ title: string; venueName: string; score: number }>;
+  /** Social & Curator Benchmark (PRD 27 / C5) — present once the social signal exists. */
+  social?: SocialBenchmark;
 };
 
 /**
@@ -121,5 +193,18 @@ export function serializeBaselineMarkdown(reading: BaselineReading): string {
     `**Top ${Math.min(5, anonymous.length)} anonymous ranking:**`,
     ...anonymous.slice(0, 5).map((e, i) => `${i + 1}. ${e.title} — ${e.venueName} (score ${e.score})`),
   ];
+
+  if (reading.social) {
+    const s = reading.social;
+    lines.push(
+      "",
+      `**Social & Curator (PRD 27):**`,
+      `- "Your people" lift: ${s.socialLift} · anonymous popularity (socialHeat): ${s.popularityLift} — read separately, never combined.`,
+      `- Influence concentration: ${Math.round(s.concentrationShare * 100)}% from the single largest source${s.concentrationFlag ? " · ⚠ early-warning threshold crossed" : ""}.`,
+      `- Exploration floor holds with social maxed: ${s.floorHolds ? "yes" : "⚠ NO"} (novelty ${s.socialNoveltyShare}% vs baseline ${s.baselineNoveltyShare}%).`,
+      `- _Descriptive synthetic-circle reading — not a quality score; no money buys rank._`
+    );
+  }
+
   return lines.join("\n");
 }

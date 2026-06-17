@@ -12,10 +12,14 @@ import {
 import type { MusicConnection, MusicProfileItem } from "@/lib/music";
 import {
   computeEngagement,
+  computeFloorHolds,
+  computeInfluenceConcentration,
   computeNonConversionShare,
   computeNoveltyShare,
+  computeSocialLift,
   computeWindow,
   serializeBaselineMarkdown,
+  type SocialBenchmark,
 } from "./insight-metrics";
 
 /**
@@ -137,6 +141,8 @@ export type RecommendationInsight = {
   syntheticProfile: { artists: string[]; note: string };
   /** Pinned, stated methodology making the reading reproducible (PRD 22). */
   methodology: BaselineMethodology;
+  /** Social & Curator Benchmark (PRD 27 / C5): social-driven lift read separately from popularity. */
+  social: SocialBenchmark;
   /** Paste-ready dated markdown snapshot of this reading (recording without storage). */
   markdown: string;
 };
@@ -164,6 +170,8 @@ export async function loadRecommendationInsight(force = false): Promise<Recommen
   // benchmark reads reflect that quiet/local discovery isn't crowded out as personalization sharpens.
   const signedIn = rankEvents(events, signedScores, counts, { enforceFloor: true });
 
+  const social = computeSocialBenchmark(events, counts, connections, profileItems, anonymous);
+
   const window = computeWindow(events);
   const syntheticProfileNote = `Fixed public-derived seed (${synthArtists.length} artists), pinned ${SYNTHETIC_TASTE_SEED_PINNED} — regenerated intentionally, never a real listener's data.`;
 
@@ -174,6 +182,7 @@ export async function loadRecommendationInsight(force = false): Promise<Recommen
     movers: computeMovers(anonymous, signedIn),
     metrics: computeMetrics(events, signedIn, anonymousScores, signedScores),
     behavior: await loadBehavior(),
+    social,
     syntheticProfile: { artists: synthArtists, note: syntheticProfileNote },
     methodology: {
       windowStart: window.start,
@@ -315,6 +324,93 @@ function computeMetrics(
       .sort((a, b) => b.count - a.count),
     coverage: { withSignal, timingOnly: events.length - withSignal, total: events.length },
     engagement: computeEngagement(signedIn, TOP_N),
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Social & Curator Benchmark (PRD 27 / C5)                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Read social-driven lift SEPARATELY from anonymous popularity, on the fixed PRD 22 methodology,
+ * using a deterministic synthetic "circle" over the window (a friend cohort + one curator) with the
+ * socialCircle dial maxed. Reports the "your people" lift vs. socialHeat, the influence-concentration
+ * share (largest single source) with an early-warning flag, and whether the exploration floor holds
+ * with social on. All synthetic + descriptive — never a real listener's data, never a quality grade.
+ */
+function computeSocialBenchmark(
+  events: EventRecord[],
+  counts: Record<string, CommunityCounts | undefined>,
+  connections: MusicConnection[],
+  profileItems: MusicProfileItem[],
+  anonymous: RankedEvent[]
+): SocialBenchmark {
+  // Deterministic synthetic circle: the first events in the window get friend going/firing, and a
+  // single "followed curator" picks two of them — enough to exercise lift + concentration.
+  const circleActivityByEvent: Record<string, { eventId: string; goingCount: number; fireCount: number; people: [] }> = {};
+  const followedCuratorPicksByEvent: Record<string, Array<{ handle: string; displayName: string }>> = {};
+  events.slice(0, 6).forEach((event, index) => {
+    circleActivityByEvent[event.id] = {
+      eventId: event.id,
+      goingCount: 2,
+      fireCount: index % 2 === 0 ? 1 : 0,
+      people: [],
+    };
+  });
+  for (const event of events.slice(0, 2)) {
+    followedCuratorPicksByEvent[event.id] = [{ handle: "benchmark-curator", displayName: "Benchmark Curator" }];
+  }
+
+  const socialScores = scoreDiscoveryEvents({
+    events,
+    counts,
+    connections,
+    profileItems,
+    listenerPreferences: { weights: { socialCircle: 200 } },
+    circleActivityByEvent,
+    followedCuratorPicksByEvent,
+  });
+  const socialRanked = rankEvents(events, socialScores, counts, { enforceFloor: true });
+  const top = socialRanked.slice(0, TOP_N);
+
+  // Lift: "your people" (socialCircle) vs anonymous popularity (socialHeat), summed across the top-N.
+  const liftRows = top.map((event) => {
+    const components = socialScores[event.eventId]?.components;
+    return {
+      socialCircle: components?.socialCircle.total ?? 0,
+      socialHeat: components?.socialHeat.total ?? 0,
+    };
+  });
+  const { socialLift, popularityLift } = computeSocialLift(liftRows);
+
+  // Concentration: split socialCircle movement between the single curator and the friend network.
+  let curatorContribution = 0;
+  let friendContribution = 0;
+  for (const event of events) {
+    const adj = socialScores[event.id]?.components.socialCircle.adjustment ?? 0;
+    if (adj <= 0) continue;
+    if (followedCuratorPicksByEvent[event.id]) {
+      curatorContribution += adj;
+    } else {
+      friendContribution += adj;
+    }
+  }
+  const { concentrationShare, concentrationFlag } = computeInfluenceConcentration([
+    curatorContribution,
+    friendContribution,
+  ]);
+
+  const baselineNoveltyShare = computeNoveltyShare(anonymous.slice(0, TOP_N));
+  const socialNoveltyShare = computeNoveltyShare(top);
+
+  return {
+    socialLift,
+    popularityLift,
+    concentrationShare,
+    concentrationFlag,
+    floorHolds: computeFloorHolds(baselineNoveltyShare, socialNoveltyShare),
+    baselineNoveltyShare,
+    socialNoveltyShare,
   };
 }
 
