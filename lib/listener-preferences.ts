@@ -10,7 +10,8 @@ export type ListenerPreferenceKey =
   | "localRelevance"
   | "novelty"
   | "freePaidPreference"
-  | "outdoorIndoorPreference";
+  | "outdoorIndoorPreference"
+  | "socialCircle";
 
 export type ListenerPreferenceWeights = Record<ListenerPreferenceKey, number>;
 export type ListenerCustomSignalKind = "artist" | "venue" | "tag" | "keyword";
@@ -52,6 +53,7 @@ const PREFERENCE_KEYS: ListenerPreferenceKey[] = [
   "novelty",
   "freePaidPreference",
   "outdoorIndoorPreference",
+  "socialCircle",
 ];
 
 export const LISTENER_PREFERENCE_CONTROLS: ListenerPreferenceControl[] = [
@@ -100,6 +102,11 @@ export const LISTENER_PREFERENCE_CONTROLS: ListenerPreferenceControl[] = [
     key: "outdoorIndoorPreference",
     label: "Outdoor/indoor preference",
   },
+  {
+    description: "How much shows your followed friends and curators are into should lift the list. Off until you turn it on.",
+    key: "socialCircle",
+    label: "Your people",
+  },
 ];
 
 export const DEFAULT_LISTENER_WEIGHTS: ListenerPreferenceWeights = {
@@ -112,6 +119,9 @@ export const DEFAULT_LISTENER_WEIGHTS: ListenerPreferenceWeights = {
   novelty: 100,
   freePaidPreference: 100,
   outdoorIndoorPreference: 100,
+  // Social / Curator signal (PRD 26 / C4): the first dial that defaults to 0 (off). A listener
+  // opts into "your people" influence by raising it; at 0 the component contributes nothing.
+  socialCircle: 0,
 };
 
 export const DEFAULT_LISTENER_DISCOVERY_PREFERENCES: ListenerDiscoveryPreferences = {

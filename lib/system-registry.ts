@@ -257,7 +257,7 @@ const NODES: RegistryNode[] = [
     layer: "processing",
     label: "Discovery Scoring",
     description:
-      "Ranks events per request by blending taste profile, behavioral signals, and listener-configured weights. Anonymous visitors get public-signal-only ranking.",
+      "Ranks events per request by blending taste profile, behavioral signals, and listener-configured weights — including the off-by-default, hard-capped socialCircle component (PRD 26): a viewer's own followed-and-opted-in friends/curators, distinct from anonymous socialHeat. Anonymous visitors get public-signal-only ranking (socialCircle contributes 0).",
     sourceOfTruth: "lib/discovery.ts",
     access: "internal",
     ownership: "automated",

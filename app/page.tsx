@@ -26,7 +26,7 @@ import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
 import { getSavedKeys } from "@/lib/saved-items";
 import { getSharedSongSummariesByEvent } from "@/lib/shared-songs";
 import { getCircleEventActivity } from "@/lib/social-activity";
-import { getCuratedByForEvents } from "@/lib/curators";
+import { getCuratedByForEvents, getFollowedCuratorPicks } from "@/lib/curators";
 import { SPOTIFY_LIMITED_BETA_CODE } from "@/lib/spotify-limited-access";
 
 // Reads cookies/auth and queries the DB on render. Force dynamic so Next.js skips the
@@ -93,6 +93,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     sharedSongSummaries,
     circleActivityByEvent,
     curatedByEvent,
+    followedCuratorPicksByEvent,
   ] =
     await Promise.all([
       getCommunityCountsByEvent(eventIds),
@@ -110,6 +111,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       getCircleEventActivity(userId, eventIds),
       // Batched "curated by" lookup for the board signal (PRD 25 / C3); public, anonymous-safe.
       getCuratedByForEvents(eventIds),
+      // Followed-curator picks feed the off-by-default socialCircle component (PRD 26 / C4); empty
+      // for anonymous viewers and for curators the viewer doesn't follow.
+      getFollowedCuratorPicks(userId, eventIds),
     ]);
   const savedEventKeys = savedKeys
     .filter((key) => key.itemType === "event")
@@ -128,6 +132,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     profileItems: musicProfileItems,
     savedFavorites,
     spotifyMatchCorrections,
+    circleActivityByEvent,
+    followedCuratorPicksByEvent,
   });
   const visibleEvents = events.filter((event) => !discoveryStates[event.id]?.removed);
   const hasTasteProfile =
@@ -197,6 +203,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           initialSavedFavorites={savedFavorites}
           circleActivityByEvent={circleActivityByEvent}
           curatedByEvent={curatedByEvent}
+          followedCuratorPicksByEvent={followedCuratorPicksByEvent}
           isSignedIn={Boolean(userId)}
           musicConnections={musicConnections}
           musicProfileItems={musicProfileItems}

@@ -20,6 +20,8 @@ import {
   resolveGenres,
   type CanonicalGenre,
 } from "./genre-taxonomy";
+import { summarizeCircleLabel, type CircleEventActivity } from "./social-activity-core";
+import type { CuratedBy } from "./curators-core";
 
 /**
  * Manually-bumped version of the scoring algorithm. Surfaced in the admin Discovery Baseline
@@ -27,7 +29,7 @@ import {
  * `scoreDiscoveryEvents`. **Bump this whenever scoring behavior changes** (new component,
  * changed weight math, cap/floor change) so two readings are comparable only when this matches.
  */
-export const SCORER_VERSION = "11.4"; // Phase 11 C4 (PRD 21): exploration floor + explicit>implicit cap.
+export const SCORER_VERSION = "12.4"; // Phase 12 C4 (PRD 26): off-by-default, capped socialCircle component.
 
 export type DiscoveryReason =
   | {
@@ -91,6 +93,11 @@ type ScoreDiscoveryEventsInput = {
   profileItems?: MusicProfileItem[];
   savedFavorites?: SavedFavorite[];
   spotifyMatchCorrections?: SpotifyMatchCorrection[];
+  // Social / Curator signal inputs (PRD 26 / C4). Per-event "your people" activity (the viewer's
+  // entitled, opted-in friends going/firing — C2) and the events their FOLLOWED curators picked (C3).
+  // Empty/absent for anonymous or not-opted-in sessions → the socialCircle component contributes 0.
+  circleActivityByEvent?: Record<string, CircleEventActivity | undefined>;
+  followedCuratorPicksByEvent?: Record<string, CuratedBy[] | undefined>;
 };
 
 /** A normalized, de-duplicated implicit skip signal ready for per-event matching (PRD 18 / C1). */
@@ -163,9 +170,39 @@ const IMPLICIT_REASON_MIN = 5;
 // Guaranteed exploration floor (PRD 21 / C4). Replaces the old binary novelty bonus: under-the-radar
 // shows get a real, default-active boost that personalization can't silently strip, and a minimum
 // share of any ranked top-N is reserved for them. Both are tunable via the existing `novelty` dial.
-const EXPLORATION_FLOOR_BASE = 14;
+export const EXPLORATION_FLOOR_BASE = 14;
 const EXPLORATION_SOCIAL_CEILING = 5;
 const EXPLORATION_FLOOR_SHARE = 0.2;
+
+// Social / Curator signal (PRD 26 / C4): "your people," distinct from anonymous socialHeat.
+// HARD CAP on the post-tuning socialCircle contribution, deliberately set BELOW the Phase 11
+// exploration-floor base (14) so a social boost can never outweigh the guaranteed boost a quiet,
+// under-the-radar local show gets — it can reorder within the personalized band but never evict the
+// reserved novel/local share. Unit-tested (SOCIAL_CIRCLE_CAP < EXPLORATION_FLOOR_BASE).
+export const SOCIAL_CIRCLE_CAP = 10;
+// The base saturates: a few in-circle people / a followed curator pick lift an event meaningfully,
+// but a fourth/fifth adds little, so one hyper-connected event can't run away (C5 also watches this).
+const SOCIAL_CIRCLE_BASE_MAX = 18;
+const SOCIAL_CIRCLE_SATURATION = 5;
+
+/**
+ * Pure, saturating `socialCircle` base for one event (PRD 26 / C4). Sourced ONLY from the viewer's
+ * own circle — entitled friends going/firing (C2) + their FOLLOWED curators' picks (C3) — never the
+ * anonymous crowd, so popularity is not double-counted with `socialHeat`. Firing weighs more than
+ * going; a followed-curator pick weighs most. Returns 0 with no activity (anonymous-null).
+ */
+export function scoreSocialCircleBase(
+  activity: CircleEventActivity | undefined | null,
+  followedCuratorPickCount = 0
+): number {
+  const going = activity?.goingCount ?? 0;
+  const fire = activity?.fireCount ?? 0;
+  const raw = going * 2 + fire * 3 + Math.max(0, followedCuratorPickCount) * 4;
+  if (raw <= 0) {
+    return 0;
+  }
+  return Math.round(SOCIAL_CIRCLE_BASE_MAX * (1 - 1 / (1 + raw / SOCIAL_CIRCLE_SATURATION)));
+}
 
 export function scoreDiscoveryEvents({
   connections = [],
@@ -178,6 +215,8 @@ export function scoreDiscoveryEvents({
   profileItems = [],
   savedFavorites = [],
   spotifyMatchCorrections = [],
+  circleActivityByEvent = {},
+  followedCuratorPicksByEvent = {},
 }: ScoreDiscoveryEventsInput): DiscoveryScoresByEvent {
   const spotifyEnabled = connections.some(
     (connection) =>
@@ -245,6 +284,8 @@ export function scoreDiscoveryEvents({
       const spotifyGenreScore = scoreSpotifyGenreMatch(genreResult.genres, spotifyGenreAffinity);
       const genreMatchBase = Math.min(GENRE_MATCH_CEILING, genreResult.score + spotifyGenreScore);
       const favoriteScore = scoreFavorites(event, savedVenues, savedArtists);
+      const circleActivity = circleActivityByEvent[event.id];
+      const followedCuratorPicks = followedCuratorPicksByEvent[event.id] ?? [];
       const componentBases = getPreferenceComponentBases({
         counts: eventCounts,
         event,
@@ -255,6 +296,8 @@ export function scoreDiscoveryEvents({
         personalScore,
         profileScore,
         publicScore,
+        circleActivity,
+        followedCuratorPickCount: followedCuratorPicks.length,
       });
       const bestBetsTuning = scorePreferenceTuning(event, preferences, componentBases, {
         includeArtistAffinity: false,
@@ -270,6 +313,13 @@ export function scoreDiscoveryEvents({
         ...profileScore.reasons,
         ...getSpotifyGenreReasons(spotifyGenreScore),
         ...getPreferenceReasons(bestMatchTuning),
+        // "Your people" attribution (PRD 26 / C4): in-circle counts/curators only, and only when the
+        // listener has opted in (dial > 0) and there is entitled activity — never anyone out-of-circle.
+        ...getSocialCircleReasons(
+          circleActivity,
+          followedCuratorPicks,
+          preferences.weights.socialCircle
+        ),
         // Genre is supplementary: it surfaces for everyone (esp. anonymous) but yields the
         // limited reason budget to stronger personalized signals when space is tight.
         ...getGenreReasons(genreResult.genres),
@@ -717,6 +767,8 @@ function getPreferenceComponentBases({
   personalScore,
   profileScore,
   publicScore,
+  circleActivity,
+  followedCuratorPickCount,
 }: {
   counts: CommunityCounts | undefined;
   event: EventRecord;
@@ -727,6 +779,8 @@ function getPreferenceComponentBases({
   personalScore: ReturnType<typeof scorePersonalSignals>;
   profileScore: ReturnType<typeof scoreSpotifyMatch>;
   publicScore: ReturnType<typeof scorePublicSignals>;
+  circleActivity?: CircleEventActivity;
+  followedCuratorPickCount?: number;
 }): PreferenceComponentBases {
   return {
     // Each per-dimension base mirrors the value also added to the direct score, so the existing dial
@@ -743,6 +797,9 @@ function getPreferenceComponentBases({
       ? 12
       : 0,
     socialHeat: publicScore.components.socialHeat,
+    // "Your people" base (PRD 26 / C4): from the viewer's OWN circle, distinct from socialHeat. Off
+    // until the dial is raised (handled in scorePreferenceTuning); the post-tuning value is hard-capped.
+    socialCircle: scoreSocialCircleBase(circleActivity, followedCuratorPickCount ?? 0),
     // Saved-venue boost + positive venue taste ride venuePreference, capped within the component
     // ceiling (PRD 14 bounding); implicit venue cooling subtracts after so it can push below zero.
     venuePreference:
@@ -761,6 +818,13 @@ function scorePreferenceTuning(
   const components = {} as DiscoveryScoreComponents;
 
   for (const control of LISTENER_PREFERENCE_CONTROLS) {
+    // socialCircle is off-by-default and its base is NOT also added to the direct score, so it uses a
+    // different formula (handled after this loop): the standard `base·((weight-100)/100)` term assumes
+    // a default-100 dial whose base already sits in the direct score, which is not true here.
+    if (control.key === "socialCircle") {
+      continue;
+    }
+
     const base = !options.includeArtistAffinity && control.key === "artistAffinity" ? 0 : bases[control.key];
     const weight = preferences.weights[control.key];
     const componentAdjustment = base * ((weight - 100) / 100);
@@ -774,6 +838,22 @@ function scorePreferenceTuning(
       weight,
     };
   }
+
+  // Social / Curator signal (PRD 26 / C4): off-by-default, capped. The contribution scales from 0 at
+  // dial 0 (the default — no effect) up through the dial, then is HARD-CAPPED below the exploration
+  // floor so it can nudge but never drown local/novel discovery. The base is not in the direct score,
+  // so this `adjustment` IS the component's whole effect (total = adjustment).
+  const socialBase = bases.socialCircle;
+  const socialWeight = preferences.weights.socialCircle;
+  const socialAdjustment = Math.min(SOCIAL_CIRCLE_CAP, Math.max(0, socialBase * (socialWeight / 100)));
+  adjustment += socialAdjustment;
+  components.socialCircle = {
+    adjustment: roundScore(socialAdjustment),
+    base: roundScore(socialBase),
+    label: "Your people",
+    total: roundScore(socialAdjustment),
+    weight: socialWeight,
+  };
 
   const customSignalScore = scoreCustomSignals(event, preferences.customSignals);
   adjustment += customSignalScore;
@@ -797,6 +877,32 @@ function scorePreferenceTuning(
     components,
     customSignalScore: roundScore(customSignalScore),
   };
+}
+
+/**
+ * Truthful, private-safe "your people" reasons (PRD 26 / C4). Shown only when the listener opted in
+ * (dial > 0) and there is entitled activity. Names only people/curators inside the viewer's OWN
+ * circle (the inputs are already entitlement-gated upstream by C1/C2/C3) — never an out-of-circle id.
+ */
+function getSocialCircleReasons(
+  activity: CircleEventActivity | undefined,
+  followedCuratorPicks: CuratedBy[],
+  socialWeight: number
+): DiscoveryReason[] {
+  if (socialWeight <= 0) {
+    return [];
+  }
+
+  const reasons: DiscoveryReason[] = [];
+  const label = summarizeCircleLabel(activity);
+  if (label) {
+    reasons.push(simpleReason(label));
+  }
+  if (followedCuratorPicks.length > 0) {
+    const names = followedCuratorPicks.slice(0, 2).map((curator) => curator.displayName).join(", ");
+    reasons.push(simpleReason(`picked by ${names}`));
+  }
+  return reasons;
 }
 
 /** Truthful reasons when a saved venue/artist drove a boost (PRD 14). No private values exposed. */

@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { enforceExplorationFloor, scoreDiscoveryEvents, type DiscoveryReason } from "../lib/discovery";
+import {
+  EXPLORATION_FLOOR_BASE,
+  SOCIAL_CIRCLE_CAP,
+  enforceExplorationFloor,
+  scoreDiscoveryEvents,
+  scoreSocialCircleBase,
+  type DiscoveryReason,
+} from "../lib/discovery";
 import type {
   DiscoveryPreferenceSignal,
   ImplicitSignalRow,
@@ -633,4 +640,91 @@ test("a single weak tap produces only a small, low-confidence affinity", () => {
   assert.ok(oneTap.components.artistAffinity.base > 0);
   assert.ok(oneTap.components.artistAffinity.base < 6);
   assert.ok(oneTap.bestMatchScore - base.bestMatchScore < 12);
+});
+
+// --- Social / Curator signal: optional, distinct, bounded (PRD 26 / C4) -------------------------
+
+const circleActivity = (goingCount: number, fireCount = 0) => ({
+  [francesElizaEvent.id]: { eventId: francesElizaEvent.id, goingCount, fireCount, people: [] },
+});
+
+function scoreSocial(options: {
+  weights?: Record<string, number>;
+  goingCount?: number;
+  fireCount?: number;
+  curatorPicks?: Array<{ handle: string; displayName: string }>;
+} = {}) {
+  return scoreDiscoveryEvents({
+    counts: {},
+    events: [francesElizaEvent],
+    listenerPreferences: options.weights ? { weights: options.weights } : {},
+    now: new Date("2026-06-07T12:00:00.000Z"),
+    circleActivityByEvent: circleActivity(options.goingCount ?? 0, options.fireCount ?? 0),
+    followedCuratorPicksByEvent: { [francesElizaEvent.id]: options.curatorPicks ?? [] },
+  })[francesElizaEvent.id];
+}
+
+test("socialCircle is off by default (dial 0 → no contribution, ranking == baseline)", () => {
+  const baseline = scoreDiscoveryEvents({
+    counts: {},
+    events: [francesElizaEvent],
+    now: new Date("2026-06-07T12:00:00.000Z"),
+  })[francesElizaEvent.id];
+  // Three friends going, but the dial is at its default 0 → component contributes nothing.
+  const offByDefault = scoreSocial({ goingCount: 3 });
+
+  assert.equal(offByDefault.components.socialCircle.weight, 0);
+  assert.equal(offByDefault.components.socialCircle.adjustment, 0);
+  assert.equal(offByDefault.components.socialCircle.total, 0);
+  assert.equal(offByDefault.bestMatchScore, baseline.bestMatchScore);
+});
+
+test("raising the socialCircle dial lifts events the entitled circle is into, capped", () => {
+  const off = scoreSocial({ goingCount: 3 });
+  const on = scoreSocial({ goingCount: 3, weights: { socialCircle: 200 } });
+
+  assert.ok(on.bestMatchScore > off.bestMatchScore);
+  // Hard cap: the contribution can never exceed SOCIAL_CIRCLE_CAP, which sits below the floor base.
+  assert.ok(on.components.socialCircle.adjustment <= SOCIAL_CIRCLE_CAP);
+  assert.ok(SOCIAL_CIRCLE_CAP < EXPLORATION_FLOOR_BASE);
+});
+
+test("socialCircle base saturates — a fourth person adds little", () => {
+  const three = scoreSocialCircleBase({ eventId: "e", goingCount: 3, fireCount: 0, people: [] });
+  const four = scoreSocialCircleBase({ eventId: "e", goingCount: 4, fireCount: 0, people: [] });
+  assert.ok(three > 0);
+  assert.ok(four > three);
+  assert.ok(four - three < three, "the 4th person adds less than the first three combined");
+  assert.equal(scoreSocialCircleBase(undefined), 0, "anonymous / no activity → 0");
+});
+
+test("a followed curator's pick boosts; reasons attribute in-circle only", () => {
+  const picked = scoreSocial({
+    weights: { socialCircle: 200 },
+    curatorPicks: [{ handle: "maya", displayName: "Maya" }],
+  });
+  assert.ok(picked.components.socialCircle.adjustment > 0);
+  assert.ok(picked.reasons.some((r) => r.kind === "simple" && r.label.includes("picked by Maya")));
+});
+
+test("socialCircle is independent of socialHeat (changing one does not move the other)", () => {
+  // Move socialHeat only: socialCircle stays 0 (no circle data influence on the crowd component).
+  const heatOnly = scoreFrancesEliza([], { weights: { socialHeat: 200 } });
+  assert.equal(heatOnly.components.socialCircle.adjustment, 0);
+
+  // Move socialCircle only: socialHeat base/adjustment unchanged from the dial-0 default case.
+  const circleOnly = scoreSocial({ goingCount: 3, weights: { socialCircle: 200 } });
+  const circleOff = scoreSocial({ goingCount: 3 });
+  assert.equal(circleOnly.components.socialHeat.total, circleOff.components.socialHeat.total);
+  assert.ok(circleOnly.components.socialCircle.adjustment > 0);
+});
+
+test("anonymous / no graph → socialCircle contributes 0", () => {
+  const anon = scoreDiscoveryEvents({
+    counts: {},
+    events: [francesElizaEvent],
+    now: new Date("2026-06-07T12:00:00.000Z"),
+  })[francesElizaEvent.id];
+  assert.equal(anon.components.socialCircle.adjustment, 0);
+  assert.equal(anon.components.socialCircle.base, 0);
 });

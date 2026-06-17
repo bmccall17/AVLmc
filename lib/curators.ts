@@ -189,6 +189,48 @@ export async function getCuratedByForEvents(eventIds: string[]): Promise<Record<
   }
 }
 
+/**
+ * For the C4 socialCircle signal: the events a viewer's FOLLOWED curators have visibly picked,
+ * keyed by event id. Joins the C1 follow edge (viewer → curator's user) against active curators with
+ * visible picks. Empty for anonymous callers; an unfollowed curator's pick never appears here.
+ */
+export async function getFollowedCuratorPicks(
+  viewerId: string | null | undefined,
+  eventIds: string[]
+): Promise<Record<string, CuratedBy[]>> {
+  const viewer = Number(viewerId);
+  const uniqueIds = Array.from(new Set(eventIds)).filter(Boolean);
+  if (!Number.isInteger(viewer) || viewer < 1 || uniqueIds.length === 0) {
+    return {};
+  }
+
+  try {
+    const result = await query<{ event_id: string; handle: string; display_name: string }>(
+      `
+        select p.event_id, c.handle, c.display_name
+        from public.curator_picks p
+        join public.curators c on c.id = p.curator_id and c.status = 'active'
+        join public.listener_follows f
+          on f.followee_user_id = c.user_id and f.follower_user_id = $1 and f.status = 'active'
+        where p.event_id = any($2::text[]) and p.status = 'visible'
+        order by c.display_name asc
+      `,
+      [viewer, uniqueIds]
+    );
+
+    const byEvent: Record<string, CuratedBy[]> = {};
+    for (const row of result.rows) {
+      (byEvent[row.event_id] ??= []).push({ handle: row.handle, displayName: row.display_name });
+    }
+    return byEvent;
+  } catch (error) {
+    if (isToleratedSchemaError(error)) {
+      return {};
+    }
+    throw error;
+  }
+}
+
 /* ---- Admin writes (reached only through the admin-gated route) ------------------ */
 
 export async function promoteCurator(input: {

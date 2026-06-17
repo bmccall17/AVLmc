@@ -9,5 +9,5 @@
     "rootDir": "..",
     "target": "es2022"
   },
-  "include": ["../next-env.d.ts", "discovery-scoring.test.ts", "../lib/discovery.ts", "../lib/genre-taxonomy.ts"]
+  "include": ["../next-env.d.ts", "discovery-scoring.test.ts", "../lib/discovery.ts", "../lib/genre-taxonomy.ts", "../lib/social-activity-core.ts", "../lib/curators-core.ts"]
 }

@@ -44,6 +44,7 @@ type ActiveTooltip = {
 type EventBoardProps = {
   circleActivityByEvent?: Record<string, CircleEventActivity | undefined>;
   curatedByEvent?: Record<string, CuratedBy[] | undefined>;
+  followedCuratorPicksByEvent?: Record<string, CuratedBy[] | undefined>;
   counts: Record<string, CommunityCounts | undefined>;
   discoveryScores: DiscoveryScoresByEvent;
   events: EventRecord[];
@@ -123,6 +124,7 @@ const actionHelp: Record<ActionKind, { body: string; impact: string; title: stri
 export function EventBoard({
   circleActivityByEvent,
   curatedByEvent,
+  followedCuratorPicksByEvent,
   counts,
   discoveryScores,
   events,
@@ -312,11 +314,15 @@ export function EventBoard({
         profileItems: musicProfileItems,
         savedFavorites: initialSavedFavorites,
         spotifyMatchCorrections,
+        circleActivityByEvent,
+        followedCuratorPicksByEvent,
       })
     );
   }, [
+    circleActivityByEvent,
     eventCounts,
     events,
+    followedCuratorPicksByEvent,
     initialSavedFavorites,
     listenerPreferences,
     localPreferenceSignals,

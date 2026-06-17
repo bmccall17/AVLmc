@@ -14,7 +14,16 @@ A new `socialCircle` component is added to `lib/discovery.ts`, `lib/listener-pre
 
 ## Implementation Status
 
-**Planned — not yet started.**
+**Shipped — June 17, 2026.**
+
+Trusted-circle / followed-curator activity is now an optional, distinct, bounded ranking input:
+
+- **New dial.** `socialCircle` added to `ListenerPreferenceKey`, `PREFERENCE_KEYS`, `LISTENER_PREFERENCE_CONTROLS` (label **"Your people"**) and `DEFAULT_LISTENER_WEIGHTS = 0` — the first dial that defaults to 0/off. `normalizeWeights` preserves 0 (verified). The dial appears in the listener-preferences panel and surfaces in Insight/Trace automatically (both iterate the controls).
+- **Scoring component (`lib/discovery.ts`).** A new `socialCircle` base via the pure, exported `scoreSocialCircleBase(activity, followedCuratorPickCount)` — saturating (firing > going > pick weight; a 4th person adds little), sourced **only** from the viewer's own circle (C2 `getCircleEventActivity`) and **followed** curators' picks (C3 `getFollowedCuratorPicks`), never the crowd, so it never double-counts `socialHeat`. Special-cased in `scorePreferenceTuning` (off-by-default `base·(weight/100)`, not the default-100 `base·((weight-100)/100)`), with a **hard cap** `SOCIAL_CIRCLE_CAP = 10` set **below** `EXPLORATION_FLOOR_BASE = 14` so it can reorder within the personalized band but never evict the Phase 11 novel/local floor (unit-tested). **Anonymous-null**: no viewer/graph/dial → 0; `SCORER_VERSION` bumped `11.4 → 12.4`.
+- **Attribution.** Truthful, private-safe reasons — `"N people you follow are going · M firing"` (reusing `summarizeCircleLabel`) and `"picked by [curator]"` — shown only when the dial > 0; in-circle names only, never an out-of-circle identity.
+- **Threading.** `app/page.tsx` fetches `circleActivityByEvent` + `followedCuratorPicksByEvent` (batched) and passes both into `scoreDiscoveryEvents`; `EventBoard` threads both into its client re-score so the dial is live.
+- **Tests.** `tests/discovery-scoring.test.ts` extended (6 scenarios): dial-0 == baseline, dial-up lifts capped, saturation, followed-curator pick + reason, `socialCircle`⊥`socialHeat`, anonymous → 0. `svc-discovery` node description updated + system map regenerated.
+- **Quality.** `test:discovery` (38), `test:registry`, `test:insight`, typecheck, lint, `next build`, and Snyk all green; no pay-to-play path; no Spotify writes; $0. The anonymous board is unchanged byte-for-byte.
 
 ## Goals
 

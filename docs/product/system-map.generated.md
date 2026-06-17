@@ -128,7 +128,7 @@ When a signed-in listener Goes/Fires an event, resolves the artist's Spotify top
 
 #### Discovery Scoring  `svc-discovery`
 
-Ranks events per request by blending taste profile, behavioral signals, and listener-configured weights. Anonymous visitors get public-signal-only ranking.
+Ranks events per request by blending taste profile, behavioral signals, and listener-configured weights — including the off-by-default, hard-capped socialCircle component (PRD 26): a viewer's own followed-and-opted-in friends/curators, distinct from anonymous socialHeat. Anonymous visitors get public-signal-only ranking (socialCircle contributes 0).
 
 - **Kind:** Service
 - **Source of truth:** `lib/discovery.ts`
