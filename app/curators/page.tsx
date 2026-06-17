@@ -24,7 +24,10 @@ export default async function CuratorsDirectoryPage() {
 
       <header className="curators-directory-head">
         <h1>Curators</h1>
-        <p>Local tastemakers whose picks you can follow. Curators are admin-promoted — no pay-to-play.</p>
+        <p>Local tastemakers whose picks you can follow. No pay-to-play.</p>
+        <Link className="primary-action curators-directory-apply" href="/curators/apply">
+          Become a curator
+        </Link>
       </header>
 
       {curators.length === 0 ? (

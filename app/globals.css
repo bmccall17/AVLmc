@@ -6248,6 +6248,186 @@ button.primary-action {
   font-weight: 700;
 }
 
+/* Curator apply flow (PRD 30 / C2) */
+.curators-directory-apply {
+  align-self: flex-start;
+  margin-top: 10px;
+  text-decoration: none;
+}
+
+.curator-apply-panel {
+  background: rgba(24, 24, 27, 0.9);
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 18px 18px 20px;
+}
+
+.curator-apply-gate {
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  margin: 0;
+  padding: 8px 12px;
+}
+
+.curator-apply-gate.is-open {
+  background: rgba(34, 197, 94, 0.12);
+  color: #86efac;
+}
+
+.curator-apply-gate.is-review {
+  background: rgba(250, 204, 21, 0.1);
+  color: #fcd34d;
+}
+
+.curator-apply-field {
+  display: grid;
+  gap: 5px;
+}
+
+.curator-apply-field > span {
+  color: #fafafa;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.curator-apply-field input,
+.curator-apply-field textarea {
+  background: rgba(9, 9, 11, 0.6);
+  border: 1px solid rgba(82, 82, 91, 0.8);
+  border-radius: 8px;
+  color: #fafafa;
+  font: inherit;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.curator-apply-field textarea {
+  resize: vertical;
+}
+
+.curator-apply-field small {
+  color: #a1a1aa;
+  font-size: 0.72rem;
+}
+
+.curator-apply-field small.error {
+  color: #fca5a5;
+}
+
+.curator-apply-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Curator self-management (PRD 31 / C3) */
+.curator-manage {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.curator-manage-picks {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+.curator-manage-pick {
+  align-items: center;
+  background: rgba(9, 9, 11, 0.55);
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  border-radius: 10px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.curator-manage-pick[data-hidden="true"] {
+  opacity: 0.6;
+}
+
+.curator-manage-pick strong {
+  color: #fafafa;
+}
+
+.curator-manage-pick small {
+  color: #a1a1aa;
+  display: block;
+}
+
+.curator-manage-hidden {
+  color: #fcd34d !important;
+  font-weight: 700;
+}
+
+.curator-profile-owner-link {
+  text-decoration: none;
+}
+
+.curator-event-results {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.curator-event-results button {
+  background: rgba(9, 9, 11, 0.6);
+  border: 1px solid rgba(82, 82, 91, 0.7);
+  border-radius: 8px;
+  color: #fafafa;
+  cursor: pointer;
+  display: block;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.curator-event-results button:hover {
+  border-color: #a5b4fc;
+}
+
+.curator-event-results small {
+  color: #a1a1aa;
+  display: block;
+}
+
+.curator-pick-selected {
+  align-items: center;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 8px 12px;
+}
+
+.curator-pick-selected small {
+  color: #a1a1aa;
+  display: block;
+}
+
+.curator-owner-nudge {
+  background: rgba(250, 204, 21, 0.1);
+  border-radius: 8px;
+  color: #fcd34d;
+  font-size: 0.84rem;
+  font-weight: 600;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+}
+
 /* Admin curators management (PRD 25 / C3). */
 .admin-curators-form {
   display: flex;
@@ -6276,6 +6456,29 @@ button.primary-action {
   display: flex;
   gap: 12px;
   justify-content: space-between;
+}
+
+.admin-curators-gate {
+  background: rgba(99, 102, 241, 0.12);
+  border-radius: 8px;
+  font-size: 0.84rem;
+  padding: 8px 12px;
+}
+
+.admin-curators-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-curators-note {
+  color: #d4d4d8;
+  display: block;
+  font-style: italic;
+}
+
+.admin-curators-subtle {
+  color: #a1a1aa;
+  font-size: 0.8rem;
 }
 
 /* Saved space (PRD 13 / C2) */

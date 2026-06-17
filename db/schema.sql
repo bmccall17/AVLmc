@@ -155,10 +155,12 @@ create table if not exists public.listener_follows (
 create index if not exists listener_follows_followee_idx
   on public.listener_follows (followee_user_id, status);
 
--- ---- Curator & Influencer Profiles (PRD 25 / C3): admin-promoted public personas. ----------
--- A curator is an admin-granted public persona layered on an existing user (one row per user).
--- Promotion is admin-only (no self-serve, no pay-to-play). Following a curator reuses the
--- listener_follows edge above — a curator is just a special followee.
+-- ---- Curator & Influencer Profiles (PRD 25 / C3; self-serve onboarding PRD 29 / Phase 13). ---
+-- A curator is a public persona layered on an existing user (one row per user). Originally
+-- admin-only; PRD 29 adds a self-serve lifecycle — a signed-in listener authors their own persona
+-- and is promoted instantly under a gate or lands `pending` for admin review above it. Public reads
+-- filter status='active', so pending/rejected rows are invisible by construction. No pay-to-play.
+-- Following a curator reuses the listener_follows edge above — a curator is just a special followee.
 create table if not exists public.curators (
   id text primary key,
   user_id integer not null unique references public.users(id) on delete cascade,
@@ -166,11 +168,27 @@ create table if not exists public.curators (
   display_name text not null,
   bio text,
   avatar_url text,
-  status text not null default 'active' check (status in ('active', 'hidden')),
+  -- application_note: the applicant's self-serve pitch (PRD 29). Private to applicant + admin.
+  application_note text,
+  status text not null default 'active' check (status in ('active', 'hidden', 'pending', 'rejected')),
+  -- false for self-serve rows (PRD 29), true for admin promotions (PRD 25).
   promoted_by_admin boolean not null default true,
+  -- handle_changed_at: rate-limits self-serve handle changes (PRD 33 anti-abuse).
+  handle_changed_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Additive changes for databases provisioned before PRD 29 / PRD 33. IF NOT EXISTS / drop+re-add
+-- keep schema.sql idempotent (single source of truth; run it to provision or repair).
+alter table public.curators
+  add column if not exists application_note text;
+alter table public.curators
+  add column if not exists handle_changed_at timestamptz not null default now();
+alter table public.curators
+  drop constraint if exists curators_status_check;
+alter table public.curators
+  add constraint curators_status_check check (status in ('active', 'hidden', 'pending', 'rejected'));
 
 create index if not exists curators_status_idx on public.curators (status);
 

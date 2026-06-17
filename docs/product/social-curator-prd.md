@@ -138,7 +138,7 @@ Decided once here; inherited by every cycle PRD.
 
 - **Assumed:** the activity-sharing opt-in lives on the existing `listener_discovery_preferences` / `app/api/me/listener-preferences` surface rather than a bespoke table; finalized in C1.
 - **Assumed:** "your people" going/firing is **live-computed** by joining `listener_follows` against `event_person_event_state` (with caching), consistent with the live-first $0 posture — no denormalized social-activity table unless C2/C4 shows a measured perf problem (decided in C2).
-- **Assumed:** curator status is an admin-granted role/flag on `users` (+ a small `curators` profile table for the public persona), not a separate account type; self-serve onboarding stays deferred (locked).
+- **Assumed:** curator status is an admin-granted role/flag on `users` (+ a small `curators` profile table for the public persona), not a separate account type; self-serve onboarding was deferred (locked) for this initiative — now **un-deferred and scoped as Phase 13** ([Curator Onboarding & Self-Management](curator-onboarding-prd.md), PRDs 29–33).
 - **Assumed:** the social ranking signal is a **new** `socialCircle` `ListenerPreferenceKey` with `DEFAULT_LISTENER_WEIGHTS.socialCircle = 0` (off by default) — the first dial that does not default to 100; revisit only if listeners need finer friend-vs-curator weighting (candidate follow-up).
 - **Assumed:** C5 delivers the Phase 10 Discovery Benchmark **Outcome 3 (Social & Curator Benchmark)**, keeping the benchmark live-only / no-new-tab and recording dated markdown snapshots at ship (consistent with PRD 22).
 - **Assumed:** PRD numbering continues the existing sequence (**23–27**) and this registers as **Phase 12**; cycle labels C1–C5 are scoped to this initiative.

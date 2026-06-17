@@ -4,7 +4,7 @@ import { signIn, signOut } from "next-auth/react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Bookmark, Plus, RotateCcw, SlidersHorizontal, Trash2, UserCircle, Users, X } from "lucide-react";
+import { Bookmark, Plus, RotateCcw, SlidersHorizontal, Star, Trash2, UserCircle, Users, X } from "lucide-react";
 import { MusicConnectionActions } from "@/components/MusicConnectionActions";
 import type { AuthFeatureFlags } from "@/lib/auth-flags";
 import type { DiscoveryScoreComponents } from "@/lib/discovery";
@@ -376,6 +376,12 @@ export function ListenerProfileButton({
                     <Link className="ghost-control saved-space-link" href="/saved">
                       <Bookmark aria-hidden="true" size={15} strokeWidth={2.4} />
                       View saved
+                    </Link>
+                  ) : null}
+                  {isSignedIn ? (
+                    <Link className="ghost-control saved-space-link" href="/curators/apply">
+                      <Star aria-hidden="true" size={15} strokeWidth={2.4} />
+                      Become a curator
                     </Link>
                   ) : null}
                   {isSignedIn ? (

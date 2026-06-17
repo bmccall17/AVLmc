@@ -3,7 +3,10 @@ import { cookies } from "next/headers";
 import { ADMIN_COOKIE_NAME, isAdminSession } from "@/lib/admin";
 import {
   addCuratorPick,
+  getSelfServeAvailability,
+  listCuratorApplications,
   listCuratorsForAdmin,
+  listNotActivatedCurators,
   promoteCurator,
   setCuratorStatus,
   setPickStatus,
@@ -11,17 +14,39 @@ import {
   type CuratorPickStatus,
   type CuratorStatus,
 } from "@/lib/curators";
+import { CURATOR_SELF_SERVE_GATE } from "@/lib/curators-core";
 
 /**
- * Admin-gated curator management (PRD 25 / C3). Promote/demote/hide curators and add/hide picks.
- * Admin-only — curator status is never self-serve and no money path can set it (no pay-to-play).
+ * Admin-gated curator management (PRD 25 / C3; self-serve review PRD 29). Promote/demote/hide
+ * curators, add/hide picks, and review the self-serve `pending` queue (approve → active via
+ * PATCH status='active', reject → rejected). No money path can set status (no pay-to-play).
  * Mirrors app/api/admin/resources.
  */
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!(await requireAdmin())) return unauthorized();
-  return NextResponse.json({ curators: await listCuratorsForAdmin() }, { headers: { "cache-control": "no-store" } });
+  const [curators, applications, notActivated, availability] = await Promise.all([
+    listCuratorsForAdmin(),
+    listCuratorApplications(),
+    listNotActivatedCurators(),
+    getSelfServeAvailability(),
+  ]);
+  return NextResponse.json(
+    {
+      curators,
+      applications,
+      notActivated,
+      gate: {
+        open: availability.open,
+        activeCurators: availability.activeCurators,
+        users: availability.users,
+        maxCurators: CURATOR_SELF_SERVE_GATE.maxCurators,
+        maxUsers: CURATOR_SELF_SERVE_GATE.maxUsers,
+      },
+    },
+    { headers: { "cache-control": "no-store" } }
+  );
 }
 
 export async function POST(request: Request) {

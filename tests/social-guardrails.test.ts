@@ -103,7 +103,58 @@ test("INVARIANT: scoring + curator + preferences source carries no payment pathw
   }
 });
 
+test("INVARIANT: the curator self-serve surface carries no payment pathway (PRD 33)", () => {
+  // No money may set/raise curator status or rank. Guard the self-serve write surfaces at the source.
+  const forbidden = ["payment", "stripe", "billing", "checkout", "purchaserank", "paidboost", "entitlement"];
+  for (const rel of [
+    "lib/curators.ts",
+    "lib/curators-core.ts",
+    "app/api/me/curator-application/route.ts",
+    "app/api/me/curator/route.ts",
+    "app/api/admin/curators/route.ts",
+  ]) {
+    const source = readFileSync(join(REPO, rel), "utf8").toLowerCase();
+    for (const token of forbidden) {
+      assert.ok(!source.includes(token), `${rel} must not reference "${token}"`);
+    }
+  }
+});
+
 /* ---- PII / leak audit ----------------------------------------------------------- */
+
+test("LEAK AUDIT: public curator surfaces never reference applications, pending rows, or self-mgmt (PRD 33)", () => {
+  // The application_note / pending+rejected rows / self-management reads are private to the
+  // applicant + admin. No PUBLIC (anonymous-reachable) curator surface may touch them.
+  const publicSurfaces = [
+    "app/api/curators/route.ts",
+    "app/curators/page.tsx",
+    "app/curator/[handle]/page.tsx",
+  ];
+  const forbidden = [
+    "application_note",
+    "applicationNote",
+    "listCuratorApplications",
+    "getMyCuratorStatus",
+    "getMyCurator",
+    "getSelfServeAvailability",
+    "listNotActivatedCurators",
+  ];
+  for (const rel of publicSurfaces) {
+    const source = readFileSync(join(REPO, rel), "utf8");
+    for (const token of forbidden) {
+      assert.ok(!source.includes(token), `${rel} (public surface) must not reference "${token}"`);
+    }
+  }
+});
+
+test("LEAK AUDIT: every public curator read filters status='active' (PRD 33)", () => {
+  // pending/rejected rows must be invisible by construction. Each public read in the service that
+  // returns curator rows constrains to active.
+  const source = readFileSync(join(REPO, "lib/curators.ts"), "utf8");
+  // The three public reads (directory, profile, curated-by) each include the active filter.
+  const activeFilters = source.match(/status\s*=\s*'active'/g) ?? [];
+  assert.ok(activeFilters.length >= 3, "expected the public curator reads to filter status='active'");
+});
 
 test("LEAK AUDIT: toPublicSharedSong never carries the seeder id; sharedBy only when set", () => {
   const song: SharedSong = {

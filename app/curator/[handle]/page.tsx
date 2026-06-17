@@ -35,7 +35,8 @@ export default async function CuratorPage({ params }: CuratorPageProps) {
 
   const viewerId = await getOptionalUserId();
   const isSignedIn = Boolean(viewerId);
-  const alreadyFollowing = viewerId ? await isFollowing(viewerId, profile.userId) : false;
+  const isOwner = Boolean(viewerId) && String(viewerId) === String(profile.userId);
+  const alreadyFollowing = !isOwner && viewerId ? await isFollowing(viewerId, profile.userId) : false;
   const { curator, topList, picks } = profile;
 
   return (
@@ -51,13 +52,19 @@ export default async function CuratorPage({ params }: CuratorPageProps) {
           <p className="curator-handle">@{curator.handle}</p>
           {curator.bio ? <p className="curator-bio">{curator.bio}</p> : null}
         </div>
-        <FollowButton
-          followeeName={curator.displayName}
-          followeeUserId={profile.userId}
-          initialFollowing={alreadyFollowing}
-          isSignedIn={isSignedIn}
-          variant="chip"
-        />
+        {isOwner ? (
+          <Link className="primary-action curator-profile-owner-link" href="/curators/manage">
+            Manage my profile
+          </Link>
+        ) : (
+          <FollowButton
+            followeeName={curator.displayName}
+            followeeUserId={profile.userId}
+            initialFollowing={alreadyFollowing}
+            isSignedIn={isSignedIn}
+            variant="chip"
+          />
+        )}
       </header>
 
       {topList.length > 0 ? (
@@ -77,6 +84,12 @@ export default async function CuratorPage({ params }: CuratorPageProps) {
 
       <section className="curator-picks" aria-label="Per-show picks">
         <h2>Picks</h2>
+        {isOwner && picks.length === 0 ? (
+          <p className="curator-owner-nudge">
+            You have no visible picks yet — <Link href="/curators/manage">add your first show</Link> to
+            appear in the curator directory.
+          </p>
+        ) : null}
         {picks.length === 0 ? (
           <p className="empty-copy">No picks yet.</p>
         ) : (

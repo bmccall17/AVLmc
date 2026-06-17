@@ -24,6 +24,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 10 | [Discovery Benchmarking (Desired Outcomes)](discovery-benchmark_desiredoutcomes.md) | Shipped | Turn the shipped Recommendation Insight + Listener Trace surfaces into a repeatable, fixed-methodology discovery benchmark (live-only / $0; no new tab). Validation layer for the deeper-personalization and social/curator future directions. **All three outcomes now have a shipped surface:** Outcome 1 (PRD 22, Discovery Baseline), Outcome 2 (PRD 28, Deeper Personalization Benchmark), Outcome 3 (PRD 27, Social & Curator Benchmark). |
 | 11 | [Deeper Personalization Initiative (Epic)](deeper-personalization-prd.md) | Shipped | Learn from what a listener *skips*, not just taps: move from the flat "recent 240 actions" model to a time-decayed, per-dimension taste model that safely uses implicit signals, stays explainable/correctable, and is loop-proof. Initiative A of the discovery North Star; PRDs 18–21 across four cycles. |
 | 12 | [Social / Curator Graph (Epic)](social-curator-prd.md) | Shipped | Opt-in follow/curator graph + inner-circle attribution; trusted-circle/curator activity as an optional, bounded ranking input distinct from public heat. Privacy-first, no pay-to-play, no Spotify writes. Initiative B of the discovery North Star; PRDs 23–27 across five cycles — **all shipped (Jun 17, 2026)**. |
+| 13 | [Curator Onboarding & Self-Management (Epic)](curator-onboarding-prd.md) | Shipped | Self-serve curator onboarding — instant under a configurable gate, admin-reviewed above it — plus guided persona setup, first-pick activation, and curator self-management of their own picks/persona; spam-resistant, privacy-safe, no pay-to-play, admin oversight retained. Completes the curator story from Phase 12. PRDs 29–33 across five cycles — **all shipped (Jun 17, 2026)**. |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
@@ -381,12 +382,63 @@ Both initiatives decompose into epic PRDs + cycle PRDs (Phase 11: PRDs 18–21, 
 (highest leverage, shipped), then the social graph foundation, and the social ranking signal last (it
 needs both the scoring model and the graph).
 
+### Phase 13: Curator Onboarding & Self-Management (shipped Jun 17, 2026)
+
+Purpose: complete the curator story from Phase 12. Phase 12 shipped **admin-promoted** curators and
+**admin-managed** picks; this initiative lets an interested listener become an **active, self-sufficient
+curator** through a guided self-serve path — author their own persona, get to first picks, and manage
+their own profile — while staying spam-resistant, privacy-safe, with **no pay-to-play** and admin
+oversight retained.
+
+The signature decision is a **threshold gate** (product-owner call, Jun 17 2026): self-serve promotion
+is **instant** while the platform is small, and falls back to an **admin-reviewed pending queue** once it
+crosses a configurable gate (`> X users` / `> Y active curators`) — reusing the existing Scaling
+Milestones pattern. Outcomes are captured in
+[`curator-onboarding_desiredoutcomes.md`](curator-onboarding_desiredoutcomes.md) and decomposed by the
+[Curator Onboarding & Self-Management epic](curator-onboarding-prd.md) into five dependency-sequenced
+cycle PRDs (29–33), each independently shippable:
+
+| Cycle | PRD | Outcome(s) | Status |
+| --- | --- | --- | --- |
+| C1 | [PRD 29 — Self-Serve Promotion & Threshold Gate](prds/prd-29-curator-self-serve-promotion.md) | 1 | **Shipped (Jun 17, 2026)** |
+| C2 | [PRD 30 — Guided Persona Setup & Apply Flow](prds/prd-30-curator-apply-flow.md) | 2 | **Shipped (Jun 17, 2026)** |
+| C3 | [PRD 31 — Curator Self-Management](prds/prd-31-curator-self-management.md) | 4 | **Shipped (Jun 17, 2026)** |
+| C4 | [PRD 32 — First-Pick Activation](prds/prd-32-curator-first-pick-activation.md) | 3 | **Shipped (Jun 17, 2026)** |
+| C5 | [PRD 33 — Guardrails & Oversight at Scale](prds/prd-33-curator-onboarding-guardrails.md) | 5 | **Shipped (Jun 17, 2026)** |
+
+C1 ships the promotion spine (the `me/curator-application` API + the `pending/rejected` status path on the
+existing `curators` row + the pure gate predicate); C2 builds the apply UI on it; C3 adds a self-scoped
+`me/curator` self-management plane; C4 hands the apply flow into first picks (reusing C3); C5 is the
+guardrail/oversight capstone (admin review queue, the Scaling Milestones gate row, anti-abuse, no-pay-to-play
+re-assertion, PII/leak audit). Recommended order: C1 → C2 → C3 → C4 → C5. The initiative reuses the Phase 12
+curator spine (no new core table), stays at `$0`, follows security-at-inception (Snyk), keeps ranking
+unchanged, and leaves the anonymous board byte-for-byte unchanged.
+
+**Phase 13 shipped (Jun 17, 2026) — all five cycles.** A signed-in listener can now become a curator
+self-serve end to end. **C1** widened the `curators` row (`status` gains `pending`/`rejected`, plus
+`application_note` + `handle_changed_at`; additive/idempotent), added the pure `isSelfServeOpen` gate
+(`CURATOR_SELF_SERVE_GATE` = 25 curators / 250 users, tunable) and a `requireUserId()`-gated
+`app/api/me/curator-application` (instant under the gate, `pending` above it; user id from the session).
+**C2** shipped the `/curators/apply` flow (`CuratorApplyForm`) with gate-aware instant-vs-review copy, inline
+validation, entry points (directory + profile menu), an anonymous sign-in nudge, and a success hand-off.
+**C3** added the self-scoped `app/api/me/curator` plane + `/curators/manage` (`CuratorManagePanel`): a curator
+edits only their own persona and adds/show-hides/removes only their own picks (ownership enforced in SQL;
+admin moderation overrides). **C4** handed the apply success into a first-picks search over upcoming events
+(`isCuratorActivated` = ≥1 visible pick) with a not-activated nudge on the curator's own surfaces. **C5** made
+the gate operable: admin pending-review queue + curator-growth/not-activated read in `CuratorAdminPanel`,
+handle-change rate limiting (`canChangeHandle`, 1/day), and unit-tested no-pay-to-play + PII/leak audits
+(`test:social-guardrails`). New routes registered (`api-me-curator-application`, `api-me-curator`); map
+regenerated; `test:curators` (12) + `test:social-guardrails` (12) + `test:registry` green; typecheck + lint
+clean; new code Snyk-clean; `$0`; anonymous board + ranking unchanged.
+
 > **▶ WHAT'S NEXT (hand-off, June 17, 2026).** Phase 11 (Deeper Personalization), Phase 12 (Social /
 > Curator Graph, PRDs 23–27), and **Phase 10 (Discovery Benchmarking) are all fully shipped** — Phase
 > 10's three outcomes now each have a shipped surface: Outcome 1 (PRD 22, Discovery Baseline), Outcome
 > 2 (PRD 28, Deeper Personalization Benchmark), Outcome 3 (PRD 27, Social & Curator Benchmark). Both
 > discovery North-Star initiatives (A: Deeper Personalization; B: Social / Curator) and their
-> benchmark validation layer are complete. **The active scoped queue is empty.** The remaining
+> benchmark validation layer are complete. **[Phase 13 — Curator Onboarding & Self-Management](curator-onboarding-prd.md)
+> (PRDs 29–33) is now fully shipped (Jun 17, 2026)** — self-serve curator onboarding, apply flow,
+> self-management, first-pick activation, and guardrails/oversight all landed. The remaining
 > dependency-unblocked candidates are small/optional follow-ups:
 > 1. **Parked — reproducible synthetic-behavior fixture** for the Deeper Personalization Benchmark:
 >    implement before the next change to Phase 11 implicit/taste scoring (`scoreImplicitSignals` /
@@ -394,9 +446,10 @@ needs both the scoring model and the graph).
 >    See [PRD 28](prds/prd-28-deeper-personalization-benchmark.md) → Parked.
 > 2. **Deferred Phase-11 taste dimensions** (time-of-week / price / indoor-outdoor) —
 >    see [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md) → Remaining Follow-Up.
-> 3. **Phase 12 follow-ups:** self-serve curator onboarding (deferred), finer friend-vs-curator
->    weighting within `socialCircle`, and tuning the concentration threshold against real data —
->    see [`social-curator-prd.md`](social-curator-prd.md) → Open Decisions.
+> 3. **Phase 12 follow-ups:** self-serve curator onboarding **shipped as Phase 13** (PRDs 29–33,
+>    above); finer friend-vs-curator weighting within `socialCircle` and tuning the
+>    concentration threshold against real data remain open — see
+>    [`social-curator-prd.md`](social-curator-prd.md) → Open Decisions.
 >
 > **Snapshot debt (open):** PRD 28's first Deeper-Personalization snapshot is still a template —
 > paste the live "Copy personalization benchmark as markdown" output into the PRD at next admin login.
@@ -418,6 +471,7 @@ Analytics are actively running via **Umami Cloud** to monitor Unique Visitors (p
 | **WAU < 10** | Keep Vercel OG image generation fully dynamic (no caching). | Current |
 | **WAU > 100** or **Events > 5,000/mo** | Implement Next.js `revalidate = 3600` on `opengraph-image.tsx` and `twitter-image.tsx` to cache Satori image generation and avoid Vercel compute limit overages. | Parked |
 | **Events > 10,000/mo** | Umami Cloud Free Tier limit reached. Transition to self-hosted Umami on a $5/mo VPS or upgrade Umami tier. | Parked |
+| **Active curators ≥ 25** or **Users ≥ 250** | Self-serve curator promotion (Phase 13 / PRD 29) switches from **instant** to an **admin-reviewed pending queue** (`CURATOR_SELF_SERVE_GATE` in `lib/curators-core.ts`; tune against real signups). The admin panel surfaces the live count vs. the gate. | **Active (shipped Jun 17, 2026)** |
 
 ## Implementation Reference
 

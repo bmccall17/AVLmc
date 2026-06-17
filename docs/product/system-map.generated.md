@@ -259,7 +259,9 @@ Admin-promoted curator personas + per-show picks (PRD 25). Public reads expose o
   - → Event Detail (flowsTo) — curated-by detail signal
 - **Fed by / required by:**
   - ← Curators API (dependsOn) — directory + profile
-  - ← Admin Curators API (dependsOn) — promote/hide + picks
+  - ← Curator Application API (dependsOn) — apply + my status (self-serve)
+  - ← Curator Self-Management API (dependsOn) — self-manage persona + picks
+  - ← Admin Curators API (dependsOn) — promote/hide + picks + review queue
 
 ### Data Stores
 
@@ -760,6 +762,28 @@ Signed-in-only, idempotent, best-effort endpoint to share a show/song-list with 
 - **Flows to / depends on:**
   - → Social Activity (Inner-Circle) (dependsOn) — share with circle
 
+#### Curator Application API  `api-me-curator-application`
+
+Signed-in-only listener plane (PRD 29): submit a self-authored curator application and read your OWN curator standing. Promoted instantly under the self-serve gate, else `pending` for admin review. The acting user id comes from the session, never the body; applications are private to the applicant + admin (never public, no pay-to-play). Returns 401 when anonymous.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/me/curator-application/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → Curators (dependsOn) — apply + my status (self-serve)
+
+#### Curator Self-Management API  `api-me-curator`
+
+Signed-in-only, self-scoped curator self-management (PRD 31): edit your OWN persona and add / show-hide / remove your OWN picks. The curator + pick ids are resolved from the session and checked in SQL, so a caller can never read or modify another curator. Admin moderation overrides — a non-active row is read-only here. Returns 401 when anonymous.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/me/curator/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → Curators (dependsOn) — self-manage persona + picks
+
 #### Saved Space  `ui-saved-space`
 
 Signed-in-only /saved view with three private lists (events, venues, artists), inline un-save, and empty states. Anonymous visitors are redirected to sign-in.
@@ -786,7 +810,7 @@ Admin-cookie-gated curator management (PRD 25): promote/demote/hide curators, ad
 - **Access:** internal
 - **Ownership:** automated
 - **Flows to / depends on:**
-  - → Curators (dependsOn) — promote/hide + picks
+  - → Curators (dependsOn) — promote/hide + picks + review queue
 
 #### AVLgo Sync (cron)  `job-avlgo-sync`
 
@@ -968,7 +992,9 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | Social Activity (Inner-Circle) | → | Event Board | flowsTo | circle badge (signed-in) |
 | Social Activity (Inner-Circle) | → | Event Detail | flowsTo | people-you-follow strip + attribution |
 | Curators API | → | Curators | dependsOn | directory + profile |
-| Admin Curators API | → | Curators | dependsOn | promote/hide + picks |
+| Curator Application API | → | Curators | dependsOn | apply + my status (self-serve) |
+| Curator Self-Management API | → | Curators | dependsOn | self-manage persona + picks |
+| Admin Curators API | → | Curators | dependsOn | promote/hide + picks + review queue |
 | Curators | → | curators | flowsTo | persona persistence |
 | Curators | → | curator_picks | flowsTo | per-show picks |
 | curators | → | users | dependsOn | persona over a user (cascade) |
@@ -993,4 +1019,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_61 nodes, 84 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_63 nodes, 86 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

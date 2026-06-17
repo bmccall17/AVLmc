@@ -63,7 +63,7 @@ Done means social influence is always *additive and bounded*, the local/novel fl
 
 ### Locked Decisions
 
-- **Curators:** admin-promoted first; self-serve onboarding deferred.
+- **Curators:** admin-promoted first; self-serve onboarding deferred (now scoped as **Phase 13** — [Curator Onboarding & Self-Management](curator-onboarding-prd.md), PRDs 29–33).
 - **Follows:** one-way, opt-in, private by default.
 - **Social signal:** off by default, opt-in, own tunable weight, capped, distinct from public heat.
 - **Spotify writes:** out of scope (parked Outcome unchanged).
