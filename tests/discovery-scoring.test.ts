@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { scoreDiscoveryEvents, type DiscoveryReason } from "../lib/discovery";
+import { enforceExplorationFloor, scoreDiscoveryEvents, type DiscoveryReason } from "../lib/discovery";
 import type {
   DiscoveryPreferenceSignal,
   ImplicitSignalRow,
@@ -441,7 +441,7 @@ test("implicit cooling never exceeds the explicit remove magnitude for the same 
   })[francesElizaEvent.id];
   const removeDrop = base.bestBetsScore - removed.bestBetsScore;
 
-  assert.ok(implicitDrop <= 36); // per-dimension cap (12) across the three dimensions
+  assert.ok(implicitDrop <= 28); // global per-event implicit cap (PRD 21 / C4)
   assert.ok(implicitDrop < removeDrop); // explicit always dominates implicit
 });
 
@@ -503,7 +503,8 @@ test("recent behavior outweighs equally-similar stale behavior", () => {
   const recent = scoreWithSignals([tasteSignal("planning", "2026-06-06T00:00:00.000Z")]);
   const stale = scoreWithSignals([tasteSignal("planning", "2026-02-01T00:00:00.000Z")]);
 
-  assert.ok(recent.bestMatchScore > stale.bestMatchScore);
+  // Compare the taste contribution directly (the exploration floor is independent of recency).
+  assert.ok(recent.components.artistAffinity.base > stale.components.artistAffinity.base);
   // Long-term taste is not erased: an old signal still contributes a positive affinity.
   assert.ok(stale.components.artistAffinity.base > 0);
 });
@@ -519,8 +520,8 @@ test("confidence: more observations produce a stronger but bounded affinity", ()
     tasteSignal("planning", "2026-06-02T00:00:00.000Z", { eventId: "e5" }),
   ]);
 
-  assert.ok(one.bestMatchScore > base.bestMatchScore);
-  assert.ok(many.bestMatchScore > one.bestMatchScore);
+  assert.ok(one.components.artistAffinity.base > base.components.artistAffinity.base);
+  assert.ok(many.components.artistAffinity.base > one.components.artistAffinity.base);
   // Bounded: the artist affinity stays within its dimension ceiling even with heavy evidence.
   assert.ok(many.components.artistAffinity.base <= 40 + 1); // ceiling + favorite/profile headroom (none here)
 });
@@ -556,6 +557,69 @@ test("an explicit positive raises a matching event over the no-signal baseline",
 
   assert.ok(engaged.bestMatchScore > base.bestMatchScore);
   assert.ok(engaged.components.artistAffinity.base > base.components.artistAffinity.base);
+});
+
+// --- Transparency, correctability & loop guardrails (PRD 21 / C4) -------------------------------
+
+test("a boost correction overrides implicit cooling for that dimension (explicit > implicit)", () => {
+  const cooled = scoreWithImplicit([implicitRow("artist", francesElizaEvent.artistName)]);
+  const corrected = scoreDiscoveryEvents({
+    counts: {},
+    events: [francesElizaEvent],
+    implicitSignals: [implicitRow("artist", francesElizaEvent.artistName)],
+    listenerPreferences: {
+      customSignals: [
+        { direction: "boost", id: "fix", kind: "artist", label: francesElizaEvent.artistName, weight: 20 },
+      ],
+    },
+    now: new Date("2026-06-07T12:00:00.000Z"),
+  })[francesElizaEvent.id];
+
+  // The correction removes the cooling: artistAffinity is no longer pushed below the un-cooled base.
+  assert.ok(corrected.components.artistAffinity.base >= 0);
+  assert.ok(corrected.components.artistAffinity.base > cooled.components.artistAffinity.base);
+  assert.ok(!hasReason(corrected.reasons, "you tend to skip this artist"));
+});
+
+test("the exploration floor keeps a novel show competitive and grows with the novelty dial", () => {
+  // A quiet, signal-free event earns the default-active floor boost.
+  const quiet = scoreWithImplicit([]);
+  const noFloor = scoreDiscoveryEvents({
+    counts: {},
+    events: [francesElizaEvent],
+    listenerPreferences: { weights: { novelty: 0 } },
+    now: new Date("2026-06-07T12:00:00.000Z"),
+  })[francesElizaEvent.id];
+  const moreFloor = scoreDiscoveryEvents({
+    counts: {},
+    events: [francesElizaEvent],
+    listenerPreferences: { weights: { novelty: 200 } },
+    now: new Date("2026-06-07T12:00:00.000Z"),
+  })[francesElizaEvent.id];
+
+  assert.ok(quiet.bestBetsScore > noFloor.bestBetsScore); // floor is active by default
+  assert.ok(moreFloor.bestBetsScore > quiet.bestBetsScore); // dial grows it
+});
+
+test("enforceExplorationFloor guarantees a minimum novel share of the top-N", () => {
+  // Ten personalized (non-novel) shows ranked above two novel ones.
+  const ranked = [
+    ...Array.from({ length: 10 }, (_, i) => ({ id: `hot-${i}`, novel: false })),
+    { id: "novel-a", novel: true },
+    { id: "novel-b", novel: true },
+  ];
+
+  const floored = enforceExplorationFloor(ranked, 5, 0.2); // require ceil(0.2*5) = 1 novel in top-5
+  const novelInTop5 = floored.slice(0, 5).filter((item) => item.novel).length;
+  assert.ok(novelInTop5 >= 1);
+
+  // A higher share reserves more slots.
+  const floored2 = enforceExplorationFloor(ranked, 5, 0.4); // require 2
+  assert.equal(floored2.slice(0, 5).filter((item) => item.novel).length, 2);
+
+  // No novel candidates → unchanged (best effort, never invents).
+  const allHot = Array.from({ length: 6 }, (_, i) => ({ id: `h-${i}`, novel: false }));
+  assert.deepEqual(enforceExplorationFloor(allHot, 5, 0.2), allHot);
 });
 
 // --- Cold-start: thin history stays public-dominated, not swingy (PRD 20 / C3) ------------------

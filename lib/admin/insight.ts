@@ -3,6 +3,7 @@ import { query } from "@/lib/db";
 import { getCommunityCountsByEvent, type CommunityCounts } from "@/lib/community";
 import { getUpcomingEvents, type EventRecord } from "@/lib/events";
 import {
+  enforceExplorationFloor,
   scoreDiscoveryEvents,
   type DiscoveryScore,
   type DiscoveryScoreComponents,
@@ -104,7 +105,9 @@ export async function loadRecommendationInsight(force = false): Promise<Recommen
   const signedScores = scoreDiscoveryEvents({ events, counts, connections, profileItems });
 
   const anonymous = rankEvents(events, anonymousScores, counts);
-  const signedIn = rankEvents(events, signedScores, counts);
+  // Apply the guaranteed exploration floor (PRD 21 / C4) to the personalized ranking, so the
+  // benchmark reads reflect that quiet/local discovery isn't crowded out as personalization sharpens.
+  const signedIn = rankEvents(events, signedScores, counts, { enforceFloor: true });
 
   const value: RecommendationInsight = {
     generatedAt: new Date().toISOString(),
@@ -130,18 +133,24 @@ export async function loadRecommendationInsight(force = false): Promise<Recommen
 function rankEvents(
   events: EventRecord[],
   scores: Record<string, DiscoveryScore>,
-  counts: Record<string, CommunityCounts | undefined>
+  counts: Record<string, CommunityCounts | undefined>,
+  options: { enforceFloor?: boolean } = {}
 ): RankedEvent[] {
   const byId = new Map(events.map((event) => [event.id, event]));
 
-  return Object.values(scores)
+  const sorted = Object.values(scores)
     .map((score) => {
       const event = byId.get(score.eventId);
       return { score, event };
     })
     .filter((entry): entry is { score: DiscoveryScore; event: EventRecord } => Boolean(entry.event))
     .sort((a, b) => b.score.bestBetsScore - a.score.bestBetsScore)
-    .map(({ score, event }, index) => ({
+    // A novel/under-the-radar show is one the exploration floor boosted (PRD 21 / C4).
+    .map((entry) => ({ ...entry, novel: entry.score.components.novelty.base > 0 }));
+
+  const ranked = options.enforceFloor ? enforceExplorationFloor(sorted, TOP_N) : sorted;
+
+  return ranked.map(({ score, event }, index) => ({
       eventId: event.id,
       title: event.eventTitle,
       venueName: event.venueName,

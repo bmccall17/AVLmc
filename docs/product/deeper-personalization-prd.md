@@ -64,6 +64,17 @@ C1 Skips Cool Dimensions
 - **C3** and **C4** both depend on C2 and are independent of each other; either may follow. C4 is the safety/accountability capstone and the natural pairing with the Phase 10 benchmark cycle.
 - **Recommended order:** C1 → C2 → C3 → C4.
 
+## Implementation Status
+
+**Shipped — all four cycles complete (June 16, 2026).** The initiative delivered end to end:
+
+- **C1 (PRD 18):** discovery reads the impression stream and gently cools repeatedly-shown, never-engaged artist/venue/genre dimensions — recency-decayed, capped below `remove`, never hiding an event.
+- **C2 (PRD 19):** the flat "recent 240" learned term is replaced by recency-decayed, confidence-weighted per-dimension affinities (artist/venue/genre) routed through the existing dials; storage stayed live-first (no rollup table). Time-of-week/price/indoor-outdoor dimensions were deferred (latent at default dials) and folded into C4's scope note.
+- **C3 (PRD 20):** a durable, idempotent anonymous→account hand-off (`migrateSessionSignalsToUser`, wired into the Auth.js `signIn` event) makes signing in continuity, not a reset; cold-start parity confirmed via confidence weighting.
+- **C4 (PRD 21):** a guaranteed exploration floor (default-active + `enforceExplorationFloor` top-N reservation), the unit-tested "explicit > implicit" invariant (global implicit cap below the `remove` envelope), and boost-correction suppression of implicit cooling.
+
+Every cycle: per-dimension explainability in Listener Trace / Recommendation Insight, Snyk-clean, $0 (no new table or route). Initiative B (the [Social / Curator Graph](social-curator_desiredoutcomes.md), Phase 12) layers a social signal on top of this scoring substrate.
+
 ## Shared Architecture & Cross-Cutting Design
 
 Decided once here; inherited by every cycle PRD.

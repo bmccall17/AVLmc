@@ -103,6 +103,17 @@ type ImplicitCool = {
   reasons: DiscoveryReason[];
 };
 
+/**
+ * Normalized "boost" terms by dimension (PRD 21 / C4 correctability). A listener who boosts an
+ * artist/venue/genre via the existing custom-signal channel is correcting any implicit cooling on
+ * that dimension — the correction wins, so cooling is suppressed for matching values.
+ */
+type ProtectedDimensions = {
+  artist: string[];
+  venue: string[];
+  tag: string[];
+};
+
 type ProfileTerm = {
   name: string;
   normalized: string;
@@ -135,8 +146,18 @@ const MAX_SPOTIFY_SCORE = 80;
 const IMPLICIT_SKIP_THRESHOLD = 4;
 const IMPLICIT_SKIP_HALF_LIFE_DAYS = 30;
 const IMPLICIT_DIM_COOL_CAP = 12;
-const IMPLICIT_TOTAL_COOL_CAP = 24;
+// Global per-event cap on total implicit influence (PRD 21 / C4): the sum of all per-dimension
+// cooling that can lower a single event's rank, held below the explicit `remove` envelope (56) so the
+// "explicit > implicit" invariant holds even when every dimension cools at once.
+const IMPLICIT_TOTAL_COOL_CAP = 28;
 const IMPLICIT_REASON_MIN = 5;
+
+// Guaranteed exploration floor (PRD 21 / C4). Replaces the old binary novelty bonus: under-the-radar
+// shows get a real, default-active boost that personalization can't silently strip, and a minimum
+// share of any ranked top-N is reserved for them. Both are tunable via the existing `novelty` dial.
+const EXPLORATION_FLOOR_BASE = 14;
+const EXPLORATION_SOCIAL_CEILING = 5;
+const EXPLORATION_FLOOR_SHARE = 0.2;
 
 export function scoreDiscoveryEvents({
   connections = [],
@@ -165,6 +186,8 @@ export function scoreDiscoveryEvents({
   // Build the recency-decayed, per-dimension positive taste model once per pass (PRD 19 / C2); each
   // event is matched against it below rather than re-summing every signal per event.
   const tasteModel = buildTasteModel(preferenceSignals, now);
+  // Listener boost corrections that override implicit cooling (PRD 21 / C4); built once per pass.
+  const protectedDimensions = buildProtectedDimensions(preferences.customSignals);
 
   // Dedupe favorites against equivalent ad-hoc boost custom signals so a saved venue/artist and
   // an explicit boost for the same name don't double-count across components (PRD 14 bounding).
@@ -190,13 +213,16 @@ export function scoreDiscoveryEvents({
         spotifyMatchCorrections.filter((correction) => correction.eventId === event.id)
       );
       const personalScore = scorePersonalSignals(event, preferenceSignals, tasteModel);
-      const implicit = scoreImplicitSignals(event, implicitSkipSignals, now);
+      const implicit = scoreImplicitSignals(event, implicitSkipSignals, now, protectedDimensions);
       // Per-dimension behavioral contribution to the directly-summed score (PRD 19 / C2). Positive
       // venue/genre taste rides both sorts; positive artist taste is a Best Match dimension (like the
       // Spotify match). Implicit skip cooling and the explicit remove penalty lower both sorts —
       // skips never bury an event, only cool the matching dimension. The matching component bases
       // below mirror these values so the existing dials tune (and can fully cancel) each one.
-      const implicitCool = implicit.artistCool + implicit.venueCool + implicit.genreCool;
+      const implicitCool = Math.min(
+        IMPLICIT_TOTAL_COOL_CAP,
+        implicit.artistCool + implicit.venueCool + implicit.genreCool
+      );
       const tasteBestBets =
         personalScore.venueAffinity + personalScore.genreAffinity - personalScore.removePenalty - implicitCool;
       const tasteBestMatch =
@@ -246,15 +272,22 @@ export function scoreDiscoveryEvents({
         {
           // Favorites contribute a direct baseline term (like the Spotify artist match), with the
           // venuePreference / artistAffinity weights dialing it 0x–2x via the component delta. A
-          // saved venue applies to both sorts; a saved artist rides artistAffinity (Best Match).
+          // saved venue applies to both sorts; a saved artist rides artistAffinity (Best Match). The
+          // exploration floor (novelty base) is added directly too (PRD 21 / C4) so under-the-radar
+          // shows keep a real, dial-tunable boost personalization can't silently strip.
           bestBetsScore:
-            publicScore.score + tasteBestBets + favoriteScore.venue + bestBetsTuning.adjustment,
+            publicScore.score +
+            tasteBestBets +
+            favoriteScore.venue +
+            componentBases.novelty +
+            bestBetsTuning.adjustment,
           bestMatchScore:
             publicScore.score +
             profileScore.score +
             tasteBestMatch +
             favoriteScore.venue +
             favoriteScore.artist +
+            componentBases.novelty +
             bestMatchTuning.adjustment,
           components: bestMatchTuning.components,
           eventId: event.id,
@@ -538,16 +571,21 @@ function buildImplicitSkipSignals(rows: ImplicitSignalRow[]): ImplicitSkipSignal
 function scoreImplicitSignals(
   event: EventRecord,
   signals: ImplicitSkipSignal[],
-  now: Date
+  now: Date,
+  protectedDimensions: ProtectedDimensions
 ): ImplicitCool {
   let artistCool = 0;
   let venueCool = 0;
   let genreCool = 0;
 
   for (const signal of signals) {
-    // Explicit positive engagement for this dimension overrides implicit cooling, and a single skip
-    // (below the repetition threshold) does nothing.
+    // Explicit positive engagement, or a listener correction (boost) on this dimension, overrides
+    // implicit cooling (PRD 21 / C4 — explicit > implicit); a single skip below the threshold is a
+    // no-op.
     if (signal.engaged || signal.impressions < IMPLICIT_SKIP_THRESHOLD) {
+      continue;
+    }
+    if (isProtectedDimension(signal, protectedDimensions)) {
       continue;
     }
 
@@ -598,6 +636,43 @@ function matchImplicitDimension(event: EventRecord, signal: ImplicitSkipSignal) 
     }
   }
   return best;
+}
+
+/** A boost correction on the matching dimension suppresses implicit cooling (PRD 21 / C4). */
+function isProtectedDimension(signal: ImplicitSkipSignal, protectedDimensions: ProtectedDimensions) {
+  const terms =
+    signal.dimension === "artist"
+      ? protectedDimensions.artist
+      : signal.dimension === "venue"
+        ? protectedDimensions.venue
+        : protectedDimensions.tag;
+  return terms.some((term) => fieldMatchStrength(signal.value, term) > 0);
+}
+
+/**
+ * Collect the listener's "boost" custom-signal terms by dimension (PRD 21 / C4). These are the
+ * corrections that override implicit cooling — reusing the existing custom-signal channel rather
+ * than a new store.
+ */
+function buildProtectedDimensions(signals: ListenerCustomSignal[]): ProtectedDimensions {
+  const protectedDimensions: ProtectedDimensions = { artist: [], venue: [], tag: [] };
+  for (const signal of signals) {
+    if (signal.direction !== "boost") {
+      continue;
+    }
+    const term = normalizeText(signal.label);
+    if (!term) {
+      continue;
+    }
+    if (signal.kind === "artist") {
+      protectedDimensions.artist.push(term);
+    } else if (signal.kind === "venue") {
+      protectedDimensions.venue.push(term);
+    } else if (signal.kind === "tag") {
+      protectedDimensions.tag.push(term);
+    }
+  }
+  return protectedDimensions;
 }
 
 /** Recency-decayed cool for one dimension; grows slowly past the threshold, capped per-dimension. */
@@ -843,6 +918,13 @@ function scoreFavorites(
   };
 }
 
+/**
+ * Exploration floor (PRD 21 / C4). An under-the-radar show — little community heat, no strong taste
+ * or Spotify signal — earns a real boost that fades smoothly as social heat rises (rather than the
+ * old all-or-nothing +12). This base is added directly to the ranked score *and* tuned by the
+ * `novelty` dial, so personalization can never silently bury quiet/local discovery, and turning the
+ * dial up grows the floor.
+ */
 function scoreNovelty(
   counts: CommunityCounts | undefined,
   profileScore: number,
@@ -855,11 +937,56 @@ function scoreNovelty(
     (counts?.songs ?? 0) +
     (counts?.voices ?? 0);
 
-  if (socialTotal > 2 || profileScore > 0 || personalScore > 10) {
+  if (socialTotal >= EXPLORATION_SOCIAL_CEILING || profileScore > 0 || personalScore > 16) {
     return 0;
   }
 
-  return 12;
+  const quietness = 1 - socialTotal / EXPLORATION_SOCIAL_CEILING;
+  return Math.round(EXPLORATION_FLOOR_BASE * quietness);
+}
+
+/**
+ * Guarantee a minimum exploration share of a ranked top-N (PRD 21 / C4). Given events already sorted
+ * best-first with a `novel` flag, promote the highest-ranked novel shows into the top-N until at
+ * least `ceil(share · topN)` of it is novel — reserving slots so a strongly-personalized listener
+ * still sees quiet/local discovery. Pure and order-stable otherwise; returns a new array.
+ */
+export function enforceExplorationFloor<T extends { novel: boolean }>(
+  ranked: T[],
+  topN: number,
+  share: number = EXPLORATION_FLOOR_SHARE
+): T[] {
+  const n = Math.min(topN, ranked.length);
+  if (n === 0) {
+    return ranked.slice();
+  }
+
+  const required = Math.ceil(share * n);
+  const novelInTop = ranked.slice(0, n).filter((item) => item.novel).length;
+  const deficit = required - novelInTop;
+  if (deficit <= 0) {
+    return ranked.slice();
+  }
+
+  // Best novel candidates sitting below the cut, in rank order.
+  const promote = new Set(ranked.slice(n).filter((item) => item.novel).slice(0, deficit));
+  if (promote.size === 0) {
+    return ranked.slice();
+  }
+
+  // Demote the lowest-ranked non-novel shows currently in the top-N to free exactly that many slots.
+  const demote = new Set<T>();
+  for (let i = n - 1; i >= 0 && demote.size < promote.size; i -= 1) {
+    if (!ranked[i].novel) {
+      demote.add(ranked[i]);
+    }
+  }
+
+  // Rebuild: the kept top-N (original minus demoted, plus promoted) keeps its relative order; the
+  // demoted shows fall just below, then everything else — all otherwise rank-stable.
+  const newTop = ranked.filter((item, index) => (index < n && !demote.has(item)) || promote.has(item));
+  const below = ranked.filter((item, index) => !((index < n && !demote.has(item)) || promote.has(item)));
+  return [...newTop, ...below];
 }
 
 function scoreCustomSignals(event: EventRecord, signals: ListenerCustomSignal[]) {

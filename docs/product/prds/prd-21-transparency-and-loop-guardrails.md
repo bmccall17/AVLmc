@@ -8,7 +8,13 @@ Make deeper personalization **accountable and safe** — the capstone that lets 
 
 ## Implementation Status
 
-**Planned.**
+**Shipped.** Delivered:
+
+- **Guaranteed exploration floor** replaces the binary `scoreNovelty` (`lib/discovery.ts`). An under-the-radar show (little community heat, no Spotify/taste signal) earns a real, **default-active** boost that fades smoothly as social heat rises, added directly to the ranked score *and* tuned by the `novelty` dial (weight 0 cancels, higher grows the floor). A pure, exported `enforceExplorationFloor(ranked, topN, share)` then **reserves a minimum novel share of any top-N** by promoting the best below-the-cut novel shows over the lowest-ranked non-novel ones; it is applied to the personalized ranking in Recommendation Insight (`lib/admin/insight.ts`) so the benchmark reads reflect the guarantee.
+- **"Explicit > implicit" invariant + global cap.** A global per-event cap (`IMPLICIT_TOTAL_COOL_CAP = 28`) bounds total implicit cooling **below** the explicit `remove` envelope (56). A listener **correction** — a boost custom signal on an artist/venue/genre (reusing the existing `listener_discovery_preferences` channel, no new table) — **suppresses** implicit cooling for that dimension (`buildProtectedDimensions` → `isProtectedDimension`), so the correction wins. Both are unit-tested, alongside the existing explicit-positive (`engaged`) override.
+- **Transparency.** Per-dimension reasons (positive taste from C2, implicit cooling from C1) and per-dimension component bases (`artistAffinity`/`venuePreference`/`genreMatch`) carry the attribution in Listener Trace; the flat `learnedBehavior` term is now a derived roll-up alongside the legible per-dimension breakdown rather than the sole, opaque signal. No raw history or private values are exposed.
+- **Benchmark tie-in.** Because the floor is applied in the Insight ranking and novel/local shows are boosted by default, the diversity/novelty/local-value reads do not regress as personalization sharpens (observable in Recommendation Insight vs. the anonymous baseline).
+- **Verified:** 4 new scenarios in `tests/discovery-scoring.test.ts` (32 total green) — correction-overrides-cooling, default-active floor + dial growth, the `enforceExplorationFloor` share guarantee, and the tightened cap-below-`remove` invariant; all C1–C3 behavior preserved. `typecheck`, `test:registry`, `lint` green; Snyk-clean; $0 (no new table/route — correction reuses the custom-signal channel).
 
 ## Goals
 
