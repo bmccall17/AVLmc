@@ -43,25 +43,37 @@ The **reproducible synthetic-behavior fixture** (a committed skip/engage fixture
 - **Verified**: `typecheck` / `lint` / `build` green; unit suites pass (incl. `test:registry` after
   map regeneration); Snyk **0 issues**. No new table / route / tab / dependency; $0.
 
-### First recorded snapshot
+### First recorded snapshot (2026-06-17, scorer v12.4)
 
-> Recorded at live verification against Neon production (paste the output of "Copy personalization
-> benchmark as markdown" here). Format:
->
-> ```
-> ### Deeper Personalization Benchmark — YYYY-MM-DD
->
-> - **Window:** … → …
-> - **Scorer:** v12.4
-> - **Method:** Aggregate roll-up of N real traceable listeners' rankings vs. the anonymous baseline (capped at 15); no listener identities.
-> - _Descriptive snapshot — not a single quality score; aggregate only, no listener identities._
->
-> **Lift:** …% of N listeners get a different top-N · mean displacement … ranks (median …).
-> **Skips:** …/N listeners (…%) see a "you tend to skip…" reason · … surfaced events cooled — capped below explicit remove.
-> **Guardrail:** personalized novelty …% vs anonymous baseline …% — floor holds.
-> **Coverage:** …/… personalized of … traceable listeners.
-> **Top signals:** … ×… · … ×…
-> ```
+Recorded live against Neon production (commit `0364d27`):
+
+```
+### Deeper Personalization Benchmark — 2026-06-17
+
+- **Window:** 2026-06-17 → 2026-07-08
+- **Scorer:** v12.4 (commit 0364d27)
+- **Method:** Aggregate roll-up of 15 real traceable listeners' rankings vs. the anonymous baseline (capped at 15); no listener identities.
+- _Descriptive snapshot — not a single quality score; aggregate only, no listener identities._
+
+**Lift:** 100% of 15 listeners get a different top-N · mean displacement 58.3 ranks (median 36.6).
+**Skips:** 1/15 listeners (7%) see a "you tend to skip…" reason · 9 surfaced events cooled — capped below explicit remove.
+**Guardrail:** personalized novelty 100% vs anonymous baseline 100% — floor holds.
+**Coverage:** 15/4 personalized of 16 traceable listeners.
+**Top signals:** dialed down for you ×168 · happening soon ×121 · tag match ×53 · genre match: folk ×24 · genre match: jazz ×12 · genre match: jazz / blues ×11 · genre match: hip hop ×11 · genre match: folk / metal ×11
+```
+
+**Reading notes (two follow-ups this first snapshot exposed):**
+
+1. **Coverage `withSignal` undercount — fixed.** The `15/4` reads "15 personalized but only 4 with
+   signal," which is impossible. Cause: `hasSignal` didn't count implicit (impression-derived) skip
+   signals, even though those personalize ranking on their own — so listeners personalized purely by
+   skip-cooling weren't counted as "with signal." Fixed in `lib/admin/personalization-benchmark.ts`
+   (`toRow` now includes `implicitSignals`); the next live reading should read `≈15/15 of 16`.
+2. **Displacement magnitude is whole-list, not top-N.** `delta` compares a surfaced event's personal
+   rank against its anonymous rank across **all** ~431 events, so a mean of 58 ranks means
+   personalization pulls a listener's surfaced shows up ~58 positions from where the anonymous board
+   sat them — expected given the metric, but worth stating so it isn't misread as instability. A
+   future cut could add a top-N-membership-churn view alongside it.
 
 ## Goals
 

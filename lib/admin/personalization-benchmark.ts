@@ -142,8 +142,12 @@ function toRow(scoring: ListenerScoring): PersonalizationListenerRow {
 
   const weights = scoring.preferences.weights ?? {};
   const tunedWeight = Object.values(weights).some((weight) => Number(weight) !== 0);
+  // "Has enough signal to personalize" must include implicit (impression-derived) skip signals —
+  // they move ranking on their own, so a listener can be personalized purely from skips. Omitting
+  // them undercounts `withSignal` below `personalized` (an impossible coverage read).
   const hasSignal =
     scoring.signals.length > 0 ||
+    scoring.implicitSignals.length > 0 ||
     scoring.profileItems.length > 0 ||
     scoring.preferences.customSignals.length > 0 ||
     tunedWeight;

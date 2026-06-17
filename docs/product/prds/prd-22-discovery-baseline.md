@@ -41,7 +41,15 @@ The bulk of the per-reading content already exists in `lib/admin/insight.ts`; "d
   `test:registry`); Snyk **0 issues**; live-verified against Neon production data. $0; no new
   table, route, tab, or dependency.
 
-### First recorded baseline snapshot (2026-06-17)
+### Recorded baseline snapshots
+
+The first reading (scorer **v11.4**) and a re-recording after the Phase 12 social work shipped
+(scorer **v12.4**, commit `0364d27`). Diff by eye: the window rolled forward a day, the top-5
+reshuffled (the Pisgah lineup aged out, scores compressed to 44), tag spread 50→48, and a
+`socialCircle`-maxed **Social & Curator** block now appears (Outcome 3 / PRD 27). Diversity, novelty
+(100%), local value (0%), and engagement concentration (0%) held steady across the scorer change.
+
+#### v11.4 — 2026-06-17
 
 ```
 ### Discovery Baseline — 2026-06-17
@@ -65,6 +73,38 @@ The bulk of the per-reading content already exists in `lib/admin/insight.ts`; "d
 3. Bayou Diesel at Arbor Evenings — The North Carolina Arboretum (score 38)
 4. Taps + Tunes Live Music — White Labs Brewing Co - Asheville Kitchen & Tap (score 38)
 5. Matt Smith's Well-Crafted Music Series with Melissa McKinney — Highland Brewing Co. (score 38)
+```
+
+#### v12.4 — 2026-06-17 (post Phase 12; commit 0364d27)
+
+```
+### Discovery Baseline — 2026-06-17
+
+- **Window:** 2026-06-17 → 2026-07-08
+- **Scorer:** v12.4 (commit 0364d27)
+- **Synthetic profile:** Fixed public-derived seed (5 artists), pinned 2026-06-17 — regenerated intentionally, never a real listener's data.
+- _Descriptive snapshot — not a single quality score._
+
+**Diversity (top 10):** 10 venues · 10 artists · 48 tags
+**Novelty:** 100% of top-10 under-the-radar
+**Local value:** 0% of top-10 carry community signal
+**Engagement:** 7 total community heat · 0% concentrated in top-10
+**Coverage:** 21/431 events personalized · 410 rank on timing alone
+**Signal mix (top 10):** Date availability 10
+**Behavior:** 453 interactions · 8 removals · 423 impressions · 95% non-converting
+
+**Top 5 anonymous ranking:**
+1. Old-time Jam — Jack of the Wood Pub (score 44)
+2. Bayou Diesel at Arbor Evenings — The North Carolina Arboretum (score 44)
+3. Matt Smith's Well-Crafted Music Series with Melissa McKinney — Highland Brewing Co. (score 44)
+4. Wednesday Jazz at The Mule — The Mule at Devil's Foot Beverage (score 44)
+5. Taps + Tunes Live Music — White Labs Brewing Co - Asheville Kitchen & Tap (score 44)
+
+**Social & Curator (PRD 27):**
+- "Your people" lift: 50 · anonymous popularity (socialHeat): 0 — read separately, never combined.
+- Influence concentration: 67% from the single largest source · ⚠ early-warning threshold crossed.
+- Exploration floor holds with social maxed: yes (novelty 100% vs baseline 100%).
+- _Descriptive synthetic-circle reading — not a quality score; no money buys rank._
 ```
 
 ## Goals
