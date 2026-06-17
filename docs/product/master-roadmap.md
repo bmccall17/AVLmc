@@ -278,6 +278,22 @@ Both decompose into epic PRDs + cycle PRDs when scoped. Recommended overall buil
 the tracks: Phase 11 skips→ranking first (highest leverage), the social graph foundation in parallel,
 and the social ranking signal last (it needs both the scoring model and the graph).
 
+> **▶ WHAT'S NEXT (hand-off, June 16, 2026).** Phase 11 (Deeper Personalization, C1–C4) is **fully
+> shipped**. Phase 11 is no longer the active queue. The dependency-unblocked candidates now are:
+> 1. **Phase 10 — Discovery Benchmark** *(recommended next)*. It is the validation layer the
+>    just-shipped Phase 11 needs (and Phase 12 will need). Still **desired-outcomes only** — needs a
+>    benchmark PRD scoped before build. Start: [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md);
+>    it builds on the shipped Recommendation Insight (`lib/admin/insight.ts`) + Listener Trace.
+> 2. **Phase 12 — Social / Curator Graph** (Initiative B). Now unblocked (it layers on Phase 11's
+>    scoring model). Still desired-outcomes only — needs epic + cycle PRDs scoped. Start:
+>    [`social-curator_desiredoutcomes.md`](social-curator_desiredoutcomes.md).
+> 3. **Small follow-up:** the deferred Phase-11 taste dimensions (time-of-week / price / indoor-outdoor)
+>    — see [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md) → Remaining Follow-Up.
+>
+> **Cross-machine note:** these four cycle commits live on local `main` and are **not pushed**. Run
+> `git push` before driving `/orchestrator` from another machine, or it will read stale docs and miss
+> this work entirely.
+
 ## Scaling Milestones & Tracking
 
 Analytics are actively running via **Umami Cloud** to monitor Unique Visitors (proxy for WAU/MAU) without heavy cookies or breaking the $0 constraint.
