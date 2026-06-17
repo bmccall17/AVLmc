@@ -7,6 +7,7 @@ import { Bell, CalendarCheck, ChevronRight, ExternalLink, Flame, Headphones, Sea
 import { signIn } from "next-auth/react";
 import { SaveButton } from "@/components/SaveButton";
 import { SharedSongsCard, type SharedSongSummary } from "@/components/SharedSongsCard";
+import { circleBadgeCount, type CircleEventActivity } from "@/lib/social-activity-core";
 import { resolveGenres, type CanonicalGenre } from "@/lib/genre-taxonomy";
 import { SHARED_SONGS_REFRESH_EVENT } from "@/lib/shared-songs-core";
 import type { CommunityCounts } from "@/lib/community";
@@ -40,6 +41,7 @@ type ActiveTooltip = {
 };
 
 type EventBoardProps = {
+  circleActivityByEvent?: Record<string, CircleEventActivity | undefined>;
   counts: Record<string, CommunityCounts | undefined>;
   discoveryScores: DiscoveryScoresByEvent;
   events: EventRecord[];
@@ -118,6 +120,7 @@ const actionHelp: Record<ActionKind, { body: string; impact: string; title: stri
 };
 
 export function EventBoard({
+  circleActivityByEvent,
   counts,
   discoveryScores,
   events,
@@ -871,6 +874,7 @@ export function EventBoard({
                 }}
                 onTogglePositiveAction={togglePositiveAction}
                 onTrackAvlgoClick={trackAvlgoClick}
+                circleActivity={circleActivityByEvent?.[event.id]}
                 reasons={reasons}
                 score={score}
                 sharedSongSummary={sharedSongSummaries[event.id]}
@@ -945,6 +949,7 @@ export function EventBoard({
 
 function DiscoveryEventCard({
   activeTooltip,
+  circleActivity,
   counts,
   event,
   index,
@@ -966,6 +971,7 @@ function DiscoveryEventCard({
   state,
 }: {
   activeTooltip: ActiveTooltip | null;
+  circleActivity: CircleEventActivity | undefined;
   counts: CommunityCounts | undefined;
   event: EventRecord;
   index: number;
@@ -1092,6 +1098,14 @@ function DiscoveryEventCard({
             </a>
           </div>
           <SharedSongsCard eventId={event.id} initialSummary={sharedSongSummary} />
+          {circleBadgeCount(circleActivity) > 0 ? (
+            <span
+              className="circle-badge"
+              title={`${circleBadgeCount(circleActivity)} from your circle`}
+            >
+              👥 {circleBadgeCount(circleActivity)} from your circle
+            </span>
+          ) : null}
         </div>
       </div>
 

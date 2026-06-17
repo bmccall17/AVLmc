@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+import { CirclePresence } from "@/components/CirclePresence";
 import { CommunityPanel } from "@/components/CommunityPanel";
 import { EventImage } from "@/components/EventImage";
 import { SaveButton } from "@/components/SaveButton";
@@ -20,6 +21,7 @@ import { formatLongDate } from "@/lib/format";
 import { listMusicConnections } from "@/lib/music";
 import { getSavedKeys } from "@/lib/saved-items";
 import { listPublicSharedSongs } from "@/lib/shared-songs";
+import { attributeSharedSongs, getCircleEventActivity } from "@/lib/social-activity";
 
 type EventPageProps = {
   params: Promise<{
@@ -73,12 +75,17 @@ export default async function EventPage({ params }: EventPageProps) {
   const sessionId = getAnonymousSessionIdFromCookieValue(
     cookieStore.get(ANONYMOUS_SESSION_COOKIE_NAME)?.value
   );
-  const [musicConnections, discoveryStates, savedKeys, sharedSongs] = await Promise.all([
-    userId ? listMusicConnections(userId) : Promise.resolve([]),
-    listDiscoveryStates([event.id], { sessionId, userId }),
-    userId ? getSavedKeys(userId) : Promise.resolve([]),
-    listPublicSharedSongs(event.id, userId),
-  ]);
+  const [musicConnections, discoveryStates, savedKeys, publicSharedSongs, circleActivityByEvent] =
+    await Promise.all([
+      userId ? listMusicConnections(userId) : Promise.resolve([]),
+      listDiscoveryStates([event.id], { sessionId, userId }),
+      userId ? getSavedKeys(userId) : Promise.resolve([]),
+      listPublicSharedSongs(event.id, userId),
+      getCircleEventActivity(userId, [event.id]),
+    ]);
+  // Attribute in-circle seeders server-side at the gate (no-op for anonymous viewers).
+  const sharedSongs = await attributeSharedSongs(userId, event.id, publicSharedSongs);
+  const circleActivity = circleActivityByEvent[event.id] ?? null;
   const spotifySearchEnabled = musicConnections.some(
     (connection) => connection.provider === "spotify" && !connection.disconnectedAt
   );
@@ -181,7 +188,14 @@ export default async function EventPage({ params }: EventPageProps) {
         spotifySearchEnabled={spotifySearchEnabled}
       />
 
-      <SharedListening eventId={event.id} initialSongs={sharedSongs} />
+      <CirclePresence activity={circleActivity} />
+
+      <SharedListening
+        eventId={event.id}
+        eventTitle={event.eventTitle}
+        initialSongs={sharedSongs}
+        isSignedIn={isSignedIn}
+      />
     </main>
   );
 }

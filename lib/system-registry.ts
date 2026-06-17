@@ -326,6 +326,17 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "manual",
   },
+  {
+    id: "svc-social-activity",
+    kind: "service",
+    layer: "processing",
+    label: "Social Activity (Inner-Circle)",
+    description:
+      "Inner-circle attribution (PRD 24): a live READ layer that joins the C1 follow graph against existing going/firing (event_person_event_state) and shared-song seeders (event_shared_songs.seeded_by_user_id), returning only activity of followees the viewer follows AND who opted into sharing. No new table — attribution is gated at the SQL join and seeded_by_user_id is resolved to a name server-side, never shipped raw. Empty for anonymous callers; never in any public/community/OG response.",
+    sourceOfTruth: "lib/social-activity.ts",
+    access: "internal",
+    ownership: "manual",
+  },
 
   /* ---- Data stores ----------------------------------------------- */
   {
@@ -645,6 +656,26 @@ const NODES: RegistryNode[] = [
     ownership: "automated",
   },
   {
+    id: "api-circle-activity",
+    kind: "surface",
+    layer: "identity",
+    label: "Circle Activity API",
+    description: "Signed-in-only endpoint returning the viewer's followed-and-opted-in people going to / firing given events (PRD 24). Returns 401/empty when anonymous; never exposes anyone outside the caller's circle.",
+    sourceOfTruth: "app/api/me/circle-activity/route.ts",
+    access: "public",
+    ownership: "automated",
+  },
+  {
+    id: "api-circle-share",
+    kind: "surface",
+    layer: "identity",
+    label: "Circle Share API",
+    description: "Signed-in-only, idempotent, best-effort endpoint to share a show/song-list with your circle (PRD 24). Reuses existing going state; no Spotify write, no ranking change.",
+    sourceOfTruth: "app/api/me/circle-share/route.ts",
+    access: "public",
+    ownership: "automated",
+  },
+  {
     id: "ui-saved-space",
     kind: "surface",
     layer: "identity",
@@ -824,6 +855,13 @@ const EDGES: RegistryEdge[] = [
   { from: "svc-social-graph", to: "db-listener-follows", kind: "flowsTo", label: "persist follow edges" },
   { from: "db-listener-follows", to: "db-users", kind: "dependsOn", label: "follower/followee (cascade)" },
   { from: "svc-social-graph", to: "db-listener-prefs", kind: "dependsOn", label: "activity-sharing opt-in gate" },
+  { from: "api-circle-activity", to: "svc-social-activity", kind: "dependsOn", label: "your-people going/firing" },
+  { from: "api-circle-share", to: "svc-social-activity", kind: "dependsOn", label: "share with circle" },
+  { from: "svc-social-activity", to: "db-listener-follows", kind: "dependsOn", label: "follow edges (gate)" },
+  { from: "svc-social-activity", to: "db-person-event-state", kind: "dependsOn", label: "going/firing source" },
+  { from: "svc-social-activity", to: "db-shared-songs", kind: "dependsOn", label: "seeder attribution (gated)" },
+  { from: "svc-social-activity", to: "ui-eventboard", kind: "flowsTo", label: "circle badge (signed-in)" },
+  { from: "svc-social-activity", to: "ui-event-detail", kind: "flowsTo", label: "people-you-follow strip + attribution" },
   { from: "ui-eventboard", to: "ui-listener-profile", kind: "flowsTo", label: "sign-in entry" },
 
   // Operations

@@ -28,6 +28,12 @@ export type SharedSong = {
 export type PublicSharedSong = Omit<SharedSong, "status"> & {
   embedUrl: string;
   youAlreadyLove: boolean;
+  /**
+   * Inner-circle attribution (PRD 24 / C2): the seeder's display name, attached ONLY for a signed-in
+   * viewer who follows the seeder and whose seeder opted into sharing. Absent (undefined) on the
+   * anonymous/public path, which stays the PRD 17 unattributed shape. Never the raw seeded_by_user_id.
+   */
+  sharedBy?: string | null;
 };
 
 export type SharedSongSeed = {

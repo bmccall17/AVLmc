@@ -225,6 +225,24 @@ Reads and writes a signed-in listener's private, one-way follow edges (PRD 23). 
 - **Fed by / required by:**
   - ← Follows API (dependsOn) — follow/unfollow/list
 
+#### Social Activity (Inner-Circle)  `svc-social-activity`
+
+Inner-circle attribution (PRD 24): a live READ layer that joins the C1 follow graph against existing going/firing (event_person_event_state) and shared-song seeders (event_shared_songs.seeded_by_user_id), returning only activity of followees the viewer follows AND who opted into sharing. No new table — attribution is gated at the SQL join and seeded_by_user_id is resolved to a name server-side, never shipped raw. Empty for anonymous callers; never in any public/community/OG response.
+
+- **Kind:** Service
+- **Source of truth:** `lib/social-activity.ts`
+- **Access:** internal
+- **Ownership:** manual
+- **Flows to / depends on:**
+  - → listener_follows (dependsOn) — follow edges (gate)
+  - → event_person_event_state (dependsOn) — going/firing source
+  - → event_shared_songs (dependsOn) — seeder attribution (gated)
+  - → Event Board (flowsTo) — circle badge (signed-in)
+  - → Event Detail (flowsTo) — people-you-follow strip + attribution
+- **Fed by / required by:**
+  - ← Circle Activity API (dependsOn) — your-people going/firing
+  - ← Circle Share API (dependsOn) — share with circle
+
 ### Data Stores
 
 _Postgres tables of record._
@@ -334,6 +352,7 @@ Per-identity, per-event state (fire / planning / removed) used to personalize an
 - **Live count:** `event_person_event_state` (resolved in portal/API)
 - **Fed by / required by:**
   - ← Signal Memory (flowsTo) — per-event state
+  - ← Social Activity (Inner-Circle) (dependsOn) — going/firing source
 
 #### users  `db-users`
 
@@ -444,6 +463,7 @@ Private, one-way follow edges (follower → followee) for the Social / Curator G
   - → users (dependsOn) — follower/followee (cascade)
 - **Fed by / required by:**
   - ← Social Graph (flowsTo) — persist follow edges
+  - ← Social Activity (Inner-Circle) (dependsOn) — follow edges (gate)
 
 #### event_shared_songs  `db-shared-songs`
 
@@ -459,6 +479,7 @@ Public, deduped per-event song list seeded when a signed-in Spotify listener Goe
   - → Event Board (flowsTo) — compact affordance
 - **Fed by / required by:**
   - ← Shared Listening (flowsTo) — upsert shared songs
+  - ← Social Activity (Inner-Circle) (dependsOn) — seeder attribution (gated)
 
 ### Public Experience
 
@@ -496,6 +517,7 @@ Card grid of events with date/venue/tags, reactions, community, and discovery or
   - ← Discovery Scoring (flowsTo) — ranked order
   - ← events (flowsTo) — event rows
   - ← event_shared_songs (flowsTo) — compact affordance
+  - ← Social Activity (Inner-Circle) (flowsTo) — circle badge (signed-in)
 
 #### Event Detail  `ui-event-detail`
 
@@ -512,6 +534,7 @@ Per-event page with full context, community panel, and share metadata.
   - ← Homepage (flowsTo) — navigates to
   - ← events (flowsTo) — event by id
   - ← event_shared_songs (flowsTo) — shared listening
+  - ← Social Activity (Inner-Circle) (flowsTo) — people-you-follow strip + attribution
 
 ### Community
 
@@ -641,6 +664,28 @@ Signed-in-only endpoints to follow, unfollow, and list who the caller follows (+
 - **Ownership:** automated
 - **Flows to / depends on:**
   - → Social Graph (dependsOn) — follow/unfollow/list
+
+#### Circle Activity API  `api-circle-activity`
+
+Signed-in-only endpoint returning the viewer's followed-and-opted-in people going to / firing given events (PRD 24). Returns 401/empty when anonymous; never exposes anyone outside the caller's circle.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/me/circle-activity/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → Social Activity (Inner-Circle) (dependsOn) — your-people going/firing
+
+#### Circle Share API  `api-circle-share`
+
+Signed-in-only, idempotent, best-effort endpoint to share a show/song-list with your circle (PRD 24). Reuses existing going state; no Spotify write, no ranking change.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/me/circle-share/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → Social Activity (Inner-Circle) (dependsOn) — share with circle
 
 #### Saved Space  `ui-saved-space`
 
@@ -831,6 +876,13 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | Social Graph | → | listener_follows | flowsTo | persist follow edges |
 | listener_follows | → | users | dependsOn | follower/followee (cascade) |
 | Social Graph | → | listener_discovery_preferences | dependsOn | activity-sharing opt-in gate |
+| Circle Activity API | → | Social Activity (Inner-Circle) | dependsOn | your-people going/firing |
+| Circle Share API | → | Social Activity (Inner-Circle) | dependsOn | share with circle |
+| Social Activity (Inner-Circle) | → | listener_follows | dependsOn | follow edges (gate) |
+| Social Activity (Inner-Circle) | → | event_person_event_state | dependsOn | going/firing source |
+| Social Activity (Inner-Circle) | → | event_shared_songs | dependsOn | seeder attribution (gated) |
+| Social Activity (Inner-Circle) | → | Event Board | flowsTo | circle badge (signed-in) |
+| Social Activity (Inner-Circle) | → | Event Detail | flowsTo | people-you-follow strip + attribution |
 | Event Board | → | Listener Profile | flowsTo | sign-in entry |
 | Image Cleanup (cron) | → | Vercel Blob | flowsTo | delete stale images |
 | AVLgo Sync (cron) | → | system_job_runs | flowsTo | records outcome |
@@ -848,4 +900,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_52 nodes, 68 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_55 nodes, 75 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

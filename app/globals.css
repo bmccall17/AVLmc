@@ -5946,6 +5946,73 @@ button.primary-action {
   filter: brightness(1.18);
 }
 
+/* Inner-circle attribution (PRD 24 / C2): "your people," visually distinct from anonymous heat. */
+.circle-presence {
+  align-items: flex-start;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  border-radius: 10px;
+  color: #bae6fd;
+  display: flex;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 12px 14px;
+}
+
+.circle-presence-copy strong {
+  color: #e0f2fe;
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.circle-presence-copy small {
+  color: #7dd3fc;
+  display: block;
+  font-size: 0.74rem;
+  margin-top: 2px;
+}
+
+/* Compact board-card badge: "👥 N from your circle" (signed-in + entitled only). */
+.circle-badge {
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 999px;
+  color: #bae6fd;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.shared-song-by {
+  color: #7dd3fc;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.circle-share-button {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 999px;
+  color: #bae6fd;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 4px 12px;
+}
+
+.circle-share-button:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.2);
+}
+
+.circle-share-button:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
 /* Saved space (PRD 13 / C2) */
 .saved-shell {
   display: flex;

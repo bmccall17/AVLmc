@@ -9,14 +9,20 @@ import {
 
 type SharedListeningProps = {
   eventId: string;
+  eventTitle?: string;
   initialSongs: PublicSharedSong[];
+  /** Signed-in viewers get the "Share with your circle" affordance (PRD 24 / C2). */
+  isSignedIn?: boolean;
 };
 
 // Detail-page "Shared listening" surface (PRD 17): the artist's top tracks as in-page Spotify
 // embeds, with an "Open in Spotify" link fallback and a per-viewer "you already love" badge.
 // Re-fetches when this event is shared (the listener Goes/Fires), so the list fills in live.
-export function SharedListening({ eventId, initialSongs }: SharedListeningProps) {
+// Signed-in viewers also see in-circle "shared by …" attribution and a "Share with your circle"
+// action (PRD 24 / C2); anonymous viewers see neither.
+export function SharedListening({ eventId, eventTitle, initialSongs, isSignedIn = false }: SharedListeningProps) {
   const [songs, setSongs] = useState<PublicSharedSong[]>(initialSongs);
+  const [shareState, setShareState] = useState<"idle" | "sharing" | "shared">("idle");
 
   const refresh = useCallback(async () => {
     try {
@@ -43,6 +49,23 @@ export function SharedListening({ eventId, initialSongs }: SharedListeningProps)
     return () => window.removeEventListener(SHARED_SONGS_REFRESH_EVENT, onRefresh);
   }, [eventId, refresh]);
 
+  async function shareWithCircle() {
+    if (!isSignedIn || shareState !== "idle") {
+      return;
+    }
+    setShareState("sharing");
+    try {
+      const response = await fetch("/api/me/circle-share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId, eventTitle, kind: "song_list" }),
+      });
+      setShareState(response.ok ? "shared" : "idle");
+    } catch {
+      setShareState("idle");
+    }
+  }
+
   if (songs.length === 0) {
     return null;
   }
@@ -52,6 +75,16 @@ export function SharedListening({ eventId, initialSongs }: SharedListeningProps)
       <header className="shared-listening-head">
         <h2>Shared listening</h2>
         <p>Tracks people heading to this show are listening to.</p>
+        {isSignedIn ? (
+          <button
+            className="circle-share-button"
+            disabled={shareState !== "idle"}
+            onClick={() => void shareWithCircle()}
+            type="button"
+          >
+            {shareState === "shared" ? "Shared with your circle ✓" : "Share with your circle"}
+          </button>
+        ) : null}
       </header>
       <ul className="shared-song-list">
         {songs.map((song) => {
@@ -75,6 +108,9 @@ export function SharedListening({ eventId, initialSongs }: SharedListeningProps)
                 allow="encrypted-media; clipboard-write; fullscreen; picture-in-picture"
               />
               <div className="shared-song-meta">
+                {song.sharedBy ? (
+                  <span className="shared-song-by">shared by {song.sharedBy}</span>
+                ) : null}
                 {song.youAlreadyLove ? (
                   <span className="shared-song-love">♥ you already love this one</span>
                 ) : null}

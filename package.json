@@ -13,6 +13,7 @@
     "test:shared-songs": "rm -rf /tmp/avlmc-shared-songs-tests && tsc -p tests/tsconfig.shared-songs.json && node --test /tmp/avlmc-shared-songs-tests/tests/shared-songs.test.js",
     "test:insight": "rm -rf /tmp/avlmc-insight-tests && tsc -p tests/tsconfig.insight.json && node --test /tmp/avlmc-insight-tests/tests/insight-metrics.test.js",
     "test:social-graph": "rm -rf /tmp/avlmc-social-graph-tests && tsc -p tests/tsconfig.social-graph.json && node --test /tmp/avlmc-social-graph-tests/tests/social-graph.test.js",
+    "test:social-activity": "rm -rf /tmp/avlmc-social-activity-tests && tsc -p tests/tsconfig.social-activity.json && node --test /tmp/avlmc-social-activity-tests/tests/social-activity.test.js",
     "test:registry": "node --import tsx --test tests/system-registry.test.ts",
     "generate:system-map": "tsx scripts/generate-system-map.ts",
     "typecheck": "tsc --noEmit"

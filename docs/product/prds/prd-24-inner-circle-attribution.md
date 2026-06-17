@@ -14,7 +14,17 @@ Building on the C1 graph + the `canViewActivityOf` gate, this cycle adds a **rea
 
 ## Implementation Status
 
-**Planned — not yet started.**
+**Shipped — June 17, 2026.**
+
+The "your people, not the crowd" read layer is live, gated by C1, with no new table:
+
+- **Service.** `lib/social-activity.ts` (`server-only`) — `getCircleEventActivity` (one batched query joining `listener_follows` × `event_person_event_state`, gated at the join by the active edge **and** `share_activity = true`; "going"/"firing" = current planning/fire not overridden by a later removal), `attributeSharedSongs` (resolves `event_shared_songs.seeded_by_user_id` → display name **server-side at the gate**, attaches `sharedBy` only for entitled viewers, leaves every other row the PRD 17 unattributed shape), and `shareWithCircle` (idempotent, best-effort, marks the listener going — the state their circle reads; no Spotify write, no new ranking pathway). 42P01/42703-tolerant.
+- **Pure shaping.** `lib/social-activity-core.ts` — `shapeCircleActivity` (bucket/count/dedupe), `summarizeCircleLabel` ("3 people you follow are going · 1 firing"), `circleBadgeCount`. Unit-tested in `tests/social-activity.test.ts`.
+- **APIs.** `GET /api/me/circle-activity` (`?eventId=` or `?eventIds=`), `POST /api/me/circle-share` — both `requireUserId()`-gated, empty/401 for anonymous. `GET /api/events/[id]/shared-songs` now attaches `sharedBy` only when signed-in and entitled; the anonymous response is byte-for-byte the PRD 17 shape.
+- **UI.** `components/CirclePresence.tsx` "People you follow" strip on the event detail page (distinct from anonymous heat); `sharedBy` attribution + a "Share with your circle" action in `components/SharedListening.tsx`; a compact "👥 N from your circle" badge on `components/EventBoard.tsx` cards (signed-in + entitled only). Board data fetched batched in `app/page.tsx` (one query/page), detail in `app/event/[id]/page.tsx`.
+- **`PublicSharedSong`** gained an optional `sharedBy?: string | null` (absent on the anonymous/public path; never the raw `seeded_by_user_id`).
+- **Architecture & quality.** `svc-social-activity`, `api-circle-activity`, `api-circle-share` registered (+ edges to `db-listener-follows`/`db-person-event-state`/`db-shared-songs` and to the board/detail surfaces); **no new table** (attribution is live-computed); system map regenerated; `test:registry`, `test:social-activity`, `test:shared-songs`, `test:discovery`, typecheck, lint, `next build`, and Snyk all green; $0.
+- **Privacy verified.** Social-activity code is reached only from signed-in-gated paths; `getCircleEventActivity` returns `{}` and `attributeSharedSongs` is a no-op for anonymous callers; no circle/`sharedBy` data appears in any `app/api/community/*` or OG response; the anonymous board ranking and PRD 17 list are unchanged. A followee who turns sharing off (or is unfollowed) disappears immediately because gating happens at read time.
 
 ## Goals
 
