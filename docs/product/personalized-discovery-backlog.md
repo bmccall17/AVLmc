@@ -176,13 +176,14 @@ contributions) from `event_interaction_events` (`lib/discovery-memory.ts` →
 `listDiscoveryPreferenceSignals`), and **ignores `impression` rows entirely**. The full
 behavioral stream is captured but mostly unused. This is the next big investment area.
 
-- **Implicit / behavioral signals from impressions.** An impression that never converts is a
-  soft *negative*; repeatedly showing an artist/venue/genre a person never engages should
-  gently cool it. Conversely, dwell/return patterns are soft positives. Design carefully:
-  impressions are high-volume and noisy, so weight them far below explicit actions, decay
-  them over time, and guard against feedback loops (don't bury everything a person hasn't
-  clicked yet). When built, this also changes the retention story — impressions become
-  signal, not just bloat (see the impression-prune note: only prune beyond the signal window).
+- **Implicit / behavioral signals from impressions.** _Shipped (C1, PRD 18, June 16, 2026):_ an
+  impression that never converts is a soft *negative* — repeatedly showing an artist/venue/genre a
+  person never engages now gently cools it (`listImplicitSignals` → `scoreImplicitSignals`), weighted
+  far below explicit actions, recency-decayed, capped below `remove`, and overridden by any explicit
+  positive. **Retention note (now active, not hypothetical):** impressions are signal, not bloat —
+  any impression-prune job must **not** delete rows inside the active implicit-signal window
+  (`IMPLICIT_SIGNAL_WINDOW_DAYS = 90` in `lib/discovery-memory.ts`); only prune `impression` rows
+  older than that window. Still open for later cycles: dwell/return patterns as soft positives.
 - **Richer signal model.** Move past the flat "recent 240" cap toward time-decayed,
   per-dimension affinities (artist / venue / genre / time-of-week / price / indoor-outdoor)
   with confidence weighting; separate short-term intent from long-term taste.

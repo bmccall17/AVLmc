@@ -14,6 +14,7 @@ import { scoreDiscoveryEvents, type DiscoveryScore } from "@/lib/discovery";
 import {
   listDiscoveryPreferenceSignals,
   listDiscoveryStates,
+  listImplicitSignals,
   listSpotifyMatchCorrections,
 } from "@/lib/discovery-memory";
 import { getDateWindow, getUpcomingEvents } from "@/lib/events";
@@ -82,6 +83,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     musicProfileItems,
     discoveryStates,
     preferenceSignals,
+    implicitSignals,
     spotifyMatchCorrections,
     listenerPreferences,
     avlgoTop30EventIds,
@@ -94,6 +96,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       userId ? listMusicProfileItems(userId) : Promise.resolve([]),
       listDiscoveryStates(eventIds, { sessionId, userId }),
       listDiscoveryPreferenceSignals({ sessionId, userId }),
+      listImplicitSignals({ sessionId, userId }),
       listSpotifyMatchCorrections(eventIds, { sessionId, userId }),
       userId ? getListenerDiscoveryPreferences(userId) : Promise.resolve(undefined),
       getAvlgoTop30EventIds(events),
@@ -111,6 +114,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     connections: musicConnections,
     counts,
     events,
+    implicitSignals,
     listenerPreferences: activeListenerPreferences,
     preferenceSignals,
     profileItems: musicProfileItems,

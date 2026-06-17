@@ -22,7 +22,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 8 | [Saved/Favorites & Genre Initiative (Epic)](saved-favorites-genre-prd.md) | Shipped | Private Saved space (events/venues/artists) + richer genre matching (taxonomy + Spotify genres); PRDs 12–16 across five cycles. |
 | 9 | [Shared Listening (PRD 17)](prds/prd-17-shared-listening.md) | Shipped | Going/Fire by a signed-in Spotify listener auto-populates the event page with a public, playable shared song list (read-only Spotify; no writes). Opens the Social Music Sharing track. |
 | 10 | [Discovery Benchmarking (Desired Outcomes)](discovery-benchmark_desiredoutcomes.md) | Planned | Turn the shipped Recommendation Insight + Listener Trace surfaces into a repeatable, fixed-methodology discovery benchmark (live-only / $0; no new tab). Validation layer for the deeper-personalization and social/curator future directions. |
-| 11 | [Deeper Personalization Scoring (Desired Outcomes)](deeper-personalization_desiredoutcomes.md) | Planned | Learn from what a listener *skips*, not just taps: move from the flat "recent 240 actions" model to a time-decayed, per-dimension taste model that safely uses implicit signals, stays explainable/correctable, and is loop-proof. Initiative A of the discovery North Star. |
+| 11 | [Deeper Personalization Initiative (Epic)](deeper-personalization-prd.md) | Building (C1 shipped) | Learn from what a listener *skips*, not just taps: move from the flat "recent 240 actions" model to a time-decayed, per-dimension taste model that safely uses implicit signals, stays explainable/correctable, and is loop-proof. Initiative A of the discovery North Star; PRDs 18–21 across four cycles. |
 | 12 | [Social / Curator Graph (Desired Outcomes)](social-curator_desiredoutcomes.md) | Planned | Opt-in follow/curator graph + inner-circle attribution; trusted-circle/curator activity as an optional, bounded ranking input distinct from public heat. Privacy-first, no pay-to-play, no Spotify writes. Initiative B of the discovery North Star. |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
@@ -219,11 +219,25 @@ trusted circle" — learning from skips, modeling taste per-dimension over time,
 friends/curators shape the board — all opt-in, explainable, $0, and without ever drowning out local
 and novel shows. These are the two feature initiatives the Phase 10 benchmark exists to grade.
 
-- **Phase 11 — Deeper Personalization Scoring** ([`deeper-personalization_desiredoutcomes.md`](deeper-personalization_desiredoutcomes.md)):
+- **Phase 11 — Deeper Personalization Scoring** (outcomes: [`deeper-personalization_desiredoutcomes.md`](deeper-personalization_desiredoutcomes.md);
+  epic: [`deeper-personalization-prd.md`](deeper-personalization-prd.md)):
   five outcomes — skips shape ranking (implicit signal from impressions), a time-decayed
   per-dimension taste model, cold-start + anonymous→account hand-off, explainable/correctable
   signals, and structural feedback-loop protection. The scoring substrate. Storage is live-first
-  (rollup table only if measured perf demands it).
+  (rollup table only if measured perf demands it). Decomposed into four cycles:
+  C1 [PRD 18 Skips Cool Dimensions](prds/prd-18-skips-cool-dimensions.md) →
+  C2 [PRD 19 Time-Decayed Per-Dimension Model](prds/prd-19-time-decayed-affinity-model.md) →
+  C3 [PRD 20 Cold-Start & Account Hand-off](prds/prd-20-coldstart-and-account-handoff.md) →
+  C4 [PRD 21 Transparency, Correctability & Loop Guardrails](prds/prd-21-transparency-and-loop-guardrails.md).
+
+  **C1 shipped (PRD 18 — Skips Cool Dimensions):** discovery now reads the previously-ignored
+  `impression` stream (`listImplicitSignals`, `lib/discovery-memory.ts`, bounded 90-day window) and
+  cools an artist/venue/genre a listener is repeatedly shown but never engages
+  (`scoreImplicitSignals`, `lib/discovery.ts`) — recency-decayed, per-dimension, capped strictly
+  below the explicit `remove` magnitude, overridden by any explicit positive, and never hiding an
+  event. Truthful "you tend to skip these" reasons + per-dimension attribution in Listener Trace and
+  Recommendation Insight. Live-first ($0, no new table); Snyk-clean; the cap-below-`remove` invariant
+  is unit-tested. Establishes the implicit-signal mechanism that C2 (PRD 19) generalizes.
 - **Phase 12 — Social / Curator Graph** ([`social-curator_desiredoutcomes.md`](social-curator_desiredoutcomes.md)):
   five outcomes — an opt-in social graph, inner-circle attribution (building on PRD 17's
   `seeded_by_user_id` on-ramp), admin-promoted curator profiles, an optional bounded social ranking

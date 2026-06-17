@@ -17,6 +17,7 @@ import { scoreDiscoveryEvents, type DiscoveryScore } from "@/lib/discovery";
 import {
   listDiscoveryPreferenceSignals,
   listDiscoveryStates,
+  listImplicitSignals,
   listSpotifyMatchCorrections,
 } from "@/lib/discovery-memory";
 import { getUpcomingEvents, type EventRecord } from "@/lib/events";
@@ -49,6 +50,7 @@ export default async function DiscoveryActionSandboxPage() {
     musicProfileItems,
     discoveryStates,
     preferenceSignals,
+    implicitSignals,
     spotifyMatchCorrections,
   ] = await Promise.all([
     getCommunityCountsByEvent(eventIds),
@@ -56,12 +58,14 @@ export default async function DiscoveryActionSandboxPage() {
     userId ? listMusicProfileItems(userId) : Promise.resolve([]),
     listDiscoveryStates(eventIds, { sessionId, userId }),
     listDiscoveryPreferenceSignals({ sessionId, userId }),
+    listImplicitSignals({ sessionId, userId }),
     listSpotifyMatchCorrections(eventIds, { sessionId, userId }),
   ]);
   const scores = scoreDiscoveryEvents({
     connections: musicConnections,
     counts,
     events: allEvents,
+    implicitSignals,
     preferenceSignals,
     profileItems: musicProfileItems,
     spotifyMatchCorrections,

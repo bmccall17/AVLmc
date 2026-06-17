@@ -1,6 +1,7 @@
 import type { CommunityCounts } from "@/lib/community";
 import type {
   DiscoveryPreferenceSignal,
+  ImplicitSignalRow,
   SpotifyMatchCorrection,
 } from "@/lib/discovery-memory";
 import type { EventRecord } from "@/lib/events";
@@ -75,12 +76,31 @@ type ScoreDiscoveryEventsInput = {
   connections?: MusicConnection[];
   counts: Record<string, CommunityCounts | undefined>;
   events: EventRecord[];
+  implicitSignals?: ImplicitSignalRow[];
   listenerPreferences?: unknown;
   now?: Date;
   preferenceSignals?: DiscoveryPreferenceSignal[];
   profileItems?: MusicProfileItem[];
   savedFavorites?: SavedFavorite[];
   spotifyMatchCorrections?: SpotifyMatchCorrection[];
+};
+
+/** A normalized, de-duplicated implicit skip signal ready for per-event matching (PRD 18 / C1). */
+type ImplicitSkipSignal = {
+  dimension: ImplicitSignalRow["dimension"];
+  value: string;
+  impressions: number;
+  lastImpressionAt: string;
+  engaged: boolean;
+};
+
+/** Per-dimension cooling derived from non-converting impressions (PRD 18 / C1). */
+type ImplicitCool = {
+  artistCool: number;
+  venueCool: number;
+  genreCool: number;
+  totalCool: number;
+  reasons: DiscoveryReason[];
 };
 
 type ProfileTerm = {
@@ -109,10 +129,20 @@ type PreferenceTuningResult = {
 const MAX_REASONS = 3;
 const MAX_SPOTIFY_SCORE = 80;
 
+// Implicit (impression-derived) skip cooling (PRD 18 / C1). Deliberately conservative: a dimension
+// must clear a repetition threshold before it cools at all, the contribution is recency-decayed, and
+// it is capped well below the explicit `remove` magnitude (min(56, …)) to keep explicit > implicit.
+const IMPLICIT_SKIP_THRESHOLD = 4;
+const IMPLICIT_SKIP_HALF_LIFE_DAYS = 30;
+const IMPLICIT_DIM_COOL_CAP = 12;
+const IMPLICIT_TOTAL_COOL_CAP = 24;
+const IMPLICIT_REASON_MIN = 5;
+
 export function scoreDiscoveryEvents({
   connections = [],
   counts,
   events,
+  implicitSignals = [],
   listenerPreferences,
   now = new Date(),
   preferenceSignals = [],
@@ -129,6 +159,9 @@ export function scoreDiscoveryEvents({
   const profileTerms = spotifyEnabled ? buildProfileTerms(profileItems) : [];
   const spotifyGenreAffinity = spotifyEnabled ? buildSpotifyGenreAffinity(profileItems) : [];
   const preferences = normalizeListenerPreferences(listenerPreferences);
+  // Aggregate the impression-derived skip signals once per scoring pass (PRD 18 / C1), normalized so
+  // matching is consistent with the rest of the scorer. Reused for every event below.
+  const implicitSkipSignals = buildImplicitSkipSignals(implicitSignals);
 
   // Dedupe favorites against equivalent ad-hoc boost custom signals so a saved venue/artist and
   // an explicit boost for the same name don't double-count across components (PRD 14 bounding).
@@ -154,6 +187,10 @@ export function scoreDiscoveryEvents({
         spotifyMatchCorrections.filter((correction) => correction.eventId === event.id)
       );
       const personalScore = scorePersonalSignals(event, preferenceSignals);
+      const implicit = scoreImplicitSignals(event, implicitSkipSignals, now);
+      // Folding the cool into the directly-summed personal contribution is what actually lowers the
+      // event's rank at default dials; the per-dimension bases below carry the cooling for the trace.
+      const personalContribution = personalScore.score - implicit.totalCool;
       const genreResult = scoreGenreMatch(event);
       // Layer the connected listener's Spotify genre affinity on top of the public taxonomy match
       // (PRD 16 / C5), bounded within the genreMatch ceiling so weighting stays calibrated.
@@ -166,6 +203,7 @@ export function scoreDiscoveryEvents({
         favoriteArtistScore: favoriteScore.artist,
         favoriteVenueScore: favoriteScore.venue,
         genreMatchBase,
+        implicit,
         personalScore,
         profileScore,
         publicScore,
@@ -179,6 +217,7 @@ export function scoreDiscoveryEvents({
       const reasons = compactReasons([
         ...getFavoriteReasons(favoriteScore),
         ...personalScore.reasons,
+        ...implicit.reasons,
         ...publicScore.reasons,
         ...profileScore.reasons,
         ...getSpotifyGenreReasons(spotifyGenreScore),
@@ -195,11 +234,11 @@ export function scoreDiscoveryEvents({
           // venuePreference / artistAffinity weights dialing it 0x–2x via the component delta. A
           // saved venue applies to both sorts; a saved artist rides artistAffinity (Best Match).
           bestBetsScore:
-            publicScore.score + personalScore.score + favoriteScore.venue + bestBetsTuning.adjustment,
+            publicScore.score + personalContribution + favoriteScore.venue + bestBetsTuning.adjustment,
           bestMatchScore:
             publicScore.score +
             profileScore.score +
-            personalScore.score +
+            personalContribution +
             favoriteScore.venue +
             favoriteScore.artist +
             bestMatchTuning.adjustment,
@@ -301,12 +340,151 @@ function scorePersonalSignals(event: EventRecord, signals: DiscoveryPreferenceSi
   };
 }
 
+/**
+ * Normalize and merge raw impression-derived rows into per-(dimension, value) skip signals
+ * (PRD 18 / C1). SQL grouped by raw value; this re-keys on `normalizeText` so punctuation/casing
+ * variants collapse the same way the rest of the scorer matches. Generic genre terms and any value
+ * that has had explicit positive engagement are dropped so they can never cool.
+ */
+function buildImplicitSkipSignals(rows: ImplicitSignalRow[]): ImplicitSkipSignal[] {
+  const merged = new Map<string, ImplicitSkipSignal>();
+
+  for (const row of rows) {
+    const value = normalizeText(row.value);
+    if (!value) {
+      continue;
+    }
+    if (row.dimension === "tag" && isGenericTerm(value)) {
+      continue;
+    }
+
+    const key = `${row.dimension}:${value}`;
+    const existing = merged.get(key);
+
+    if (!existing) {
+      merged.set(key, {
+        dimension: row.dimension,
+        value,
+        impressions: row.impressions,
+        lastImpressionAt: row.lastImpressionAt,
+        engaged: row.engaged,
+      });
+      continue;
+    }
+
+    existing.impressions += row.impressions;
+    existing.engaged = existing.engaged || row.engaged;
+    if (new Date(row.lastImpressionAt).getTime() > new Date(existing.lastImpressionAt).getTime()) {
+      existing.lastImpressionAt = row.lastImpressionAt;
+    }
+  }
+
+  return Array.from(merged.values());
+}
+
+/**
+ * Turn repeated, non-converting impressions into a gentle per-dimension cool (PRD 18 / C1, Outcome 1).
+ * A dimension cools only after it clears the repetition threshold with zero positive engagement; the
+ * magnitude is recency-decayed and capped per-dimension and in total, strictly below the explicit
+ * `remove` magnitude so explicit signals always dominate. Cooling never hides an event — it only
+ * lowers matching artist/venue/genre bases, leaving the novelty floor to protect discovery.
+ */
+function scoreImplicitSignals(
+  event: EventRecord,
+  signals: ImplicitSkipSignal[],
+  now: Date
+): ImplicitCool {
+  let artistCool = 0;
+  let venueCool = 0;
+  let genreCool = 0;
+
+  for (const signal of signals) {
+    // Explicit positive engagement for this dimension overrides implicit cooling, and a single skip
+    // (below the repetition threshold) does nothing.
+    if (signal.engaged || signal.impressions < IMPLICIT_SKIP_THRESHOLD) {
+      continue;
+    }
+
+    const matchStrength = matchImplicitDimension(event, signal);
+    if (matchStrength === 0) {
+      continue;
+    }
+
+    const cool = implicitCoolMagnitude(signal, now) * matchStrength;
+    // Take the strongest matching signal per dimension rather than summing, so multiple matching
+    // tags (or near-duplicate values) can't compound into over-cooling.
+    if (signal.dimension === "artist") {
+      artistCool = Math.max(artistCool, cool);
+    } else if (signal.dimension === "venue") {
+      venueCool = Math.max(venueCool, cool);
+    } else {
+      genreCool = Math.max(genreCool, cool);
+    }
+  }
+
+  artistCool = Math.min(IMPLICIT_DIM_COOL_CAP, artistCool);
+  venueCool = Math.min(IMPLICIT_DIM_COOL_CAP, venueCool);
+  genreCool = Math.min(IMPLICIT_DIM_COOL_CAP, genreCool);
+  const totalCool = Math.min(IMPLICIT_TOTAL_COOL_CAP, artistCool + venueCool + genreCool);
+
+  return {
+    artistCool,
+    venueCool,
+    genreCool,
+    totalCool,
+    reasons: getImplicitReasons(artistCool, venueCool, genreCool),
+  };
+}
+
+/** Match an event field against a (normalized) implicit skip value, reusing the shared primitive. */
+function matchImplicitDimension(event: EventRecord, signal: ImplicitSkipSignal) {
+  if (signal.dimension === "artist") {
+    return fieldMatchStrength(event.artistName, signal.value);
+  }
+  if (signal.dimension === "venue") {
+    return fieldMatchStrength(event.venueName, signal.value);
+  }
+
+  let best = 0;
+  for (const tag of event.tags) {
+    if (!isGenericTerm(normalizeText(tag))) {
+      best = Math.max(best, fieldMatchStrength(tag, signal.value));
+    }
+  }
+  return best;
+}
+
+/** Recency-decayed cool for one dimension; grows slowly past the threshold, capped per-dimension. */
+function implicitCoolMagnitude(signal: ImplicitSkipSignal, now: Date) {
+  const over = signal.impressions - IMPLICIT_SKIP_THRESHOLD;
+  const raw = Math.min(IMPLICIT_DIM_COOL_CAP, 6 + over * 2);
+  const ageDays = Math.max(0, (now.getTime() - new Date(signal.lastImpressionAt).getTime()) / 86_400_000);
+  const decay = Math.pow(0.5, ageDays / IMPLICIT_SKIP_HALF_LIFE_DAYS);
+  return raw * decay;
+}
+
+/** Truthful, private-safe reason naming the dominant cooled dimension. No raw counts exposed. */
+function getImplicitReasons(artistCool: number, venueCool: number, genreCool: number): DiscoveryReason[] {
+  const strongest = Math.max(artistCool, venueCool, genreCool);
+  if (strongest < IMPLICIT_REASON_MIN) {
+    return [];
+  }
+  if (strongest === artistCool) {
+    return [simpleReason("you tend to skip this artist")];
+  }
+  if (strongest === venueCool) {
+    return [simpleReason("you tend to skip this venue")];
+  }
+  return [simpleReason("you tend to skip shows like this")];
+}
+
 function getPreferenceComponentBases({
   counts,
   event,
   favoriteArtistScore,
   favoriteVenueScore,
   genreMatchBase,
+  implicit,
   personalScore,
   profileScore,
   publicScore,
@@ -316,16 +494,20 @@ function getPreferenceComponentBases({
   favoriteArtistScore: number;
   favoriteVenueScore: number;
   genreMatchBase: number;
+  implicit: ImplicitCool;
   personalScore: ReturnType<typeof scorePersonalSignals>;
   profileScore: ReturnType<typeof scoreSpotifyMatch>;
   publicScore: ReturnType<typeof scorePublicSignals>;
 }): PreferenceComponentBases {
   return {
-    artistAffinity: profileScore.score + favoriteArtistScore,
+    // Implicit skip cooling is subtracted from the matching per-dimension base so it is attributable
+    // per-dimension in Listener Trace and tunable via the existing dials (PRD 18 / C1). The headline
+    // rank effect comes from `personalContribution`; at default dials these bases don't double-count.
+    artistAffinity: profileScore.score + favoriteArtistScore - implicit.artistCool,
     dateAvailability: publicScore.components.dateAvailability,
     freePaidPreference: eventContainsAny(event, ["free", "no cover", "suggested donation"]) ? 12 : 0,
-    genreMatch: genreMatchBase,
-    learnedBehavior: personalScore.learnedBehaviorScore,
+    genreMatch: genreMatchBase - implicit.genreCool,
+    learnedBehavior: personalScore.learnedBehaviorScore - implicit.totalCool,
     localRelevance: publicScore.components.localRelevance,
     novelty: scoreNovelty(counts, profileScore.score, personalScore.score),
     outdoorIndoorPreference: eventContainsAny(event, ["outdoor", "outside", "patio", "indoor", "listening room"])
@@ -333,8 +515,10 @@ function getPreferenceComponentBases({
       : 0,
     socialHeat: publicScore.components.socialHeat,
     // Saved-venue boost rides venuePreference, capped with the existing learned-behavior cap so it
-    // can't exceed the component ceiling (PRD 14 bounding).
-    venuePreference: Math.min(VENUE_PREFERENCE_CEILING, personalScore.venuePreferenceScore + favoriteVenueScore),
+    // can't exceed the component ceiling (PRD 14 bounding); implicit venue cooling subtracts after.
+    venuePreference:
+      Math.min(VENUE_PREFERENCE_CEILING, personalScore.venuePreferenceScore + favoriteVenueScore) -
+      implicit.venueCool,
   };
 }
 

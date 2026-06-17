@@ -238,6 +238,12 @@ function BehaviorPanel({ behavior }: { behavior: RecommendationInsight["behavior
               : "no removals yet"}
             .
           </p>
+          <p className="admin-meta">
+            {behavior.implicitLearningActive
+              ? `${behavior.impressions} impressions feed implicit skip cooling (repeatedly-shown, never-engaged dimensions gently cool)`
+              : "no impressions captured yet for implicit skip cooling"}
+            .
+          </p>
           <div className="admin-mini-table">
             {behavior.byAction.map((action) => (
               <div className="admin-mini-row" key={action.action}>

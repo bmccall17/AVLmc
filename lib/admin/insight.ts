@@ -73,6 +73,8 @@ export type BehaviorInsight = {
   byAction: Array<{ action: string; count: number }>;
   removals: number;
   negativeLearningActive: boolean;
+  impressions: number;
+  implicitLearningActive: boolean;
 };
 
 export type RecommendationInsight = {
@@ -305,9 +307,26 @@ async function loadBehavior(): Promise<BehaviorInsight> {
     const byAction = result.rows.map((row) => ({ action: row.action, count: Number(row.count) }));
     const total = byAction.reduce((sum, row) => sum + row.count, 0);
     const removals = byAction.find((row) => row.action === "remove")?.count ?? 0;
-    return { total, byAction, removals, negativeLearningActive: removals > 0 };
+    // Impressions now feed implicit skip cooling (PRD 18 / C1) — surfaced so the admin can see the
+    // implicit-learning input alongside explicit removals.
+    const impressions = byAction.find((row) => row.action === "impression")?.count ?? 0;
+    return {
+      total,
+      byAction,
+      removals,
+      negativeLearningActive: removals > 0,
+      impressions,
+      implicitLearningActive: impressions > 0,
+    };
   } catch {
-    return { total: 0, byAction: [], removals: 0, negativeLearningActive: false };
+    return {
+      total: 0,
+      byAction: [],
+      removals: 0,
+      negativeLearningActive: false,
+      impressions: 0,
+      implicitLearningActive: false,
+    };
   }
 }
 

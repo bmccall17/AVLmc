@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { scoreDiscoveryEvents, type DiscoveryReason } from "../lib/discovery";
-import type { SpotifyMatchCorrection } from "../lib/discovery-memory";
+import type {
+  DiscoveryPreferenceSignal,
+  ImplicitSignalRow,
+  SpotifyMatchCorrection,
+} from "../lib/discovery-memory";
 import type { EventRecord } from "../lib/events";
 import type { MusicConnection, MusicProfileItem } from "../lib/music";
 
@@ -351,4 +355,114 @@ test("empty Spotify genres (pre re-sync) fall back to taxonomy-only matching", (
   const withEmpty = scoreWithSpotifyGenres([noGenres]);
 
   assert.equal(withEmpty.components.genreMatch.base, base.components.genreMatch.base);
+});
+
+// --- Skips cool dimensions (implicit signals, PRD 18 / C1) --------------------------------------
+
+const RECENT_IMPRESSION = "2026-06-07T00:00:00.000Z"; // ~12h before the scoring `now`
+
+function implicitRow(
+  dimension: ImplicitSignalRow["dimension"],
+  value: string,
+  overrides: Partial<ImplicitSignalRow> = {}
+): ImplicitSignalRow {
+  return {
+    dimension,
+    value,
+    impressions: 10,
+    lastImpressionAt: RECENT_IMPRESSION,
+    engaged: false,
+    ...overrides,
+  };
+}
+
+function scoreWithImplicit(implicitSignals: ImplicitSignalRow[], preferences: object = {}) {
+  return scoreDiscoveryEvents({
+    counts: {},
+    events: [francesElizaEvent],
+    implicitSignals,
+    listenerPreferences: preferences,
+    now: new Date("2026-06-07T12:00:00.000Z"),
+  })[francesElizaEvent.id];
+}
+
+test("repeatedly skipping an artist gently cools its matching events", () => {
+  const base = scoreWithImplicit([]);
+  const cooled = scoreWithImplicit([implicitRow("artist", francesElizaEvent.artistName)]);
+
+  assert.ok(cooled.bestBetsScore < base.bestBetsScore);
+  assert.ok(cooled.components.artistAffinity.base < base.components.artistAffinity.base);
+  assert.ok(hasReason(cooled.reasons, "you tend to skip this artist"));
+});
+
+test("a single skip (below the repetition threshold) does nothing", () => {
+  const base = scoreWithImplicit([]);
+  const single = scoreWithImplicit([implicitRow("artist", francesElizaEvent.artistName, { impressions: 2 })]);
+
+  assert.equal(single.bestBetsScore, base.bestBetsScore);
+  assert.equal(single.reasons.some((reason) => reason.label.startsWith("you tend to skip")), false);
+});
+
+test("any explicit positive engagement overrides implicit cooling", () => {
+  const base = scoreWithImplicit([]);
+  const engaged = scoreWithImplicit([
+    implicitRow("artist", francesElizaEvent.artistName, { engaged: true }),
+  ]);
+
+  assert.equal(engaged.bestBetsScore, base.bestBetsScore);
+});
+
+test("implicit cooling never exceeds the explicit remove magnitude for the same dimension", () => {
+  const base = scoreWithImplicit([]);
+
+  // Saturate every dimension to reach the implicit total cap.
+  const maxCooled = scoreWithImplicit([
+    implicitRow("artist", francesElizaEvent.artistName, { impressions: 50 }),
+    implicitRow("venue", francesElizaEvent.venueName, { impressions: 50 }),
+    implicitRow("tag", "Folk Storytelling", { impressions: 50 }),
+  ]);
+  const implicitDrop = base.bestBetsScore - maxCooled.bestBetsScore;
+
+  // An explicit remove for the same artist (similarity 8 → min(56, 64) = 56).
+  const removeSignal: DiscoveryPreferenceSignal = {
+    action: "remove",
+    artistName: francesElizaEvent.artistName,
+    eventId: "some-other-event",
+    eventTitle: "",
+    tags: [],
+    venueName: "",
+  };
+  const removed = scoreDiscoveryEvents({
+    counts: {},
+    events: [francesElizaEvent],
+    now: new Date("2026-06-07T12:00:00.000Z"),
+    preferenceSignals: [removeSignal],
+  })[francesElizaEvent.id];
+  const removeDrop = base.bestBetsScore - removed.bestBetsScore;
+
+  assert.ok(implicitDrop <= 24); // total implicit cap
+  assert.ok(implicitDrop < removeDrop); // explicit always dominates implicit
+});
+
+test("stale skips decay so older non-engagement cools less", () => {
+  const base = scoreWithImplicit([]);
+  const recent = scoreWithImplicit([implicitRow("artist", francesElizaEvent.artistName)]);
+  const stale = scoreWithImplicit([
+    implicitRow("artist", francesElizaEvent.artistName, { lastImpressionAt: "2026-03-01T00:00:00.000Z" }),
+  ]);
+
+  const recentDrop = base.bestBetsScore - recent.bestBetsScore;
+  const staleDrop = base.bestBetsScore - stale.bestBetsScore;
+
+  assert.ok(staleDrop < recentDrop);
+  assert.ok(staleDrop >= 0);
+});
+
+test("implicit cooling is attributable to the venue and genre dimensions", () => {
+  const venueCooled = scoreWithImplicit([implicitRow("venue", francesElizaEvent.venueName)]);
+  assert.ok(hasReason(venueCooled.reasons, "you tend to skip this venue"));
+
+  const genreCooled = scoreWithImplicit([implicitRow("tag", "Folk Storytelling")]);
+  assert.ok(hasReason(genreCooled.reasons, "you tend to skip shows like this"));
+  assert.ok(genreCooled.components.genreMatch.base < scoreWithImplicit([]).components.genreMatch.base);
 });

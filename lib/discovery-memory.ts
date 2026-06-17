@@ -34,6 +34,23 @@ export type DiscoveryPreferenceSignal = {
   venueName: string;
 };
 
+/** Dimension an implicit (impression-derived) skip signal applies to (PRD 18 / C1). */
+export type ImplicitSignalDimension = "artist" | "venue" | "tag";
+
+/**
+ * An impression-derived non-conversion signal for one dimension value (PRD 18 / C1). Aggregated
+ * server-side from the high-volume `impression` stream: how often a listener was shown an
+ * artist/venue/tag, when most recently, and whether they ever engaged with it. The scorer turns a
+ * repeatedly-shown-but-never-engaged dimension into a gentle, decayed cool — never a hard hide.
+ */
+export type ImplicitSignalRow = {
+  dimension: ImplicitSignalDimension;
+  value: string;
+  impressions: number;
+  lastImpressionAt: string;
+  engaged: boolean;
+};
+
 export type SpotifyMatchCorrectionAction = "reject" | "replace";
 
 export type SpotifyMatchCorrection = {
@@ -72,6 +89,14 @@ type PreferenceSignalRow = {
   event_title: string;
   tags: string[] | null;
   venue_name: string | null;
+};
+
+type ImplicitSignalQueryRow = {
+  dimension: ImplicitSignalDimension;
+  value: string | null;
+  impressions: number | string;
+  last_impression_at: Date | string | null;
+  engaged: boolean;
 };
 
 type SpotifyMatchCorrectionRow = {
@@ -156,6 +181,80 @@ export async function listDiscoveryPreferenceSignals(
       tags: row.tags ?? [],
       venueName: row.venue_name ?? "",
     }));
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+/** Look-back window for impression-derived signals (PRD 18 / C1). Stale skips fall out and decay. */
+const IMPLICIT_SIGNAL_WINDOW_DAYS = 90;
+
+/**
+ * Read the (previously ignored) `impression` stream and aggregate per-dimension non-conversion
+ * signals for a listener (PRD 18 / C1). Reuses the merged anonymous+account identity read. All
+ * aggregation happens in SQL so the hot path makes one bounded read — never per-event, never raw
+ * impression rows. Tolerates a missing table so the board never breaks.
+ */
+export async function listImplicitSignals(
+  identity: DiscoveryIdentityInput
+): Promise<ImplicitSignalRow[]> {
+  const identityKeys = getIdentityKeys(identity);
+
+  if (identityKeys.length === 0) {
+    return [];
+  }
+
+  try {
+    const result = await query<ImplicitSignalQueryRow>(
+      `
+        with windowed as (
+          select action, artist_name, venue_name, tags, created_at
+          from public.event_interaction_events
+          where identity_key = any($1::text[])
+            and created_at >= now() - make_interval(days => $2::int)
+        ),
+        exploded as (
+          select 'artist'::text as dimension, artist_name as value, action, created_at
+          from windowed
+          where artist_name is not null and length(trim(artist_name)) > 0
+          union all
+          select 'venue'::text as dimension, venue_name as value, action, created_at
+          from windowed
+          where venue_name is not null and length(trim(venue_name)) > 0
+          union all
+          select 'tag'::text as dimension, tag as value, action, created_at
+          from windowed, unnest(coalesce(tags, '{}'::text[])) as tag
+          where length(trim(tag)) > 0
+        )
+        select
+          dimension,
+          value,
+          count(*) filter (where action = 'impression')::int as impressions,
+          max(created_at) filter (where action = 'impression') as last_impression_at,
+          bool_or(action in (
+            'detail_open', 'avlgo_click', 'fire', 'planning', 'song_contribution', 'note_contribution'
+          )) as engaged
+        from exploded
+        group by dimension, value
+        having count(*) filter (where action = 'impression') > 0
+        order by impressions desc
+        limit 300
+      `,
+      [identityKeys, IMPLICIT_SIGNAL_WINDOW_DAYS]
+    );
+
+    return result.rows
+      .filter((row) => row.value && row.last_impression_at)
+      .map((row) => ({
+        dimension: row.dimension,
+        value: row.value as string,
+        impressions: Number(row.impressions),
+        lastImpressionAt: toIsoStringOrNull(row.last_impression_at) as string,
+        engaged: Boolean(row.engaged),
+      }));
   } catch (error) {
     if (isMissingRelationError(error)) {
       return [];
