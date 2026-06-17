@@ -168,7 +168,7 @@ Do not use raw Spotify OAuth tokens in client code or ranking responses. Discove
 
 ## Future Direction — Deeper Personalization (planned, not yet scoped)
 
-> Benchmark framing: see [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md) (Outcome 2) for how this is measured against the anonymous Discovery Baseline in the admin Recommendation-Insight / Listener-Trace tabs.
+> **Now scoped** as a dedicated initiative — see [`deeper-personalization_desiredoutcomes.md`](deeper-personalization_desiredoutcomes.md) (Phase 11, five outcomes). Benchmark framing: see [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md) (Outcome 2) for how it is measured against the anonymous Discovery Baseline in the admin Recommendation-Insight / Listener-Trace tabs.
 
 Personalization today is intentionally shallow: scoring reads only a person's **most recent
 240 explicit, meaningful actions** (`detail_open`, `avlgo_click`, `fire`, `planning`, `remove`,
@@ -198,7 +198,7 @@ tabs against real behavior — without runaway feedback loops.
 
 ## Future Direction — Social, Curators & Influencers (planned, not yet scoped)
 
-> Benchmark framing: see [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md) (Outcome 3) for how social/curator lift is measured separately from public popularity and watched for influence concentration.
+> **Now scoped** as a dedicated initiative — see [`social-curator_desiredoutcomes.md`](social-curator_desiredoutcomes.md) (Phase 12, five outcomes). Benchmark framing: see [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md) (Outcome 3) for how social/curator lift is measured separately from public popularity and watched for influence concentration.
 
 A larger theme beyond solo personalization: turn AVLmc into a place where taste is *shared*.
 Builds on **Phase 9 (Social Music Sharing)** — the shipped Shared Listening surface (PRD 17)

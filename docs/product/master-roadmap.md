@@ -22,6 +22,8 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 8 | [Saved/Favorites & Genre Initiative (Epic)](saved-favorites-genre-prd.md) | Shipped | Private Saved space (events/venues/artists) + richer genre matching (taxonomy + Spotify genres); PRDs 12–16 across five cycles. |
 | 9 | [Shared Listening (PRD 17)](prds/prd-17-shared-listening.md) | Shipped | Going/Fire by a signed-in Spotify listener auto-populates the event page with a public, playable shared song list (read-only Spotify; no writes). Opens the Social Music Sharing track. |
 | 10 | [Discovery Benchmarking (Desired Outcomes)](discovery-benchmark_desiredoutcomes.md) | Planned | Turn the shipped Recommendation Insight + Listener Trace surfaces into a repeatable, fixed-methodology discovery benchmark (live-only / $0; no new tab). Validation layer for the deeper-personalization and social/curator future directions. |
+| 11 | [Deeper Personalization Scoring (Desired Outcomes)](deeper-personalization_desiredoutcomes.md) | Planned | Learn from what a listener *skips*, not just taps: move from the flat "recent 240 actions" model to a time-decayed, per-dimension taste model that safely uses implicit signals, stays explainable/correctable, and is loop-proof. Initiative A of the discovery North Star. |
+| 12 | [Social / Curator Graph (Desired Outcomes)](social-curator_desiredoutcomes.md) | Planned | Opt-in follow/curator graph + inner-circle attribution; trusted-circle/curator activity as an optional, bounded ranking input distinct from public heat. Privacy-first, no pay-to-play, no Spotify writes. Initiative B of the discovery North Star. |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
@@ -209,6 +211,28 @@ homes in the existing **Recommendation Insight** (aggregate) + **Listener Trace*
 **Overview** (summary link) surfaces — **no new tab** — and stays **live-only / $0** (no snapshot
 store; history is recorded as dated markdown snapshots at ship time). This is the validation layer
 for the two "Future Direction" sections in [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
+
+### Phases 11–12: Discovery North Star — Deeper Personalization & Social/Curator (planned)
+
+North Star: evolve discovery from "ranks what you tap" to "understands your taste **and** your
+trusted circle" — learning from skips, modeling taste per-dimension over time, and letting
+friends/curators shape the board — all opt-in, explainable, $0, and without ever drowning out local
+and novel shows. These are the two feature initiatives the Phase 10 benchmark exists to grade.
+
+- **Phase 11 — Deeper Personalization Scoring** ([`deeper-personalization_desiredoutcomes.md`](deeper-personalization_desiredoutcomes.md)):
+  five outcomes — skips shape ranking (implicit signal from impressions), a time-decayed
+  per-dimension taste model, cold-start + anonymous→account hand-off, explainable/correctable
+  signals, and structural feedback-loop protection. The scoring substrate. Storage is live-first
+  (rollup table only if measured perf demands it).
+- **Phase 12 — Social / Curator Graph** ([`social-curator_desiredoutcomes.md`](social-curator_desiredoutcomes.md)):
+  five outcomes — an opt-in social graph, inner-circle attribution (building on PRD 17's
+  `seeded_by_user_id` on-ramp), admin-promoted curator profiles, an optional bounded social ranking
+  signal distinct from public heat, and guardrails (no pay-to-play, no domination, no leaks, no
+  Spotify writes). Layers on top of Phase 11's scoring model.
+
+Both decompose into epic PRDs + cycle PRDs when scoped. Recommended overall build order interleaves
+the tracks: Phase 11 skips→ranking first (highest leverage), the social graph foundation in parallel,
+and the social ranking signal last (it needs both the scoring model and the graph).
 
 ## Scaling Milestones & Tracking
 
