@@ -514,6 +514,7 @@ export function EventBoard({
           {
             action,
             artistName: event.artistName,
+            createdAt: new Date().toISOString(),
             eventId: event.id,
             eventTitle: event.eventTitle,
             tags: event.tags,

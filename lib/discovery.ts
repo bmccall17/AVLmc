@@ -162,6 +162,9 @@ export function scoreDiscoveryEvents({
   // Aggregate the impression-derived skip signals once per scoring pass (PRD 18 / C1), normalized so
   // matching is consistent with the rest of the scorer. Reused for every event below.
   const implicitSkipSignals = buildImplicitSkipSignals(implicitSignals);
+  // Build the recency-decayed, per-dimension positive taste model once per pass (PRD 19 / C2); each
+  // event is matched against it below rather than re-summing every signal per event.
+  const tasteModel = buildTasteModel(preferenceSignals, now);
 
   // Dedupe favorites against equivalent ad-hoc boost custom signals so a saved venue/artist and
   // an explicit boost for the same name don't double-count across components (PRD 14 bounding).
@@ -186,11 +189,22 @@ export function scoreDiscoveryEvents({
         profileTerms,
         spotifyMatchCorrections.filter((correction) => correction.eventId === event.id)
       );
-      const personalScore = scorePersonalSignals(event, preferenceSignals);
+      const personalScore = scorePersonalSignals(event, preferenceSignals, tasteModel);
       const implicit = scoreImplicitSignals(event, implicitSkipSignals, now);
-      // Folding the cool into the directly-summed personal contribution is what actually lowers the
-      // event's rank at default dials; the per-dimension bases below carry the cooling for the trace.
-      const personalContribution = personalScore.score - implicit.totalCool;
+      // Per-dimension behavioral contribution to the directly-summed score (PRD 19 / C2). Positive
+      // venue/genre taste rides both sorts; positive artist taste is a Best Match dimension (like the
+      // Spotify match). Implicit skip cooling and the explicit remove penalty lower both sorts —
+      // skips never bury an event, only cool the matching dimension. The matching component bases
+      // below mirror these values so the existing dials tune (and can fully cancel) each one.
+      const implicitCool = implicit.artistCool + implicit.venueCool + implicit.genreCool;
+      const tasteBestBets =
+        personalScore.venueAffinity + personalScore.genreAffinity - personalScore.removePenalty - implicitCool;
+      const tasteBestMatch =
+        personalScore.artistAffinity +
+        personalScore.venueAffinity +
+        personalScore.genreAffinity -
+        personalScore.removePenalty -
+        implicitCool;
       const genreResult = scoreGenreMatch(event);
       // Layer the connected listener's Spotify genre affinity on top of the public taxonomy match
       // (PRD 16 / C5), bounded within the genreMatch ceiling so weighting stays calibrated.
@@ -234,11 +248,11 @@ export function scoreDiscoveryEvents({
           // venuePreference / artistAffinity weights dialing it 0x–2x via the component delta. A
           // saved venue applies to both sorts; a saved artist rides artistAffinity (Best Match).
           bestBetsScore:
-            publicScore.score + personalContribution + favoriteScore.venue + bestBetsTuning.adjustment,
+            publicScore.score + tasteBestBets + favoriteScore.venue + bestBetsTuning.adjustment,
           bestMatchScore:
             publicScore.score +
             profileScore.score +
-            personalContribution +
+            tasteBestMatch +
             favoriteScore.venue +
             favoriteScore.artist +
             bestMatchTuning.adjustment,
@@ -297,47 +311,179 @@ function scorePublicSignals(event: EventRecord, counts: CommunityCounts | undefi
   };
 }
 
-function scorePersonalSignals(event: EventRecord, signals: DiscoveryPreferenceSignal[]) {
-  let positiveScore = 0;
-  let negativeScore = 0;
-  let venuePreferenceScore = 0;
+// --- Time-decayed, per-dimension taste model (PRD 19 / C2) --------------------------------------
+//
+// Replaces the flat "recent 240 equally-weighted signals" learned term with per-dimension affinities
+// (artist / venue / genre) that are recency-decayed — a steep short-term half-life (intent) blended
+// with a gentle long-term one (durable taste) — and confidence-weighted (more evidence → more
+// weight, with diminishing returns). Each affinity routes into its existing component base + the
+// direct score via the `net = base · (weight/100)` pattern, so it inherits the shipped dials and
+// stays explainable. The implicit skip cooling from C1 (`scoreImplicitSignals`) feeds the same bases.
+
+const TASTE_SHORT_HALF_LIFE_DAYS = 10;
+const TASTE_LONG_HALF_LIFE_DAYS = 120;
+const TASTE_SHORT_BLEND = 0.6;
+const TASTE_LONG_BLEND = 0.4;
+const TASTE_CONFIDENCE_K = 2;
+const TASTE_SATURATION_SCALE = 40;
+const TASTE_ARTIST_CEILING = 40;
+const TASTE_VENUE_CEILING = 28;
+const TASTE_GENRE_CEILING = 22;
+const TASTE_REASON_MIN = 8;
+const REMOVE_PENALTY_CAP = 80;
+
+type DimensionAccumulator = { weight: number; count: number };
+
+type ListenerTasteModel = {
+  artist: Map<string, DimensionAccumulator>;
+  venue: Map<string, DimensionAccumulator>;
+  genre: Map<CanonicalGenre, DimensionAccumulator>;
+};
+
+type EventTaste = { artistAffinity: number; venueAffinity: number; genreAffinity: number };
+
+/**
+ * Aggregate a listener's positive behavioral signals into recency-decayed per-dimension accumulators
+ * (PRD 19 / C2). Computed once per scoring pass, then matched per event. Each action contributes its
+ * existing positive weight × blended recency; removes/implicit negatives are handled elsewhere so
+ * explicit removal stays dominant.
+ */
+function buildTasteModel(signals: DiscoveryPreferenceSignal[], now: Date): ListenerTasteModel {
+  const model: ListenerTasteModel = { artist: new Map(), venue: new Map(), genre: new Map() };
 
   for (const signal of signals) {
-    const similarity = scoreSignalSimilarity(event, signal);
-
-    if (similarity === 0) {
-      continue;
-    }
-
-    if (signal.action === "remove") {
-      negativeScore += Math.min(56, similarity * 8);
-      continue;
-    }
-
     const actionWeight = getPositiveActionWeight(signal.action);
-    if (actionWeight > 0) {
-      positiveScore += Math.min(actionWeight, similarity * actionWeight * 0.12);
-      if (isSameNormalizedValue(event.venueName, signal.venueName)) {
-        venuePreferenceScore += Math.min(18, actionWeight * 0.22);
-      }
+    if (actionWeight <= 0) {
+      continue;
+    }
+    const contribution = actionWeight * blendedRecency(signal.createdAt, now);
+    if (contribution <= 0) {
+      continue;
+    }
+
+    const artist = normalizeText(signal.artistName);
+    if (artist) {
+      addToAccumulator(model.artist, artist, contribution);
+    }
+    const venue = normalizeText(signal.venueName);
+    if (venue) {
+      addToAccumulator(model.venue, venue, contribution);
+    }
+    for (const genre of resolveGenres([signal.eventTitle, signal.artistName, ...signal.tags])) {
+      addToAccumulator(model.genre, genre, contribution);
     }
   }
 
-  const score = Math.max(-80, Math.min(70, positiveScore - negativeScore));
-  const reasons: DiscoveryReason[] = [];
+  return model;
+}
 
-  if (positiveScore >= 24) {
-    reasons.push(simpleReason("matches your recent picks"));
-  } else if (positiveScore >= 10) {
-    reasons.push(simpleReason("learned from your clicks"));
+function addToAccumulator<K>(map: Map<K, DimensionAccumulator>, key: K, contribution: number) {
+  const existing = map.get(key);
+  if (existing) {
+    existing.weight += contribution;
+    existing.count += 1;
+  } else {
+    map.set(key, { weight: contribution, count: 1 });
   }
+}
+
+/** Blend a steep short-term decay (recent intent) with a gentle long-term decay (durable taste). */
+function blendedRecency(createdAt: string, now: Date) {
+  const ageDays = Math.max(0, (now.getTime() - new Date(createdAt).getTime()) / 86_400_000);
+  const shortDecay = Math.pow(0.5, ageDays / TASTE_SHORT_HALF_LIFE_DAYS);
+  const longDecay = Math.pow(0.5, ageDays / TASTE_LONG_HALF_LIFE_DAYS);
+  return TASTE_SHORT_BLEND * shortDecay + TASTE_LONG_BLEND * longDecay;
+}
+
+/**
+ * Saturating, confidence-weighted affinity from an accumulator (PRD 19 / C2): more recency-weighted
+ * evidence raises the affinity with diminishing returns toward the dimension ceiling, while a low
+ * observation count holds a single signal's effect down (confidence).
+ */
+function affinityStrength(accumulator: DimensionAccumulator | undefined, ceiling: number) {
+  if (!accumulator || accumulator.weight <= 0) {
+    return 0;
+  }
+  const saturated = 1 - Math.exp(-accumulator.weight / TASTE_SATURATION_SCALE);
+  const confidence = accumulator.count / (accumulator.count + TASTE_CONFIDENCE_K);
+  return ceiling * saturated * confidence;
+}
+
+/** Match an event's artist/venue/genres against the taste maps (best partial match wins). */
+function scoreTasteForEvent(event: EventRecord, model: ListenerTasteModel): EventTaste {
+  const artistAffinity = bestDimensionAffinity(event.artistName, model.artist, TASTE_ARTIST_CEILING);
+  const venueAffinity = bestDimensionAffinity(event.venueName, model.venue, TASTE_VENUE_CEILING);
+
+  let genreAffinity = 0;
+  for (const eventGenre of resolveGenres([event.eventTitle, event.artistName, ...event.tags])) {
+    genreAffinity = Math.max(genreAffinity, affinityStrength(model.genre.get(eventGenre), TASTE_GENRE_CEILING));
+  }
+
+  return { artistAffinity, venueAffinity, genreAffinity };
+}
+
+function bestDimensionAffinity(value: string, map: Map<string, DimensionAccumulator>, ceiling: number) {
+  let best = 0;
+  for (const [key, accumulator] of map) {
+    const matchStrength = fieldMatchStrength(value, key);
+    if (matchStrength === 0) {
+      continue;
+    }
+    best = Math.max(best, affinityStrength(accumulator, ceiling) * matchStrength);
+  }
+  return best;
+}
+
+/**
+ * Per-event behavioral contribution (PRD 19 / C2): positive per-dimension taste from the model plus
+ * the explicit `remove` penalty (kept undecayed and per-event so explicit removal stays a strong,
+ * dominant negative). Implicit skip cooling is applied separately in `scoreImplicitSignals` (C1).
+ */
+function scorePersonalSignals(
+  event: EventRecord,
+  signals: DiscoveryPreferenceSignal[],
+  model: ListenerTasteModel
+) {
+  const taste = scoreTasteForEvent(event, model);
+
+  let removePenalty = 0;
+  for (const signal of signals) {
+    if (signal.action !== "remove") {
+      continue;
+    }
+    const similarity = scoreSignalSimilarity(event, signal);
+    if (similarity > 0) {
+      removePenalty += Math.min(56, similarity * 8);
+    }
+  }
+  removePenalty = Math.min(REMOVE_PENALTY_CAP, removePenalty);
+
+  const learnedBehaviorScore =
+    taste.artistAffinity + taste.venueAffinity + taste.genreAffinity - removePenalty;
 
   return {
-    learnedBehaviorScore: score,
-    reasons,
-    score,
-    venuePreferenceScore: Math.min(36, venuePreferenceScore),
+    artistAffinity: taste.artistAffinity,
+    venueAffinity: taste.venueAffinity,
+    genreAffinity: taste.genreAffinity,
+    removePenalty,
+    learnedBehaviorScore,
+    reasons: getTasteReasons(taste),
   };
+}
+
+/** Truthful, private-safe positive reasons naming the dominant taste dimension. No raw history. */
+function getTasteReasons(taste: EventTaste): DiscoveryReason[] {
+  const strongest = Math.max(taste.artistAffinity, taste.venueAffinity, taste.genreAffinity);
+  if (strongest < TASTE_REASON_MIN) {
+    return [];
+  }
+  if (strongest === taste.artistAffinity) {
+    return [simpleReason("matches artists you return to")];
+  }
+  if (strongest === taste.venueAffinity) {
+    return [simpleReason("matches venues you favor")];
+  }
+  return [simpleReason("matches your taste in this genre")];
 }
 
 /**
@@ -500,24 +646,24 @@ function getPreferenceComponentBases({
   publicScore: ReturnType<typeof scorePublicSignals>;
 }): PreferenceComponentBases {
   return {
-    // Implicit skip cooling is subtracted from the matching per-dimension base so it is attributable
-    // per-dimension in Listener Trace and tunable via the existing dials (PRD 18 / C1). The headline
-    // rank effect comes from `personalContribution`; at default dials these bases don't double-count.
-    artistAffinity: profileScore.score + favoriteArtistScore - implicit.artistCool,
+    // Each per-dimension base mirrors the value also added to the direct score, so the existing dial
+    // both tunes and (at weight 0) fully cancels that dimension's contribution. Positive taste comes
+    // from the C2 model; implicit skip cooling (C1) subtracts from the same base for trace attribution.
+    artistAffinity: profileScore.score + favoriteArtistScore + personalScore.artistAffinity - implicit.artistCool,
     dateAvailability: publicScore.components.dateAvailability,
     freePaidPreference: eventContainsAny(event, ["free", "no cover", "suggested donation"]) ? 12 : 0,
-    genreMatch: genreMatchBase - implicit.genreCool,
+    genreMatch: genreMatchBase + personalScore.genreAffinity - implicit.genreCool,
     learnedBehavior: personalScore.learnedBehaviorScore - implicit.totalCool,
     localRelevance: publicScore.components.localRelevance,
-    novelty: scoreNovelty(counts, profileScore.score, personalScore.score),
+    novelty: scoreNovelty(counts, profileScore.score, personalScore.learnedBehaviorScore),
     outdoorIndoorPreference: eventContainsAny(event, ["outdoor", "outside", "patio", "indoor", "listening room"])
       ? 12
       : 0,
     socialHeat: publicScore.components.socialHeat,
-    // Saved-venue boost rides venuePreference, capped with the existing learned-behavior cap so it
-    // can't exceed the component ceiling (PRD 14 bounding); implicit venue cooling subtracts after.
+    // Saved-venue boost + positive venue taste ride venuePreference, capped within the component
+    // ceiling (PRD 14 bounding); implicit venue cooling subtracts after so it can push below zero.
     venuePreference:
-      Math.min(VENUE_PREFERENCE_CEILING, personalScore.venuePreferenceScore + favoriteVenueScore) -
+      Math.min(VENUE_PREFERENCE_CEILING, favoriteVenueScore + personalScore.venueAffinity) -
       implicit.venueCool,
   };
 }
@@ -979,13 +1125,6 @@ export function normalizeText(value: string) {
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function isSameNormalizedValue(left: string, right: string) {
-  const normalizedLeft = normalizeText(left);
-  const normalizedRight = normalizeText(right);
-
-  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
 }
 
 function eventContainsAny(event: EventRecord, terms: string[]) {

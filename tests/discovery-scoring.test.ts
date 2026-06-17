@@ -427,6 +427,7 @@ test("implicit cooling never exceeds the explicit remove magnitude for the same 
   const removeSignal: DiscoveryPreferenceSignal = {
     action: "remove",
     artistName: francesElizaEvent.artistName,
+    createdAt: "2026-06-06T00:00:00.000Z",
     eventId: "some-other-event",
     eventTitle: "",
     tags: [],
@@ -440,7 +441,7 @@ test("implicit cooling never exceeds the explicit remove magnitude for the same 
   })[francesElizaEvent.id];
   const removeDrop = base.bestBetsScore - removed.bestBetsScore;
 
-  assert.ok(implicitDrop <= 24); // total implicit cap
+  assert.ok(implicitDrop <= 36); // per-dimension cap (12) across the three dimensions
   assert.ok(implicitDrop < removeDrop); // explicit always dominates implicit
 });
 
@@ -465,4 +466,94 @@ test("implicit cooling is attributable to the venue and genre dimensions", () =>
   const genreCooled = scoreWithImplicit([implicitRow("tag", "Folk Storytelling")]);
   assert.ok(hasReason(genreCooled.reasons, "you tend to skip shows like this"));
   assert.ok(genreCooled.components.genreMatch.base < scoreWithImplicit([]).components.genreMatch.base);
+});
+
+// --- Time-decayed, per-dimension taste model (PRD 19 / C2) --------------------------------------
+
+const NOW = new Date("2026-06-07T12:00:00.000Z");
+
+function tasteSignal(
+  action: DiscoveryPreferenceSignal["action"],
+  createdAt: string,
+  overrides: Partial<DiscoveryPreferenceSignal> = {}
+): DiscoveryPreferenceSignal {
+  return {
+    action,
+    artistName: francesElizaEvent.artistName,
+    createdAt,
+    eventId: francesElizaEvent.id,
+    eventTitle: francesElizaEvent.eventTitle,
+    tags: francesElizaEvent.tags,
+    venueName: francesElizaEvent.venueName,
+    ...overrides,
+  };
+}
+
+function scoreWithSignals(signals: DiscoveryPreferenceSignal[], preferences: object = {}) {
+  return scoreDiscoveryEvents({
+    counts: {},
+    events: [francesElizaEvent],
+    listenerPreferences: preferences,
+    now: NOW,
+    preferenceSignals: signals,
+  })[francesElizaEvent.id];
+}
+
+test("recent behavior outweighs equally-similar stale behavior", () => {
+  const recent = scoreWithSignals([tasteSignal("planning", "2026-06-06T00:00:00.000Z")]);
+  const stale = scoreWithSignals([tasteSignal("planning", "2026-02-01T00:00:00.000Z")]);
+
+  assert.ok(recent.bestMatchScore > stale.bestMatchScore);
+  // Long-term taste is not erased: an old signal still contributes a positive affinity.
+  assert.ok(stale.components.artistAffinity.base > 0);
+});
+
+test("confidence: more observations produce a stronger but bounded affinity", () => {
+  const base = scoreWithSignals([]);
+  const one = scoreWithSignals([tasteSignal("planning", "2026-06-06T00:00:00.000Z")]);
+  const many = scoreWithSignals([
+    tasteSignal("planning", "2026-06-06T00:00:00.000Z", { eventId: "e1" }),
+    tasteSignal("planning", "2026-06-05T00:00:00.000Z", { eventId: "e2" }),
+    tasteSignal("planning", "2026-06-04T00:00:00.000Z", { eventId: "e3" }),
+    tasteSignal("planning", "2026-06-03T00:00:00.000Z", { eventId: "e4" }),
+    tasteSignal("planning", "2026-06-02T00:00:00.000Z", { eventId: "e5" }),
+  ]);
+
+  assert.ok(one.bestMatchScore > base.bestMatchScore);
+  assert.ok(many.bestMatchScore > one.bestMatchScore);
+  // Bounded: the artist affinity stays within its dimension ceiling even with heavy evidence.
+  assert.ok(many.components.artistAffinity.base <= 40 + 1); // ceiling + favorite/profile headroom (none here)
+});
+
+test("a per-dimension affinity is canceled when its dial is set to 0", () => {
+  const signals = [tasteSignal("fire", "2026-06-06T00:00:00.000Z")];
+  const withTaste = scoreWithSignals(signals);
+  const muted = scoreWithSignals(signals, { weights: { venuePreference: 0 } });
+
+  // Venue taste lifts Best Bets at the default dial; zeroing venuePreference removes that lift.
+  assert.ok(withTaste.components.venuePreference.base > 0);
+  assert.ok(withTaste.bestBetsScore > muted.bestBetsScore);
+  assert.ok(muted.components.venuePreference.adjustment <= 0);
+});
+
+test("the strongest taste dimension surfaces a truthful reason", () => {
+  const score = scoreWithSignals([
+    tasteSignal("planning", "2026-06-06T00:00:00.000Z", { eventId: "e1" }),
+    tasteSignal("planning", "2026-06-05T00:00:00.000Z", { eventId: "e2" }),
+    tasteSignal("planning", "2026-06-04T00:00:00.000Z", { eventId: "e3" }),
+  ]);
+
+  assert.ok(
+    hasReason(score.reasons, "matches artists you return to") ||
+      hasReason(score.reasons, "matches venues you favor") ||
+      hasReason(score.reasons, "matches your taste in this genre")
+  );
+});
+
+test("an explicit positive raises a matching event over the no-signal baseline", () => {
+  const base = scoreWithSignals([]);
+  const engaged = scoreWithSignals([tasteSignal("fire", "2026-06-06T00:00:00.000Z")]);
+
+  assert.ok(engaged.bestMatchScore > base.bestMatchScore);
+  assert.ok(engaged.components.artistAffinity.base > base.components.artistAffinity.base);
 });

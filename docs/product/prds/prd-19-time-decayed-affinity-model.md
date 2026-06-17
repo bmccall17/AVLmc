@@ -8,7 +8,14 @@ Replace the flat "most recent 240 equally-weighted signals" model with a **time-
 
 ## Implementation Status
 
-**Planned.**
+**Shipped.** Delivered:
+
+- **Per-dimension, recency-decayed, confidence-weighted taste model** (`buildTasteModel` → `scoreTaste*` in `lib/discovery.ts`). A listener's positive signals (now carrying `createdAt`, plumbed through `listDiscoveryPreferenceSignals`) are aggregated **once per scoring pass** into per-value accumulators for **artist, venue, and genre** (genre via `resolveGenres`). Each signal contributes its existing `getPositiveActionWeight` × a **blended recency** — a steep short-term half-life (10d, intent) blended 0.6/0.4 with a gentle long-term one (120d, durable taste). Each affinity is a **saturating, confidence-weighted** function of the accumulated evidence (`1 − e^(−w/scale)` × `n/(n+k)`): more recency-weighted evidence raises it with diminishing returns toward a per-dimension ceiling, while a single observation stays weak.
+- **Routed through the existing dials.** Each affinity feeds its matching component base **and** the direct score using the `net = base · (weight/100)` pattern, so the shipped 0–200 weights both tune and (at weight 0) **fully cancel** each dimension — no new dials. The flat `learnedBehavior` term is replaced by these legible per-dimension contributions. The C1 implicit skip cooling feeds the same per-dimension bases, so explicit positives and implicit negatives compose coherently; explicit `remove` stays an undecayed, dominant per-event negative.
+- **Explainability.** Truthful, private-safe reasons name the dominant taste dimension ("matches artists you return to" / "venues you favor" / "your taste in this genre"); each affinity is attributable per-dimension in Listener Trace via its component base.
+- **Storage decision — live-first, no rollup table.** Affinities are computed live from the bounded (240-row) signal read with one model build per pass and per-event map lookups; at current scale (WAU < 10, bounded upcoming-event window) this is well within budget. A per-listener rollup table remains the documented escape hatch **only if** profiling later shows a problem (re-evaluate against the roadmap Scaling Milestones).
+- **Scope note (honest).** This cycle ships the three **ranking-affecting** dimensions (artist/venue/genre). The remaining listed dimensions — **time-of-week / price / indoor-outdoor** — are deferred: their component bases (`dateAvailability` is timing-only; `freePaidPreference`; `outdoorIndoorPreference`) are latent at default dials and add little default-ranking value without the C4 weighting/exploration-floor work, so they are best landed alongside PRD 21.
+- **Verified:** 5 new scenarios in `tests/discovery-scoring.test.ts` (28 total green) — recency outweighs stale, confidence is bounded-increasing, weight-0 cancels a dimension, dominant-dimension reason, explicit positive lifts ranking; all C1 invariants preserved (incl. cap-below-`remove`). `typecheck`, `test:registry`, `lint` green; Snyk-clean; $0 (no new table/route).
 
 ## Goals
 

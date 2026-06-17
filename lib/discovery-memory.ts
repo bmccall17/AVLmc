@@ -28,6 +28,7 @@ export type DiscoveryStateByEvent = Record<string, DiscoveryPersonEventState | u
 export type DiscoveryPreferenceSignal = {
   action: DiscoveryEventAction;
   artistName: string;
+  createdAt: string;
   eventId: string;
   eventTitle: string;
   tags: string[];
@@ -85,6 +86,7 @@ type StateRow = {
 type PreferenceSignalRow = {
   action: DiscoveryEventAction;
   artist_name: string | null;
+  created_at: Date | string | null;
   event_id: string;
   event_title: string;
   tags: string[] | null;
@@ -155,7 +157,7 @@ export async function listDiscoveryPreferenceSignals(
   try {
     const result = await query<PreferenceSignalRow>(
       `
-        select action, event_id, event_title, artist_name, venue_name, tags
+        select action, event_id, event_title, artist_name, venue_name, tags, created_at
         from public.event_interaction_events
         where identity_key = any($1::text[])
           and action in (
@@ -176,6 +178,7 @@ export async function listDiscoveryPreferenceSignals(
     return result.rows.map((row) => ({
       action: row.action,
       artistName: row.artist_name ?? "",
+      createdAt: toIsoStringOrNull(row.created_at) ?? new Date(0).toISOString(),
       eventId: row.event_id,
       eventTitle: row.event_title,
       tags: row.tags ?? [],
