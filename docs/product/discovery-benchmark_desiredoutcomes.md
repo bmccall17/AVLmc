@@ -1,6 +1,6 @@
 ## Discovery Benchmarking — Desired Outcomes
 
-Updated: June 16, 2026
+Updated: June 17, 2026
 
 ### Purpose & Posture
 
@@ -19,6 +19,14 @@ This builds directly on the two "Future Direction" sections of [`personalized-di
 ---
 
 ### 1. Discovery Baseline (detailed — first phase)
+
+> **Shipped — PRD 22 (June 17, 2026).** Recommendation Insight is now a repeatable,
+> fixed-methodology baseline reading: pinned window + `SCORER_VERSION`/commit + a **stable
+> committed synthetic profile**, the full metric set (anonymous ranking shape, behavior mix incl.
+> impression non-conversion, engagement, diversity, novelty, local relevance, signal coverage)
+> each with a plain-language definition, a markdown snapshot for recording-without-storage, and an
+> Overview discovery-health link. See [`prds/prd-22-discovery-baseline.md`](prds/prd-22-discovery-baseline.md)
+> for the delivered detail and the first recorded snapshot.
 
 Done looks like the Admin Portal establishing a **repeatable, fixed-methodology reading** of how discovery performs today, so that every future personalization or social change can be measured against the same anonymous ranking, listener behavior, engagement, diversity, novelty, local-relevance, and signal-coverage reference. Because nothing is stored, the reading is only trustworthy if it is *computed the same way every time* and *recorded at known moments* — those two disciplines are the deliverable.
 

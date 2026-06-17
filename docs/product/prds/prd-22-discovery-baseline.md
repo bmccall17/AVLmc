@@ -16,7 +16,56 @@ The bulk of the per-reading content already exists in `lib/admin/insight.ts`; "d
 
 ## Implementation Status
 
-**Planned.**
+**Shipped.** Delivered (commit `cb24683`):
+
+- **Fixed-methodology baseline reading** in Recommendation Insight (`lib/admin/insight.ts`,
+  `components/admin/InsightSection.tsx`): a `methodology` block on the payload + a panel
+  **Methodology strip** stating the pinned event window, `SCORER_VERSION` (`v11.4`, new constant
+  in `lib/discovery.ts`) + git commit (`VERCEL_GIT_COMMIT_SHA`, graceful when absent), and the
+  synthetic-profile note — with the "descriptive, not a quality score" caveat.
+- **Stable synthetic profile**: a committed, public-derived `SYNTHETIC_TASTE_SEED` (pinned
+  2026-06-17, regenerated intentionally from frequent listings) replaces the drift-prone
+  `topArtists(events)`, so the anonymous-vs-signed-in comparison moves only when the algorithm
+  changes — verified live (coverage 20/418, 6 movers).
+- **New baseline metrics**: novelty share (top-N under-the-radar), engagement (total community
+  heat + top-N concentration), and impression non-conversion share — plus a plain-language
+  **definition** under each metric card; the impression-non-conversion read also surfaces in the
+  behavioral panel.
+- **Recording without storage**: a pure `serializeBaselineMarkdown` + a **"Copy baseline reading
+  as markdown"** button produce a dated, paste-ready snapshot (no table, no file output).
+- **Overview discovery-health card** (`components/AdminPortal.tsx`) summarizing diversity /
+  novelty / coverage / local value with a link into Recommendation Insight (warms its cache).
+- **Pure helpers** extracted to `lib/admin/insight-metrics.ts` (no `server-only`/db) and
+  unit-tested (`tests/insight-metrics.test.ts`, 8 cases).
+- **Verified**: `typecheck`/`lint`/`build` green; 66 unit tests pass (incl. new insight suite +
+  `test:registry`); Snyk **0 issues**; live-verified against Neon production data. $0; no new
+  table, route, tab, or dependency.
+
+### First recorded baseline snapshot (2026-06-17)
+
+```
+### Discovery Baseline — 2026-06-17
+
+- **Window:** 2026-06-17 → 2026-07-07
+- **Scorer:** v11.4
+- **Synthetic profile:** Fixed public-derived seed (5 artists), pinned 2026-06-17 — regenerated intentionally, never a real listener's data.
+- _Descriptive snapshot — not a single quality score._
+
+**Diversity (top 10):** 10 venues · 10 artists · 50 tags
+**Novelty:** 100% of top-10 under-the-radar
+**Local value:** 0% of top-10 carry community signal
+**Engagement:** 10 total community heat · 0% concentrated in top-10
+**Coverage:** 20/418 events personalized · 398 rank on timing alone
+**Signal mix (top 10):** Genre match 9 · Date availability 1
+**Behavior:** 340 interactions · 2 removals · 316 impressions · 93% non-converting
+
+**Top 5 anonymous ranking:**
+1. Pisgah Brewing Upcoming Music Lineup — Pisgah Brewing Company Black Mountain (score 44)
+2. Old-time Jam — Jack of the Wood Pub (score 38)
+3. Bayou Diesel at Arbor Evenings — The North Carolina Arboretum (score 38)
+4. Taps + Tunes Live Music — White Labs Brewing Co - Asheville Kitchen & Tap (score 38)
+5. Matt Smith's Well-Crafted Music Series with Melissa McKinney — Highland Brewing Co. (score 38)
+```
 
 ## Goals
 
