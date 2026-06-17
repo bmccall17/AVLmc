@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { auth } from "@/auth";
 import { EventBoard } from "@/components/EventBoard";
 import { ListenerProfileButton, type ListenerScorePreview } from "@/components/ListenerProfileButton";
+import SupportButton from "@/components/SupportButton";
 import {
   ANONYMOUS_SESSION_COOKIE_NAME,
   getAnonymousSessionIdFromCookieValue,
@@ -180,6 +181,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             spotifyLimitedBetaNotice={spotifyLimitedBetaNotice}
             user={user}
           />
+          <SupportButton />
         </div>
       </header>
 

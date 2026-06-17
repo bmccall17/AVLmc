@@ -1584,6 +1584,91 @@ body {
   color: #09090b;
 }
 
+.sandbox-support {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--gold);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 40px;
+  position: relative;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.sandbox-support:hover,
+.sandbox-support:focus-visible {
+  background: rgba(240, 169, 58, 0.12);
+  border-color: rgba(240, 169, 58, 0.4);
+  color: #f7c069;
+}
+
+.sandbox-support-tooltip {
+  backdrop-filter: blur(18px);
+  background: rgba(10, 10, 10, 0.94);
+  border: 1px solid rgba(244, 244, 245, 0.18);
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.52);
+  color: #fafafa;
+  display: grid;
+  gap: 6px;
+  line-height: 1.4;
+  max-width: min(260px, calc(100vw - 56px));
+  opacity: 0;
+  padding: 12px;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  text-align: left;
+  top: calc(100% + 12px);
+  transform: translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  width: 260px;
+  z-index: 60;
+}
+
+.sandbox-support-tooltip::after {
+  background: rgba(10, 10, 10, 0.94);
+  border-left: 1px solid rgba(244, 244, 245, 0.18);
+  border-top: 1px solid rgba(244, 244, 245, 0.18);
+  content: "";
+  height: 10px;
+  position: absolute;
+  right: 14px;
+  top: -6px;
+  transform: rotate(45deg);
+  width: 10px;
+}
+
+.sandbox-support:hover .sandbox-support-tooltip,
+.sandbox-support:focus-visible .sandbox-support-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.sandbox-support-tooltip strong {
+  color: #fafafa;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.sandbox-support-tooltip span {
+  color: #d4d4d8;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.sandbox-support-tooltip em {
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .curator-callout {
   align-items: center;
   background: rgba(24, 24, 27, 0.4);
