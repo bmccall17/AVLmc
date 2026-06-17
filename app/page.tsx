@@ -171,17 +171,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <a className="sandbox-source-link" href={avlgoSourceUrl} rel="noreferrer" target="_blank">
             AVLgo feed
           </a>
-          <ListenerProfileButton
-            features={features}
-            hasTasteProfile={hasTasteProfile}
-            initialPreferences={activeListenerPreferences}
-            musicConnections={musicConnections}
-            musicProfileItems={musicProfileItems}
-            scorePreview={scorePreview}
-            spotifyLimitedBetaNotice={spotifyLimitedBetaNotice}
-            user={user}
-          />
-          <SupportButton />
+          <div className="sandbox-identity-actions">
+            <ListenerProfileButton
+              features={features}
+              hasTasteProfile={hasTasteProfile}
+              initialPreferences={activeListenerPreferences}
+              musicConnections={musicConnections}
+              musicProfileItems={musicProfileItems}
+              scorePreview={scorePreview}
+              spotifyLimitedBetaNotice={spotifyLimitedBetaNotice}
+              user={user}
+            />
+            <SupportButton />
+          </div>
         </div>
       </header>
 

@@ -1300,6 +1300,24 @@ body {
   min-width: 0;
 }
 
+/* Keep the support (buy-me-a-coffee) mug glued to the profile button so the
+   two share one line and ride the profile button's responsive behavior. */
+.sandbox-identity-actions {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sandbox-identity-actions .sandbox-profile {
+  flex: 1 1 auto;
+}
+
+.sandbox-identity-actions .sandbox-support {
+  flex: 0 0 auto;
+}
+
 .listener-modal-backdrop {
   align-items: flex-start;
   background: rgba(0, 0, 0, 0.72);
@@ -3153,6 +3171,10 @@ button.primary-action {
   .sandbox-profile {
     flex: 1 1 auto;
     justify-content: center;
+  }
+
+  .sandbox-identity-actions {
+    flex: 1 1 100%;
   }
 
   .listener-modal-backdrop {
