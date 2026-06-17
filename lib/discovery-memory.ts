@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { query } from "@/lib/db";
+import { getPool, query } from "@/lib/db";
 import type { EventRecord } from "@/lib/events";
 
 export type DiscoveryEventAction =
@@ -387,6 +387,91 @@ export async function recordSpotifyMatchCorrection(input: DiscoveryIdentityInput
       return null;
     }
     throw error;
+  }
+}
+
+/**
+ * Durable anonymous → account hand-off (PRD 20 / C3). Migrates a browser's accumulated anonymous
+ * discovery signals to the signed-in account so signing in feels like continuity, not a reset.
+ *
+ * Idempotent and lossless: the append-only interaction log has no per-event uniqueness, so it is
+ * blind re-keyed; per-event state has `unique (event_id, identity_key)`, so session state is merged
+ * into any existing account state — keeping the strongest/most-recent fire/planning/removed
+ * timestamp (mirroring `mergeStateRows`/`latestIso`) — and the leftover session rows are dropped. A
+ * second run for the same pair finds no session rows and is a no-op. Wrapped in a transaction and
+ * tolerant of a missing table, so it can never block sign-in.
+ */
+export async function migrateSessionSignalsToUser(sessionId: string, userId: string) {
+  const normalizedUserId = toNullableUserId(userId);
+
+  if (!sessionId || normalizedUserId === null) {
+    return;
+  }
+
+  const sessionKey = `session:${sessionId}`;
+  const userKey = `user:${userId}`;
+  const client = await getPool().connect();
+
+  try {
+    await client.query("begin");
+
+    // 1) Append-only interaction log: no per-event uniqueness, so re-keying is safe and idempotent.
+    await client.query(
+      `
+        update public.event_interaction_events
+        set identity_key = $2, user_id = $3
+        where identity_key = $1
+      `,
+      [sessionKey, userKey, normalizedUserId]
+    );
+
+    // 2) Per-event state: merge session state into existing account state (strongest/most-recent
+    //    wins; GREATEST ignores NULLs, matching latestIso).
+    await client.query(
+      `
+        update public.event_person_event_state u
+        set fire_at = greatest(u.fire_at, s.fire_at),
+          planning_at = greatest(u.planning_at, s.planning_at),
+          removed_at = greatest(u.removed_at, s.removed_at),
+          user_id = $3,
+          updated_at = now()
+        from public.event_person_event_state s
+        where s.identity_key = $1
+          and u.identity_key = $2
+          and u.event_id = s.event_id
+      `,
+      [sessionKey, userKey, normalizedUserId]
+    );
+
+    // 3) Re-key the non-conflicting session rows to the account.
+    await client.query(
+      `
+        update public.event_person_event_state s
+        set identity_key = $2, user_id = $3, updated_at = now()
+        where s.identity_key = $1
+          and not exists (
+            select 1 from public.event_person_event_state u
+            where u.identity_key = $2 and u.event_id = s.event_id
+          )
+      `,
+      [sessionKey, userKey, normalizedUserId]
+    );
+
+    // 4) Drop any leftover (already-merged) session rows.
+    await client.query(
+      `delete from public.event_person_event_state where identity_key = $1`,
+      [sessionKey]
+    );
+
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    if (isMissingRelationError(error)) {
+      return;
+    }
+    throw error;
+  } finally {
+    client.release();
   }
 }
 

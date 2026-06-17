@@ -8,7 +8,14 @@ Make personalization useful **before** sign-in and continuous **across** it. Tod
 
 ## Implementation Status
 
-**Planned.**
+**Shipped.** Delivered:
+
+- **Durable, idempotent session → account hand-off.** `migrateSessionSignalsToUser(sessionId, userId)` (`lib/discovery-memory.ts`) re-keys a browser's anonymous discovery signals to the account in one transaction: the append-only `event_interaction_events` log (no per-event uniqueness) is blind re-keyed; `event_person_event_state` (unique `(event_id, identity_key)`) is **merged** into any existing account state — `GREATEST` keeps the strongest/most-recent fire/planning/removed timestamp, mirroring `mergeStateRows`/`latestIso` — then leftover session rows are dropped. A second run finds no session rows → **no-op** (idempotent, lossless). Tolerant of a missing table (`isMissingRelationError`).
+- **Auth seam wired.** The migration runs in the Auth.js `events.signIn` callback (`auth.ts`), right after `recordMusicConnection`. The anonymous session id is read from the `avl_anonymous_session` cookie via `next/headers`; the call is wrapped in try/catch so a hand-off failure **never blocks sign-in**.
+- **Cold-start.** Confirmed parity: the C2 affinity model is identity-key agnostic (anonymous sessions accumulate/apply affinities exactly like accounts), and its confidence weighting (`n/(n+k)`) already degrades a thin history to a small, low-confidence nudge — a single tap stays public-dominated, not swingy (unit-tested).
+- **Observability.** Because signals are re-keyed to `user:{id}`, a freshly signed-in listener's pre-sign-in signals appear under the account in Listener Trace (which reads by identity key / `user_id`).
+- **Scope note:** the two PRD-named tables are migrated; `spotify_event_match_corrections` re-keying was left out of scope (corrections remain readable via the merged-identity read while a session is active).
+- **Verified:** cold-start scenario added to `tests/discovery-scoring.test.ts` (29 total green); the migration's idempotency/merge is enforced by its SQL design (transactional re-key + `GREATEST` merge + delete; DB-integration scenarios can't run in the no-DB scoring test harness). `typecheck`, `test:registry`, `lint` green; Snyk-clean; $0 (no new table/route).
 
 ## Goals
 

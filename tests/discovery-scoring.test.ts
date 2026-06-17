@@ -557,3 +557,16 @@ test("an explicit positive raises a matching event over the no-signal baseline",
   assert.ok(engaged.bestMatchScore > base.bestMatchScore);
   assert.ok(engaged.components.artistAffinity.base > base.components.artistAffinity.base);
 });
+
+// --- Cold-start: thin history stays public-dominated, not swingy (PRD 20 / C3) ------------------
+
+test("a single weak tap produces only a small, low-confidence affinity", () => {
+  const base = scoreWithSignals([]);
+  const oneTap = scoreWithSignals([tasteSignal("detail_open", "2026-06-06T00:00:00.000Z")]);
+
+  // The affinity exists but is small (one observation → low confidence), so cold-start ranking
+  // stays close to the public baseline rather than swinging on a single interaction.
+  assert.ok(oneTap.components.artistAffinity.base > 0);
+  assert.ok(oneTap.components.artistAffinity.base < 6);
+  assert.ok(oneTap.bestMatchScore - base.bestMatchScore < 12);
+});

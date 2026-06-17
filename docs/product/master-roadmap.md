@@ -22,7 +22,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 8 | [Saved/Favorites & Genre Initiative (Epic)](saved-favorites-genre-prd.md) | Shipped | Private Saved space (events/venues/artists) + richer genre matching (taxonomy + Spotify genres); PRDs 12–16 across five cycles. |
 | 9 | [Shared Listening (PRD 17)](prds/prd-17-shared-listening.md) | Shipped | Going/Fire by a signed-in Spotify listener auto-populates the event page with a public, playable shared song list (read-only Spotify; no writes). Opens the Social Music Sharing track. |
 | 10 | [Discovery Benchmarking (Desired Outcomes)](discovery-benchmark_desiredoutcomes.md) | Planned | Turn the shipped Recommendation Insight + Listener Trace surfaces into a repeatable, fixed-methodology discovery benchmark (live-only / $0; no new tab). Validation layer for the deeper-personalization and social/curator future directions. |
-| 11 | [Deeper Personalization Initiative (Epic)](deeper-personalization-prd.md) | Building (C1–C2 shipped) | Learn from what a listener *skips*, not just taps: move from the flat "recent 240 actions" model to a time-decayed, per-dimension taste model that safely uses implicit signals, stays explainable/correctable, and is loop-proof. Initiative A of the discovery North Star; PRDs 18–21 across four cycles. |
+| 11 | [Deeper Personalization Initiative (Epic)](deeper-personalization-prd.md) | Building (C1–C3 shipped) | Learn from what a listener *skips*, not just taps: move from the flat "recent 240 actions" model to a time-decayed, per-dimension taste model that safely uses implicit signals, stays explainable/correctable, and is loop-proof. Initiative A of the discovery North Star; PRDs 18–21 across four cycles. |
 | 12 | [Social / Curator Graph (Desired Outcomes)](social-curator_desiredoutcomes.md) | Planned | Opt-in follow/curator graph + inner-circle attribution; trusted-circle/curator activity as an optional, bounded ranking input distinct from public heat. Privacy-first, no pay-to-play, no Spotify writes. Initiative B of the discovery North Star. |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
@@ -248,6 +248,15 @@ and novel shows. These are the two feature initiatives the Phase 10 benchmark ex
   dominant. Storage decision recorded: **live-first, no rollup table** (within budget at current
   scale; rollup remains the measured-only escape hatch). Time-of-week/price/indoor-outdoor dimensions
   deferred to land with C4. Live-first ($0); Snyk-clean; recency/confidence/cancellation unit-tested.
+
+  **C3 shipped (PRD 20 — Cold-Start & Account Hand-off):** a durable, idempotent session→account
+  hand-off (`migrateSessionSignalsToUser` in `lib/discovery-memory.ts`) wired into the Auth.js
+  `events.signIn` callback (`auth.ts`) — on sign-in, a browser's anonymous `event_interaction_events`
+  + `event_person_event_state` are re-keyed to the account (log blind re-keyed; per-event state merged
+  with `GREATEST`, keeping the strongest/most-recent state; leftover session rows dropped), so signing
+  in is continuity, not a reset. Idempotent (a second run is a no-op), transactional, tolerant of a
+  missing table, and best-effort so it never blocks sign-in. Cold-start parity confirmed: the C2
+  confidence weighting keeps a thin history public-dominated (unit-tested). Live-first ($0); Snyk-clean.
 - **Phase 12 — Social / Curator Graph** ([`social-curator_desiredoutcomes.md`](social-curator_desiredoutcomes.md)):
   five outcomes — an opt-in social graph, inner-circle attribution (building on PRD 17's
   `seeded_by_user_id` on-ramp), admin-promoted curator profiles, an optional bounded social ranking
