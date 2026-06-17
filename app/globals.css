@@ -5855,6 +5855,97 @@ button.primary-action {
   margin: 4px 0 12px;
 }
 
+/* Activity-sharing opt-in (PRD 23 / C1): the consent toggle in the listener prefs panel. */
+.listener-sharing-panel {
+  gap: 12px;
+}
+
+.listener-toggle {
+  align-items: flex-start;
+  background: rgba(9, 9, 11, 0.48);
+  border: 1px solid rgba(63, 63, 70, 0.72);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+}
+
+.listener-toggle input {
+  accent-color: #a7f3d0;
+  flex: none;
+  margin-top: 3px;
+}
+
+.listener-toggle strong {
+  color: #fafafa;
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 950;
+}
+
+.listener-toggle small {
+  color: #a1a1aa;
+  display: block;
+  font-size: 0.74rem;
+  margin-top: 3px;
+}
+
+/* Follow / unfollow control (PRD 23 / C1): distinct from Save (bookmark). Placed in C2/C3. */
+.follow-button {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 6px;
+  justify-content: center;
+  transition:
+    filter 140ms ease,
+    transform 140ms ease;
+}
+
+.follow-button:active {
+  transform: scale(0.95);
+}
+
+.follow-button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.follow-button--chip {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 999px;
+  color: #bae6fd;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 4px 12px;
+}
+
+.follow-button--chip:hover,
+.follow-button--chip:focus-visible {
+  background: rgba(56, 189, 248, 0.2);
+}
+
+.follow-button--chip.is-following {
+  background: rgba(56, 189, 248, 0.28);
+  border-color: rgba(125, 211, 252, 0.7);
+  color: #e0f2fe;
+}
+
+.follow-button--icon {
+  background: transparent;
+  border: 0;
+  color: #7dd3fc;
+}
+
+.follow-button--icon.is-following {
+  color: #38bdf8;
+  filter: brightness(1.18);
+}
+
 /* Saved space (PRD 13 / C2) */
 .saved-shell {
   display: flex;

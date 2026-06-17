@@ -122,13 +122,38 @@ create table if not exists public.listener_discovery_preferences (
   user_id integer not null references public.users(id) on delete cascade,
   weights jsonb not null default '{}'::jsonb,
   custom_signals jsonb not null default '[]'::jsonb,
+  -- Social / Curator Graph (PRD 23 / C1): the single activity-sharing consent gate. Off by
+  -- default. When false, the listener is absent from every "your people" read in later cycles.
+  share_activity boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (user_id)
 );
 
+-- Additive column for databases provisioned before PRD 23. IF NOT EXISTS keeps schema.sql idempotent.
+alter table public.listener_discovery_preferences
+  add column if not exists share_activity boolean not null default false;
+
 create index if not exists listener_discovery_preferences_user_id_idx
   on public.listener_discovery_preferences (user_id);
+
+-- ---- Social / Curator Graph (PRD 23 / C1): private, one-way, reversible follow edges. -------
+-- A signed-in listener follows another listener (or, later, a curator). One row per direction;
+-- unfollowing deletes the row. Never exposed in any public/community/OG response. Visibility of a
+-- followee's activity is gated by this edge AND the followee's share_activity opt-in (see
+-- lib/social-graph.ts canViewActivityOf). on delete cascade on both FKs keeps the graph clean.
+create table if not exists public.listener_follows (
+  id text primary key,
+  follower_user_id integer not null references public.users(id) on delete cascade,
+  followee_user_id integer not null references public.users(id) on delete cascade,
+  status text not null default 'active' check (status in ('active', 'blocked')),
+  created_at timestamptz not null default now(),
+  unique (follower_user_id, followee_user_id),
+  check (follower_user_id <> followee_user_id)
+);
+
+create index if not exists listener_follows_followee_idx
+  on public.listener_follows (followee_user_id, status);
 
 -- ---- Community contributions & reactions ---------------------------------------
 -- Interaction tables keep their own copy of event metadata (event_title, etc.) and

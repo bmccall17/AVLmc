@@ -26,6 +26,12 @@ export type ListenerCustomSignal = {
 
 export type ListenerDiscoveryPreferences = {
   customSignals: ListenerCustomSignal[];
+  /**
+   * Social / Curator Graph activity-sharing opt-in (PRD 23 / C1). Off by default. When false the
+   * listener is absent from every "your people" read in later cycles; the public community counts
+   * everyone already sees are unaffected. This is the single consent gate the graph checks.
+   */
+  shareActivity: boolean;
   updatedAt: string | null;
   weights: ListenerPreferenceWeights;
 };
@@ -110,6 +116,7 @@ export const DEFAULT_LISTENER_WEIGHTS: ListenerPreferenceWeights = {
 
 export const DEFAULT_LISTENER_DISCOVERY_PREFERENCES: ListenerDiscoveryPreferences = {
   customSignals: [],
+  shareActivity: false,
   updatedAt: null,
   weights: DEFAULT_LISTENER_WEIGHTS,
 };
@@ -123,6 +130,7 @@ export function normalizeListenerPreferences(
 
   return {
     customSignals: normalizeCustomSignals(input.customSignals),
+    shareActivity: input.shareActivity === true,
     updatedAt: typeof input.updatedAt === "string" ? input.updatedAt : updatedAt,
     weights: normalizeWeights(inputWeights),
   };
@@ -133,6 +141,7 @@ export function serializeListenerPreferences(preferences: ListenerDiscoveryPrefe
 
   return {
     customSignals: normalized.customSignals,
+    shareActivity: normalized.shareActivity,
     weights: normalized.weights,
   };
 }

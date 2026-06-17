@@ -74,7 +74,8 @@ export type DerivedCountKey =
   | "system_job_runs"
   | "admin_resources"
   | "saved_items"
-  | "event_shared_songs";
+  | "event_shared_songs"
+  | "listener_follows";
 
 export type RegistryNode = {
   /** Stable identifier; referenced by edges and by later cycles. Never reuse or repurpose. */
@@ -314,6 +315,17 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "manual",
   },
+  {
+    id: "svc-social-graph",
+    kind: "service",
+    layer: "processing",
+    label: "Social Graph",
+    description:
+      "Reads and writes a signed-in listener's private, one-way follow edges (PRD 23). Entitlement-scoped: exposes who the caller follows and their aggregate follower count, never a regular listener's follower identities. Owns canViewActivityOf (follow edge AND the followee's sharing opt-in) for later cycles. Never wired into any public/community/OG response.",
+    sourceOfTruth: "lib/social-graph.ts",
+    access: "internal",
+    ownership: "manual",
+  },
 
   /* ---- Data stores ----------------------------------------------- */
   {
@@ -483,6 +495,17 @@ const NODES: RegistryNode[] = [
     countKey: "saved_items",
   },
   {
+    id: "db-listener-follows",
+    kind: "datastore",
+    layer: "data",
+    label: "listener_follows",
+    description: "Private, one-way follow edges (follower → followee) for the Social / Curator Graph (PRD 23). Unfollowing deletes the row; on delete cascade keeps it clean. Never exposed in any public/community/OG response.",
+    sourceOfTruth: "listener_follows",
+    access: "internal",
+    ownership: "manual",
+    countKey: "listener_follows",
+  },
+  {
     id: "db-shared-songs",
     kind: "datastore",
     layer: "data",
@@ -608,6 +631,16 @@ const NODES: RegistryNode[] = [
     label: "Saved Items API",
     description: "Signed-in-only endpoints to list, save, and un-save events, venues, and artists. Returns 401 when anonymous.",
     sourceOfTruth: "app/api/me/saved-items/route.ts",
+    access: "public",
+    ownership: "automated",
+  },
+  {
+    id: "api-follows",
+    kind: "surface",
+    layer: "identity",
+    label: "Follows API",
+    description: "Signed-in-only endpoints to follow, unfollow, and list who the caller follows (+ their own follower count). Returns 401 when anonymous. Never exposes another listener's follower identities or any follow data in a public response.",
+    sourceOfTruth: "app/api/me/follows/route.ts",
     access: "public",
     ownership: "automated",
   },
@@ -787,6 +820,10 @@ const EDGES: RegistryEdge[] = [
   { from: "ui-event-detail", to: "api-saved-items", kind: "flowsTo", label: "save from detail" },
   { from: "svc-saved-items", to: "ui-saved-space", kind: "flowsTo", label: "grouped saved lists" },
   { from: "ui-saved-space", to: "api-saved-items", kind: "flowsTo", label: "inline un-save" },
+  { from: "api-follows", to: "svc-social-graph", kind: "dependsOn", label: "follow/unfollow/list" },
+  { from: "svc-social-graph", to: "db-listener-follows", kind: "flowsTo", label: "persist follow edges" },
+  { from: "db-listener-follows", to: "db-users", kind: "dependsOn", label: "follower/followee (cascade)" },
+  { from: "svc-social-graph", to: "db-listener-prefs", kind: "dependsOn", label: "activity-sharing opt-in gate" },
   { from: "ui-eventboard", to: "ui-listener-profile", kind: "flowsTo", label: "sign-in entry" },
 
   // Operations

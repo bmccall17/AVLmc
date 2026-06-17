@@ -4,7 +4,7 @@ import { signIn, signOut } from "next-auth/react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Bookmark, Plus, RotateCcw, SlidersHorizontal, Trash2, UserCircle, X } from "lucide-react";
+import { Bookmark, Plus, RotateCcw, SlidersHorizontal, Trash2, UserCircle, Users, X } from "lucide-react";
 import { MusicConnectionActions } from "@/components/MusicConnectionActions";
 import type { AuthFeatureFlags } from "@/lib/auth-flags";
 import type { DiscoveryScoreComponents } from "@/lib/discovery";
@@ -142,6 +142,16 @@ export function ListenerProfileButton({
           ...current.weights,
           [key]: value,
         },
+      })
+    );
+    setSaveState({ kind: "idle", message: "" });
+  }
+
+  function setShareActivity(shareActivity: boolean) {
+    setDraftPreferences((current) =>
+      normalizeListenerPreferences({
+        ...current,
+        shareActivity,
       })
     );
     setSaveState({ kind: "idle", message: "" });
@@ -523,6 +533,30 @@ export function ListenerProfileButton({
               ) : (
                 <p className="empty-copy">Add artists, venues, tags, or keywords to directly shape your list.</p>
               )}
+            </section>
+
+            <section className="listener-panel listener-sharing-panel">
+              <div className="listener-panel-heading">
+                <Users aria-hidden="true" size={18} strokeWidth={2.4} />
+                <div>
+                  <h3>Friends &amp; sharing</h3>
+                  <p>Following is one-way and private. Your activity stays hidden until you opt in below.</p>
+                </div>
+              </div>
+              <label className="listener-toggle">
+                <input
+                  checked={draftPreferences.shareActivity}
+                  onChange={(event) => setShareActivity(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>
+                  <strong>Let people you approve see what you&apos;re going to and firing</strong>
+                  <small>
+                    Off by default. Only listeners you&apos;ve approved can see your going/firing — never
+                    anonymous visitors. This never changes the public community counts everyone already sees.
+                  </small>
+                </span>
+              </label>
             </section>
 
             <div className="listener-modal-actions">

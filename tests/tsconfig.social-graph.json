@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "/tmp/avlmc-social-graph-tests",
+    "rootDir": "..",
+    "target": "es2022"
+  },
+  "include": ["../next-env.d.ts", "social-graph.test.ts", "../lib/social-graph-core.ts"]
+}

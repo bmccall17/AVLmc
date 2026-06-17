@@ -9,6 +9,7 @@ import {
 
 type ListenerPreferenceRow = {
   custom_signals: unknown;
+  share_activity: boolean | null;
   updated_at: Date | string;
   weights: unknown;
 };
@@ -19,7 +20,7 @@ export async function getListenerDiscoveryPreferences(
   try {
     const result = await query<ListenerPreferenceRow>(
       `
-        select weights, custom_signals, updated_at
+        select weights, custom_signals, share_activity, updated_at
         from public.listener_discovery_preferences
         where user_id = $1
         limit 1
@@ -35,12 +36,14 @@ export async function getListenerDiscoveryPreferences(
     return normalizeListenerPreferences(
       {
         customSignals: row.custom_signals,
+        shareActivity: row.share_activity === true,
         weights: row.weights,
       },
       toIsoString(row.updated_at)
     );
   } catch (error) {
-    if (isMissingRelationError(error)) {
+    // No table yet, or the share_activity column predates PRD 23 → fall back to defaults.
+    if (isMissingRelationError(error) || isUndefinedColumnError(error)) {
       return DEFAULT_LISTENER_DISCOVERY_PREFERENCES;
     }
     throw error;
@@ -53,6 +56,7 @@ export async function saveListenerDiscoveryPreferences(
 ): Promise<ListenerDiscoveryPreferences> {
   const normalized = normalizeListenerPreferences(preferences);
   const payload = serializeListenerPreferences(normalized);
+  const dbUserId = toDatabaseUserId(userId);
 
   try {
     const result = await query<ListenerPreferenceRow>(
@@ -61,20 +65,23 @@ export async function saveListenerDiscoveryPreferences(
           id,
           user_id,
           weights,
-          custom_signals
+          custom_signals,
+          share_activity
         )
-        values ($1, $2, $3::jsonb, $4::jsonb)
+        values ($1, $2, $3::jsonb, $4::jsonb, $5)
         on conflict (user_id) do update
           set weights = excluded.weights,
             custom_signals = excluded.custom_signals,
+            share_activity = excluded.share_activity,
             updated_at = now()
-        returning weights, custom_signals, updated_at
+        returning weights, custom_signals, share_activity, updated_at
       `,
       [
         randomUUID(),
-        toDatabaseUserId(userId),
+        dbUserId,
         JSON.stringify(payload.weights),
         JSON.stringify(payload.customSignals),
+        payload.shareActivity,
       ]
     );
     const row = result.rows[0];
@@ -82,6 +89,7 @@ export async function saveListenerDiscoveryPreferences(
     return normalizeListenerPreferences(
       {
         customSignals: row?.custom_signals ?? payload.customSignals,
+        shareActivity: row?.share_activity ?? payload.shareActivity,
         weights: row?.weights ?? payload.weights,
       },
       row?.updated_at ? toIsoString(row.updated_at) : new Date().toISOString()
@@ -90,8 +98,45 @@ export async function saveListenerDiscoveryPreferences(
     if (isMissingRelationError(error)) {
       throw new Error("Listener preferences table is not set up. Apply db/schema.sql before saving.");
     }
+    // Pre-PRD-23 database without the share_activity column: persist the rest so saving still works.
+    if (isUndefinedColumnError(error)) {
+      return saveWithoutShareActivity(dbUserId, payload);
+    }
     throw error;
   }
+}
+
+async function saveWithoutShareActivity(
+  dbUserId: number,
+  payload: ReturnType<typeof serializeListenerPreferences>
+): Promise<ListenerDiscoveryPreferences> {
+  const result = await query<ListenerPreferenceRow>(
+    `
+      insert into public.listener_discovery_preferences (
+        id,
+        user_id,
+        weights,
+        custom_signals
+      )
+      values ($1, $2, $3::jsonb, $4::jsonb)
+      on conflict (user_id) do update
+        set weights = excluded.weights,
+          custom_signals = excluded.custom_signals,
+          updated_at = now()
+      returning weights, custom_signals, updated_at
+    `,
+    [randomUUID(), dbUserId, JSON.stringify(payload.weights), JSON.stringify(payload.customSignals)]
+  );
+  const row = result.rows[0];
+
+  return normalizeListenerPreferences(
+    {
+      customSignals: row?.custom_signals ?? payload.customSignals,
+      shareActivity: false,
+      weights: row?.weights ?? payload.weights,
+    },
+    row?.updated_at ? toIsoString(row.updated_at) : new Date().toISOString()
+  );
 }
 
 function toDatabaseUserId(userId: string) {
@@ -109,10 +154,18 @@ function toIsoString(value: Date | string) {
 }
 
 function isMissingRelationError(error: unknown) {
+  return hasErrorCode(error, "42P01");
+}
+
+function isUndefinedColumnError(error: unknown) {
+  return hasErrorCode(error, "42703");
+}
+
+function hasErrorCode(error: unknown, code: string) {
   return (
     typeof error === "object" &&
     error !== null &&
     "code" in error &&
-    (error as { code?: string }).code === "42P01"
+    (error as { code?: string }).code === code
   );
 }

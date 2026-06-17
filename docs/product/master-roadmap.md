@@ -23,7 +23,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 9 | [Shared Listening (PRD 17)](prds/prd-17-shared-listening.md) | Shipped | Going/Fire by a signed-in Spotify listener auto-populates the event page with a public, playable shared song list (read-only Spotify; no writes). Opens the Social Music Sharing track. |
 | 10 | [Discovery Benchmarking (Desired Outcomes)](discovery-benchmark_desiredoutcomes.md) | C1 Shipped | Turn the shipped Recommendation Insight + Listener Trace surfaces into a repeatable, fixed-methodology discovery benchmark (live-only / $0; no new tab). Validation layer for the deeper-personalization and social/curator future directions. **C1 (PRD 22, Discovery Baseline) shipped**; Outcomes 2–3 remain unscoped. |
 | 11 | [Deeper Personalization Initiative (Epic)](deeper-personalization-prd.md) | Shipped | Learn from what a listener *skips*, not just taps: move from the flat "recent 240 actions" model to a time-decayed, per-dimension taste model that safely uses implicit signals, stays explainable/correctable, and is loop-proof. Initiative A of the discovery North Star; PRDs 18–21 across four cycles. |
-| 12 | [Social / Curator Graph (Desired Outcomes)](social-curator_desiredoutcomes.md) | Planned | Opt-in follow/curator graph + inner-circle attribution; trusted-circle/curator activity as an optional, bounded ranking input distinct from public heat. Privacy-first, no pay-to-play, no Spotify writes. Initiative B of the discovery North Star. |
+| 12 | [Social / Curator Graph (Epic)](social-curator-prd.md) | Planned (scoped) | Opt-in follow/curator graph + inner-circle attribution; trusted-circle/curator activity as an optional, bounded ranking input distinct from public heat. Privacy-first, no pay-to-play, no Spotify writes. Initiative B of the discovery North Star; PRDs 23–27 across five cycles. |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
@@ -283,26 +283,54 @@ and novel shows. These are the two feature initiatives the Phase 10 benchmark ex
   from C1/C2 carries the attribution; the flat learned term is now a derived roll-up. Unit-tested
   (correction-wins, floor guarantee, cap invariant); Snyk-clean; $0. **Phase 11 — the Deeper
   Personalization initiative (all five outcomes / four cycles C1–C4) is complete.**
-- **Phase 12 — Social / Curator Graph** ([`social-curator_desiredoutcomes.md`](social-curator_desiredoutcomes.md)):
+- **Phase 12 — Social / Curator Graph** (outcomes: [`social-curator_desiredoutcomes.md`](social-curator_desiredoutcomes.md);
+  epic: [`social-curator-prd.md`](social-curator-prd.md)):
   five outcomes — an opt-in social graph, inner-circle attribution (building on PRD 17's
   `seeded_by_user_id` on-ramp), admin-promoted curator profiles, an optional bounded social ranking
   signal distinct from public heat, and guardrails (no pay-to-play, no domination, no leaks, no
-  Spotify writes). Layers on top of Phase 11's scoring model.
+  Spotify writes). Layers on top of Phase 11's scoring model. **Now scoped** into an epic + five
+  dependency-sequenced cycle PRDs (23–27):
 
-Both decompose into epic PRDs + cycle PRDs when scoped. Recommended overall build order interleaves
-the tracks: Phase 11 skips→ranking first (highest leverage), the social graph foundation in parallel,
-and the social ranking signal last (it needs both the scoring model and the graph).
+  | Cycle | PRD | Outcome(s) | Status |
+  | --- | --- | --- | --- |
+  | C1 | [PRD 23 — Opt-In Social Graph](prds/prd-23-opt-in-social-graph.md) | 1 | **Shipped (Jun 17, 2026)** |
+  | C2 | [PRD 24 — Inner-Circle Attribution](prds/prd-24-inner-circle-attribution.md) | 2 | **Planned** |
+  | C3 | [PRD 25 — Curator & Influencer Profiles](prds/prd-25-curator-profiles.md) | 3 | **Planned** |
+  | C4 | [PRD 26 — Social Signal in Discovery](prds/prd-26-social-signal-in-discovery.md) | 4 | **Planned** |
+  | C5 | [PRD 27 — Guardrails & Social Benchmark](prds/prd-27-social-guardrails-and-benchmark.md) | 5 (+ Phase 10 Outcome 3) | **Planned** |
+
+  C1 ships the follow-graph spine; C2 (attribution) and C3 (curators) both build on it and are
+  independent of each other; C4 adds the off-by-default, capped `socialCircle` ranking component (needs
+  C1–C3 + the Phase 11 model); C5 is the guardrail/benchmark capstone and delivers the Discovery
+  Benchmark's Social & Curator Benchmark (Phase 10, Outcome 3). Recommended order: C1 → C2 → C3 → C4 → C5.
+
+  **C1 shipped (Jun 17, 2026):** the private follow-graph spine is live — a one-way, reversible
+  `listener_follows` edge + an off-by-default `share_activity` opt-in on `listener_discovery_preferences`,
+  managed through a `requireUserId()`-gated `app/api/me/follows`. `lib/social-graph.ts` exposes only
+  entitlement-scoped reads (who I follow, my follower count, the `canViewActivityOf` gate) — never a
+  regular listener's follower identities — with the pure visibility rule in `lib/social-graph-core.ts`.
+  A reusable `FollowButton` is ready for C2/C3 to place. No follow/sharing data leaks into any
+  public/community/OG response; the board ranking and anonymous payload are byte-for-byte unchanged.
+  Registry (`svc-social-graph`, `db-listener-follows`, `api-follows`) + system map updated; tests,
+  typecheck, lint, build, and Snyk green; $0. **C2 (PRD 24 — Inner-Circle Attribution) is next.**
+
+Both initiatives decompose into epic PRDs + cycle PRDs (Phase 11: PRDs 18–21, shipped; Phase 12: PRDs
+23–27, scoped). Recommended overall build order interleaved the tracks: Phase 11 skips→ranking first
+(highest leverage, shipped), then the social graph foundation, and the social ranking signal last (it
+needs both the scoring model and the graph).
 
 > **▶ WHAT'S NEXT (hand-off, June 17, 2026).** Phase 11 (Deeper Personalization, C1–C4) is **fully
-> shipped**, and **Phase 10 C1 (PRD 22 — Discovery Baseline) is shipped** — the fixed-methodology
-> baseline now exists to grade future work. The dependency-unblocked candidates now are:
-> 1. **Phase 12 — Social / Curator Graph** (Initiative B) *(recommended next)*. Unblocked (it layers
->    on Phase 11's scoring model) and now has a baseline to be measured against. Still
->    **desired-outcomes only** — needs epic + cycle PRDs scoped. Start:
->    [`social-curator_desiredoutcomes.md`](social-curator_desiredoutcomes.md).
-> 2. **Phase 10 Outcomes 2–3** (Deeper Personalization Benchmark; Social & Curator Benchmark). The
->    baseline (Outcome 1) is in place; these extend it but stay **unscoped** until the work they
->    grade is prioritized. Start: [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md).
+> shipped**, **Phase 10 C1 (PRD 22 — Discovery Baseline) is shipped**, and **Phase 12 C1 (PRD 23 —
+> Opt-In Social Graph) is now shipped** — the follow-graph spine (`listener_follows` + `share_activity`
+> opt-in + `lib/social-graph.ts` + `/api/me/follows` + `FollowButton`). The dependency-unblocked
+> candidates now are:
+> 1. **Phase 12 C2 — PRD 24 (Inner-Circle Attribution)** *(recommended next — build)*. Surfaces what
+>    followed-and-opted-in friends are going to / firing, reusing the C1 `canViewActivityOf` gate and
+>    PRD 17's `seeded_by_user_id` on-ramp. Unblocked by C1. Start:
+>    [`prds/prd-24-inner-circle-attribution.md`](prds/prd-24-inner-circle-attribution.md) (then C3→C4→C5).
+> 2. **Phase 10 Outcome 2** (Deeper Personalization Benchmark). Extends the shipped baseline; stays
+>    **unscoped** until prioritized. (Outcome 3 — Social & Curator Benchmark — is now scoped as Phase
+>    12 C5 / PRD 27.) Start: [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md).
 > 3. **Small follow-up:** the deferred Phase-11 taste dimensions (time-of-week / price / indoor-outdoor)
 >    — see [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md) → Remaining Follow-Up.
 >

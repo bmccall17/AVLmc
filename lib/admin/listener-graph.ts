@@ -366,6 +366,7 @@ function parseIdentity(identityKey: string): { userId?: string; sessionId?: stri
 function defaultPrefs(): ListenerDiscoveryPreferences {
   return {
     customSignals: [],
+    shareActivity: false,
     updatedAt: null,
     weights: Object.fromEntries(
       LISTENER_PREFERENCE_CONTROLS.map((control) => [control.key, 0])

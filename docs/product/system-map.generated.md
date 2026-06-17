@@ -211,6 +211,20 @@ Reads and writes a signed-in listener's private Saved/Favorites (events, venues,
 - **Fed by / required by:**
   - ← Saved Items API (dependsOn) — save/list/remove
 
+#### Social Graph  `svc-social-graph`
+
+Reads and writes a signed-in listener's private, one-way follow edges (PRD 23). Entitlement-scoped: exposes who the caller follows and their aggregate follower count, never a regular listener's follower identities. Owns canViewActivityOf (follow edge AND the followee's sharing opt-in) for later cycles. Never wired into any public/community/OG response.
+
+- **Kind:** Service
+- **Source of truth:** `lib/social-graph.ts`
+- **Access:** internal
+- **Ownership:** manual
+- **Flows to / depends on:**
+  - → listener_follows (flowsTo) — persist follow edges
+  - → listener_discovery_preferences (dependsOn) — activity-sharing opt-in gate
+- **Fed by / required by:**
+  - ← Follows API (dependsOn) — follow/unfollow/list
+
 ### Data Stores
 
 _Postgres tables of record._
@@ -333,6 +347,7 @@ Auth.js user records for signed-in listeners.
 - **Fed by / required by:**
   - ← Auth.js (flowsTo) — user records
   - ← saved_items (dependsOn) — owned by user (cascade)
+  - ← listener_follows (dependsOn) — follower/followee (cascade)
 
 #### accounts  `db-accounts`
 
@@ -386,6 +401,7 @@ Per-listener discovery weights and custom signals that tune ranking.
   - → Discovery Scoring (flowsTo) — custom weights
 - **Fed by / required by:**
   - ← Listener Preferences (flowsTo) — saved weights
+  - ← Social Graph (dependsOn) — activity-sharing opt-in gate
 
 #### spotify_event_match_corrections  `db-spotify-corrections`
 
@@ -414,6 +430,20 @@ Private, polymorphic Saved/Favorites for signed-in listeners: events, venues, an
   - → users (dependsOn) — owned by user (cascade)
 - **Fed by / required by:**
   - ← Saved Items (flowsTo) — persist saves
+
+#### listener_follows  `db-listener-follows`
+
+Private, one-way follow edges (follower → followee) for the Social / Curator Graph (PRD 23). Unfollowing deletes the row; on delete cascade keeps it clean. Never exposed in any public/community/OG response.
+
+- **Kind:** Data store
+- **Source of truth:** `listener_follows`
+- **Access:** internal
+- **Ownership:** manual
+- **Live count:** `listener_follows` (resolved in portal/API)
+- **Flows to / depends on:**
+  - → users (dependsOn) — follower/followee (cascade)
+- **Fed by / required by:**
+  - ← Social Graph (flowsTo) — persist follow edges
 
 #### event_shared_songs  `db-shared-songs`
 
@@ -601,6 +631,17 @@ Signed-in-only endpoints to list, save, and un-save events, venues, and artists.
   - ← Event Detail (flowsTo) — save from detail
   - ← Saved Space (flowsTo) — inline un-save
 
+#### Follows API  `api-follows`
+
+Signed-in-only endpoints to follow, unfollow, and list who the caller follows (+ their own follower count). Returns 401 when anonymous. Never exposes another listener's follower identities or any follow data in a public response.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/me/follows/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → Social Graph (dependsOn) — follow/unfollow/list
+
 #### Saved Space  `ui-saved-space`
 
 Signed-in-only /saved view with three private lists (events, venues, artists), inline un-save, and empty states. Anonymous visitors are redirected to sign-in.
@@ -786,6 +827,10 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | Event Detail | → | Saved Items API | flowsTo | save from detail |
 | Saved Items | → | Saved Space | flowsTo | grouped saved lists |
 | Saved Space | → | Saved Items API | flowsTo | inline un-save |
+| Follows API | → | Social Graph | dependsOn | follow/unfollow/list |
+| Social Graph | → | listener_follows | flowsTo | persist follow edges |
+| listener_follows | → | users | dependsOn | follower/followee (cascade) |
+| Social Graph | → | listener_discovery_preferences | dependsOn | activity-sharing opt-in gate |
 | Event Board | → | Listener Profile | flowsTo | sign-in entry |
 | Image Cleanup (cron) | → | Vercel Blob | flowsTo | delete stale images |
 | AVLgo Sync (cron) | → | system_job_runs | flowsTo | records outcome |
@@ -803,4 +848,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_49 nodes, 64 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_52 nodes, 68 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
