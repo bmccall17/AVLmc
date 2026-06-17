@@ -168,6 +168,8 @@ Do not use raw Spotify OAuth tokens in client code or ranking responses. Discove
 
 ## Future Direction — Deeper Personalization (planned, not yet scoped)
 
+> Benchmark framing: see [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md) (Outcome 2) for how this is measured against the anonymous Discovery Baseline in the admin Recommendation-Insight / Listener-Trace tabs.
+
 Personalization today is intentionally shallow: scoring reads only a person's **most recent
 240 explicit, meaningful actions** (`detail_open`, `avlgo_click`, `fire`, `planning`, `remove`,
 contributions) from `event_interaction_events` (`lib/discovery-memory.ts` →
@@ -195,6 +197,8 @@ Acceptance for a first cut: a signed-in listener's ranking measurably reflects w
 tabs against real behavior — without runaway feedback loops.
 
 ## Future Direction — Social, Curators & Influencers (planned, not yet scoped)
+
+> Benchmark framing: see [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md) (Outcome 3) for how social/curator lift is measured separately from public popularity and watched for influence concentration.
 
 A larger theme beyond solo personalization: turn AVLmc into a place where taste is *shared*.
 Builds on **Phase 9 (Social Music Sharing)** — the shipped Shared Listening surface (PRD 17)

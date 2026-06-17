@@ -21,6 +21,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 7 | [Admin Portal Initiative (Epic)](admin-portal-prd.md) | Shipped | Turn `/admin` into a visual, live, explainable operating system; PRDs 06–11 across six cycles. |
 | 8 | [Saved/Favorites & Genre Initiative (Epic)](saved-favorites-genre-prd.md) | Shipped | Private Saved space (events/venues/artists) + richer genre matching (taxonomy + Spotify genres); PRDs 12–16 across five cycles. |
 | 9 | [Shared Listening (PRD 17)](prds/prd-17-shared-listening.md) | Shipped | Going/Fire by a signed-in Spotify listener auto-populates the event page with a public, playable shared song list (read-only Spotify; no writes). Opens the Social Music Sharing track. |
+| 10 | [Discovery Benchmarking (Desired Outcomes)](discovery-benchmark_desiredoutcomes.md) | Planned | Turn the shipped Recommendation Insight + Listener Trace surfaces into a repeatable, fixed-methodology discovery benchmark (live-only / $0; no new tab). Validation layer for the deeper-personalization and social/curator future directions. |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
@@ -193,6 +194,21 @@ with `seeded_by_user_id` stored server-side only as the on-ramp to a future **in
 attribution layer. Save stays private (it does not trigger sharing). No new OAuth scope, no re-auth;
 outside discovery scoring; admin-moderatable; Snyk-clean; $0. This is a **read/share** feature and
 remains distinct from the parked Spotify *write* Outcome 9.
+
+### Phase 10: Discovery Benchmarking (planned)
+
+Purpose: turn the admin portal's shipped discovery-inspection surfaces into a *benchmark* — a
+repeatable, fixed-methodology read of how discovery performs — so future personalization and
+social changes can be measured against a known baseline.
+
+Desired outcomes are captured in [`discovery-benchmark_desiredoutcomes.md`](discovery-benchmark_desiredoutcomes.md):
+(1) **Discovery Baseline** (the detailed first phase — a fixed-methodology live reading of
+anonymous ranking, listener behavior, engagement, diversity, novelty, local relevance, and signal
+coverage), (2) **Deeper Personalization Benchmark**, and (3) **Social & Curator Benchmark**. It
+homes in the existing **Recommendation Insight** (aggregate) + **Listener Trace** (drill-down) +
+**Overview** (summary link) surfaces — **no new tab** — and stays **live-only / $0** (no snapshot
+store; history is recorded as dated markdown snapshots at ship time). This is the validation layer
+for the two "Future Direction" sections in [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
 
 ## Scaling Milestones & Tracking
 
