@@ -21,6 +21,14 @@ import {
   type CanonicalGenre,
 } from "./genre-taxonomy";
 
+/**
+ * Manually-bumped version of the scoring algorithm. Surfaced in the admin Discovery Baseline
+ * (PRD 22 / Phase 10) so a recorded baseline snapshot is attributable to a known state of
+ * `scoreDiscoveryEvents`. **Bump this whenever scoring behavior changes** (new component,
+ * changed weight math, cap/floor change) so two readings are comparable only when this matches.
+ */
+export const SCORER_VERSION = "11.4"; // Phase 11 C4 (PRD 21): exploration floor + explicit>implicit cap.
+
 export type DiscoveryReason =
   | {
       kind: "spotify_artist";

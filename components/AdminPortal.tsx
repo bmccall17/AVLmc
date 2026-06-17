@@ -179,7 +179,14 @@ export function AdminPortal({
       </nav>
 
       <div className="admin-tab-content">
-        {activeTab === "overview" && <OverviewSection data={data} />}
+        {activeTab === "overview" && (
+          <OverviewSection
+            data={data}
+            insight={insight}
+            setInsight={setInsight}
+            onOpenInsight={() => setActiveTab("insight")}
+          />
+        )}
         {activeTab === "health" && <HealthSection health={health} />}
         {activeTab === "architecture" && (
           <ArchitectureSection systemMap={systemMap} health={health} />
@@ -304,7 +311,17 @@ function LazySection<T>({
 /*  Overview Section                                                   */
 /* ================================================================== */
 
-function OverviewSection({ data }: { data: AdminDashboardData }) {
+function OverviewSection({
+  data,
+  insight,
+  setInsight,
+  onOpenInsight,
+}: {
+  data: AdminDashboardData;
+  insight: RecommendationInsight | null;
+  setInsight: (value: RecommendationInsight) => void;
+  onOpenInsight: () => void;
+}) {
   const gapCount =
     data.fieldCompleteness.missingImage +
     data.fieldCompleteness.missingTime +
@@ -372,6 +389,8 @@ function OverviewSection({ data }: { data: AdminDashboardData }) {
         />
       </div>
 
+      <DiscoveryHealthCard insight={insight} setInsight={setInsight} onOpenInsight={onOpenInsight} />
+
       <div className="admin-subsection">
         <h3>Date Window</h3>
         <p className="admin-meta">
@@ -409,6 +428,87 @@ function OverviewSection({ data }: { data: AdminDashboardData }) {
             ))}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  Discovery Health summary (PRD 22 — Discovery Baseline)             */
+/* ================================================================== */
+
+/**
+ * Compact discovery-health summary on Overview that links into Recommendation Insight. Lazily
+ * fetches the same `/api/admin/insight` payload and caches it via `setInsight`, so opening the
+ * Insight tab afterward is instant. Degrades to a plain link if the reading can't load.
+ */
+function DiscoveryHealthCard({
+  insight,
+  setInsight,
+  onOpenInsight,
+}: {
+  insight: RecommendationInsight | null;
+  setInsight: (value: RecommendationInsight) => void;
+  onOpenInsight: () => void;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (insight !== null) return;
+    let active = true;
+    fetch("/api/admin/insight")
+      .then((response) => {
+        if (!response.ok) throw new Error("load failed");
+        return response.json();
+      })
+      .then((loaded) => {
+        if (active) setInsight(loaded as RecommendationInsight);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [insight, setInsight]);
+
+  return (
+    <div className="admin-subsection">
+      <div className="admin-baseline-methodology-head">
+        <h3>Discovery health</h3>
+        <button type="button" className="admin-button" onClick={onOpenInsight}>
+          Open Recommendation Insight →
+        </button>
+      </div>
+      {insight ? (
+        <div className="admin-status-bar">
+          <StatusIndicator
+            label="Diversity"
+            active={!insight.metrics.lowDiversity}
+            detail={`${insight.metrics.venueSpread} venues`}
+          />
+          <StatusIndicator
+            label="Novelty"
+            active={insight.metrics.noveltyShare > 0}
+            detail={`${insight.metrics.noveltyShare}% top-${insight.metrics.topN}`}
+          />
+          <StatusIndicator
+            label="Coverage"
+            active={insight.metrics.coverage.withSignal > 0}
+            detail={`${insight.metrics.coverage.withSignal}/${insight.metrics.coverage.total}`}
+          />
+          <StatusIndicator
+            label="Local value"
+            active={insight.metrics.localValueShare > 0}
+            detail={`${insight.metrics.localValueShare}%`}
+          />
+        </div>
+      ) : (
+        <p className="admin-meta">
+          {failed
+            ? "Open Recommendation Insight for the live discovery baseline reading."
+            : "Loading discovery baseline…"}
+        </p>
       )}
     </div>
   );

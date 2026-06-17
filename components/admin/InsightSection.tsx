@@ -32,6 +32,8 @@ export function InsightSection({ insight }: { insight: RecommendationInsight }) 
         </p>
       </div>
 
+      <MethodologyStrip insight={insight} />
+
       <MetricsRow insight={insight} />
 
       {insight.movers.length > 0 && (
@@ -92,6 +94,61 @@ export function InsightSection({ insight }: { insight: RecommendationInsight }) 
   );
 }
 
+/**
+ * Pinned methodology (PRD 22 — Discovery Baseline): a reading is reproducible only if its window,
+ * synthetic profile, and scorer version are stated, and recordable via a dated markdown snapshot.
+ */
+function MethodologyStrip({ insight }: { insight: RecommendationInsight }) {
+  const { methodology: m } = insight;
+  const [copied, setCopied] = useState(false);
+
+  async function copyMarkdown() {
+    try {
+      await navigator.clipboard.writeText(insight.markdown);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="admin-subsection admin-baseline-methodology">
+      <div className="admin-baseline-methodology-head">
+        <div>
+          <h3>Baseline reading · methodology</h3>
+          <p className="admin-meta">
+            Fixed methodology so two readings compare like-for-like — a snapshot is{" "}
+            <strong>descriptive</strong>, not a single quality score.
+          </p>
+        </div>
+        <button type="button" className="admin-button" onClick={copyMarkdown}>
+          {copied ? "Copied ✓" : "Copy baseline reading as markdown"}
+        </button>
+      </div>
+      <div className="admin-mini-table">
+        <div className="admin-mini-row">
+          <span>Event window</span>
+          <strong>
+            <code>{m.windowStart || "?"}</code> → <code>{m.windowEnd || "?"}</code>
+          </strong>
+        </div>
+        <div className="admin-mini-row">
+          <span>Scorer version</span>
+          <strong>
+            v{m.scorerVersion}
+            {m.commit ? ` · ${m.commit}` : ""}
+          </strong>
+        </div>
+        <div className="admin-mini-row">
+          <span>Synthetic profile</span>
+          <strong>{m.syntheticProfileNote}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MetricsRow({ insight }: { insight: RecommendationInsight }) {
   const { metrics } = insight;
   return (
@@ -103,11 +160,25 @@ function MetricsRow({ insight }: { insight: RecommendationInsight }) {
           {metrics.artistSpread} artists · {metrics.tagSpread} tags
           {metrics.lowDiversity ? " · low diversity" : ""}
         </small>
+        <small className="admin-stat-def">Distinct venues/artists/tags across the top-{metrics.topN} — how varied the surfaced set is.</small>
+      </div>
+      <div className="admin-stat-card">
+        <span className="admin-stat-value">{metrics.noveltyShare}%</span>
+        <span className="admin-stat-label">Novelty</span>
+        <small className="admin-stat-detail">of top-{metrics.topN} under-the-radar</small>
+        <small className="admin-stat-def">Share of the top-{metrics.topN} that is quiet (low heat, no profile/personal signal) — is exploration surfacing?</small>
       </div>
       <div className="admin-stat-card">
         <span className="admin-stat-value">{metrics.localValueShare}%</span>
         <span className="admin-stat-label">Local value</span>
         <small className="admin-stat-detail">top results with community signal</small>
+        <small className="admin-stat-def">Share of the top-{metrics.topN} carrying Asheville community activity.</small>
+      </div>
+      <div className="admin-stat-card">
+        <span className="admin-stat-value">{metrics.engagement.topNHeatShare}%</span>
+        <span className="admin-stat-label">Engagement concentration</span>
+        <small className="admin-stat-detail">{metrics.engagement.totalHeat} total heat in window</small>
+        <small className="admin-stat-def">Share of all community heat concentrated in the top-{metrics.topN} — is attention top-heavy?</small>
       </div>
       <div className="admin-stat-card">
         <span className="admin-stat-value">{metrics.coverage.withSignal}</span>
@@ -115,6 +186,7 @@ function MetricsRow({ insight }: { insight: RecommendationInsight }) {
         <small className="admin-stat-detail">
           of {metrics.coverage.total} events · {metrics.coverage.timingOnly} rank on timing alone
         </small>
+        <small className="admin-stat-def">Events whose score changes once a taste profile is applied (signal coverage).</small>
       </div>
       <div className="admin-stat-card">
         <span className="admin-stat-label">Signal mix (top {metrics.topN})</span>
@@ -126,6 +198,7 @@ function MetricsRow({ insight }: { insight: RecommendationInsight }) {
             </div>
           ))}
         </div>
+        <small className="admin-stat-def">Dominant ranking component per top-{metrics.topN} event.</small>
       </div>
     </div>
   );
@@ -244,6 +317,12 @@ function BehaviorPanel({ behavior }: { behavior: RecommendationInsight["behavior
               : "no impressions captured yet for implicit skip cooling"}
             .
           </p>
+          {behavior.impressions > 0 && (
+            <p className="admin-meta">
+              {behavior.impressionNonConversionShare}% of impressions never convert to an engagement
+              action — the soft-negative volume Deeper Personalization learns from (window-wide proxy).
+            </p>
+          )}
           <div className="admin-mini-table">
             {behavior.byAction.map((action) => (
               <div className="admin-mini-row" key={action.action}>

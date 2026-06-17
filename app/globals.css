@@ -3579,6 +3579,46 @@ button.primary-action {
   line-height: 1.4;
 }
 
+/* Plain-language metric definition (PRD 22 — Discovery Baseline fixed-reading discipline). */
+.admin-stat-def {
+  color: #71717a;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 4px;
+  border-top: 1px solid rgba(63, 63, 70, 0.4);
+  padding-top: 6px;
+}
+
+/* ---- Discovery Baseline methodology strip (PRD 22) ---- */
+
+.admin-baseline-methodology-head {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.admin-button {
+  background: rgba(244, 244, 245, 0.06);
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  border-radius: 8px;
+  color: #fafafa;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 8px 14px;
+  transition: border-color 200ms ease, background 200ms ease;
+  white-space: nowrap;
+}
+
+.admin-button:hover {
+  background: rgba(244, 244, 245, 0.12);
+  border-color: rgba(244, 244, 245, 0.3);
+}
+
 /* ---- Status Bar ---- */
 
 .admin-status-bar {

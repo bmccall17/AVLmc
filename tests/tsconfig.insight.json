@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "/tmp/avlmc-insight-tests",
+    "rootDir": "..",
+    "target": "es2022"
+  },
+  "include": ["../next-env.d.ts", "insight-metrics.test.ts", "../lib/admin/insight-metrics.ts"]
+}

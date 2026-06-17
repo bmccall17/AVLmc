@@ -5,10 +5,18 @@ import { getUpcomingEvents, type EventRecord } from "@/lib/events";
 import {
   enforceExplorationFloor,
   scoreDiscoveryEvents,
+  SCORER_VERSION,
   type DiscoveryScore,
   type DiscoveryScoreComponents,
 } from "@/lib/discovery";
 import type { MusicConnection, MusicProfileItem } from "@/lib/music";
+import {
+  computeEngagement,
+  computeNonConversionShare,
+  computeNoveltyShare,
+  computeWindow,
+  serializeBaselineMarkdown,
+} from "./insight-metrics";
 
 /**
  * Recommendation Quality & Listener Insight (PRD 09 / C4, Outcome 5).
@@ -24,8 +32,25 @@ import type { MusicConnection, MusicProfileItem } from "@/lib/music";
  */
 
 const TOP_N = 10;
-const SYNTH_ARTISTS = 5;
 const CACHE_TTL_MS = 30_000;
+
+/**
+ * STABLE synthetic taste profile (PRD 22 / Phase 10 — Discovery Baseline).
+ *
+ * The anonymous-vs-signed-in comparison must move only when the *algorithm* changes — not because
+ * the public listings drifted. So the synthetic profile is a FIXED, public-derived seed pinned in
+ * code, NOT re-derived from the current window each read. Regenerate this list **intentionally**
+ * (a known, recorded act) — e.g. from the most frequent listing artists at a milestone — and bump
+ * the pinned date below; never let it drift silently.
+ */
+const SYNTHETIC_TASTE_SEED: string[] = [
+  "Dinah's Daydream",
+  "Old-time Jam",
+  "Bluegrass Jam w/Drew Matulich",
+  "Jazz Brunch with The Four Peanuts",
+  "Nobody's Darling String Band",
+];
+const SYNTHETIC_TASTE_SEED_PINNED = "2026-06-17";
 
 export type RankedComponent = {
   label: string;
@@ -47,6 +72,8 @@ export type RankedEvent = {
   spotifyMatched: boolean;
   components: RankedComponent[];
   communitySignal: number;
+  /** Under-the-radar show — boosted by the exploration floor (PRD 21 / C4). */
+  novel: boolean;
 };
 
 export type Mover = {
@@ -65,8 +92,12 @@ export type InsightMetrics = {
   artistSpread: number;
   lowDiversity: boolean;
   localValueShare: number;
+  /** % of the top-N that is under-the-radar (low heat + no profile/personal signal). */
+  noveltyShare: number;
   signalMix: Array<{ label: string; count: number }>;
   coverage: { withSignal: number; timingOnly: number; total: number };
+  /** Community heat across the window and how much concentrates in the top-N. */
+  engagement: { totalHeat: number; topNHeatShare: number };
 };
 
 export type BehaviorInsight = {
@@ -76,6 +107,24 @@ export type BehaviorInsight = {
   negativeLearningActive: boolean;
   impressions: number;
   implicitLearningActive: boolean;
+  /**
+   * Aggregate proxy for the soft-negative volume Deeper Personalization consumes: the share of
+   * impressions not matched by an engagement action (detail open / AVLgo click / fire / planning /
+   * contribution). Window-wide ratio, not a per-impression join — descriptive only.
+   */
+  impressionNonConversionShare: number;
+};
+
+export type BaselineMethodology = {
+  /** Pinned event window (min/max event date in the current reading). */
+  windowStart: string;
+  windowEnd: string;
+  /** Manually-bumped scoring algorithm version (`SCORER_VERSION`). */
+  scorerVersion: string;
+  /** Deployed git commit (short) when available, else null. */
+  commit: string | null;
+  /** Honest descriptor of the fixed, public-derived synthetic profile seed. */
+  syntheticProfileNote: string;
 };
 
 export type RecommendationInsight = {
@@ -86,6 +135,10 @@ export type RecommendationInsight = {
   metrics: InsightMetrics;
   behavior: BehaviorInsight;
   syntheticProfile: { artists: string[]; note: string };
+  /** Pinned, stated methodology making the reading reproducible (PRD 22). */
+  methodology: BaselineMethodology;
+  /** Paste-ready dated markdown snapshot of this reading (recording without storage). */
+  markdown: string;
 };
 
 let cache: { at: number; value: RecommendationInsight } | null = null;
@@ -100,7 +153,9 @@ export async function loadRecommendationInsight(force = false): Promise<Recommen
 
   const anonymousScores = scoreDiscoveryEvents({ events, counts });
 
-  const synthArtists = topArtists(events, SYNTH_ARTISTS);
+  // Fixed, public-derived seed (PRD 22) — NOT re-derived from the window — so the signed-in
+  // comparison moves only when the algorithm changes, not when listings drift.
+  const synthArtists = SYNTHETIC_TASTE_SEED;
   const { connections, profileItems } = buildSyntheticProfile(synthArtists);
   const signedScores = scoreDiscoveryEvents({ events, counts, connections, profileItems });
 
@@ -109,6 +164,9 @@ export async function loadRecommendationInsight(force = false): Promise<Recommen
   // benchmark reads reflect that quiet/local discovery isn't crowded out as personalization sharpens.
   const signedIn = rankEvents(events, signedScores, counts, { enforceFloor: true });
 
+  const window = computeWindow(events);
+  const syntheticProfileNote = `Fixed public-derived seed (${synthArtists.length} artists), pinned ${SYNTHETIC_TASTE_SEED_PINNED} — regenerated intentionally, never a real listener's data.`;
+
   const value: RecommendationInsight = {
     generatedAt: new Date().toISOString(),
     anonymous,
@@ -116,11 +174,17 @@ export async function loadRecommendationInsight(force = false): Promise<Recommen
     movers: computeMovers(anonymous, signedIn),
     metrics: computeMetrics(events, signedIn, anonymousScores, signedScores),
     behavior: await loadBehavior(),
-    syntheticProfile: {
-      artists: synthArtists,
-      note: "Derived from the most frequent artists in the current public listings — not a real listener's data.",
+    syntheticProfile: { artists: synthArtists, note: syntheticProfileNote },
+    methodology: {
+      windowStart: window.start,
+      windowEnd: window.end,
+      scorerVersion: SCORER_VERSION,
+      commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
+      syntheticProfileNote,
     },
+    markdown: "",
   };
+  value.markdown = serializeBaselineMarkdown(value);
 
   cache = { at: Date.now(), value };
   return value;
@@ -150,7 +214,7 @@ function rankEvents(
 
   const ranked = options.enforceFloor ? enforceExplorationFloor(sorted, TOP_N) : sorted;
 
-  return ranked.map(({ score, event }, index) => ({
+  return ranked.map(({ score, event, novel }, index) => ({
       eventId: event.id,
       title: event.eventTitle,
       venueName: event.venueName,
@@ -162,6 +226,7 @@ function rankEvents(
       spotifyMatched: score.spotifyMatched,
       components: explainComponents(score.components),
       communitySignal: communityTotal(counts[event.id]),
+      novel,
     }));
 }
 
@@ -244,28 +309,18 @@ function computeMetrics(
     artistSpread: artists.size,
     lowDiversity: top.length > 0 && venues.size <= Math.ceil(top.length / 3),
     localValueShare: top.length > 0 ? Math.round((localValueCount / top.length) * 100) : 0,
+    noveltyShare: computeNoveltyShare(top),
     signalMix: Array.from(mix.entries())
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count),
     coverage: { withSignal, timingOnly: events.length - withSignal, total: events.length },
+    engagement: computeEngagement(signedIn, TOP_N),
   };
 }
 
 /* ------------------------------------------------------------------ */
 /*  Synthetic profile (privacy-safe)                                   */
 /* ------------------------------------------------------------------ */
-
-function topArtists(events: EventRecord[], limit: number): string[] {
-  const counts = new Map<string, number>();
-  for (const event of events) {
-    const name = event.artistName?.trim();
-    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
-  }
-  return Array.from(counts.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([name]) => name);
-}
 
 function buildSyntheticProfile(artists: string[]): {
   connections: MusicConnection[];
@@ -326,6 +381,7 @@ async function loadBehavior(): Promise<BehaviorInsight> {
       negativeLearningActive: removals > 0,
       impressions,
       implicitLearningActive: impressions > 0,
+      impressionNonConversionShare: computeNonConversionShare(byAction, impressions),
     };
   } catch {
     return {
@@ -335,6 +391,7 @@ async function loadBehavior(): Promise<BehaviorInsight> {
       negativeLearningActive: false,
       impressions: 0,
       implicitLearningActive: false,
+      impressionNonConversionShare: 0,
     };
   }
 }
