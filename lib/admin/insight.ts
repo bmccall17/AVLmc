@@ -21,6 +21,10 @@ import {
   serializeBaselineMarkdown,
   type SocialBenchmark,
 } from "./insight-metrics";
+import {
+  loadPersonalizationBenchmark,
+  type PersonalizationBenchmark,
+} from "./personalization-benchmark";
 
 /**
  * Recommendation Quality & Listener Insight (PRD 09 / C4, Outcome 5).
@@ -143,6 +147,8 @@ export type RecommendationInsight = {
   methodology: BaselineMethodology;
   /** Social & Curator Benchmark (PRD 27 / C5): social-driven lift read separately from popularity. */
   social: SocialBenchmark;
+  /** Deeper Personalization Benchmark (PRD 28 / Phase 10 Outcome 2): real-listener aggregate roll-up. */
+  personalization: PersonalizationBenchmark;
   /** Paste-ready dated markdown snapshot of this reading (recording without storage). */
   markdown: string;
 };
@@ -172,6 +178,11 @@ export async function loadRecommendationInsight(force = false): Promise<Recommen
 
   const social = computeSocialBenchmark(events, counts, connections, profileItems, anonymous);
 
+  // PRD 28: aggregate roll-up of real listeners' rankings vs. the anonymous baseline. Reuses the
+  // already-loaded events/counts/anonymousScores so the only added cost is the bounded per-listener
+  // loader fan-out; degrades to an `available: false` reading on any failure.
+  const personalization = await loadPersonalizationBenchmark(events, counts, anonymousScores);
+
   const window = computeWindow(events);
   const syntheticProfileNote = `Fixed public-derived seed (${synthArtists.length} artists), pinned ${SYNTHETIC_TASTE_SEED_PINNED} — regenerated intentionally, never a real listener's data.`;
 
@@ -183,6 +194,7 @@ export async function loadRecommendationInsight(force = false): Promise<Recommen
     metrics: computeMetrics(events, signedIn, anonymousScores, signedScores),
     behavior: await loadBehavior(),
     social,
+    personalization,
     syntheticProfile: { artists: synthArtists, note: syntheticProfileNote },
     methodology: {
       windowStart: window.start,

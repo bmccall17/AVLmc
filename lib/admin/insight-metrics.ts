@@ -208,3 +208,182 @@ export function serializeBaselineMarkdown(reading: BaselineReading): string {
 
   return lines.join("\n");
 }
+
+/* ------------------------------------------------------------------ */
+/*  Deeper Personalization Benchmark (PRD 28 / Phase 10, Outcome 2)   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One real listener's personalization read, reduced to the plain numbers the roll-up needs. Derived
+ * from the existing Listener Trace scoring (personal vs anonymous), so the benchmark adds NO new
+ * scoring — it aggregates what the per-listener trace already computes. Aggregate-only: a row never
+ * carries an identity, token, or any private profile value.
+ */
+export type PersonalizationListenerRow = {
+  /** Listener has enough taste/behavior signal for personalization to do anything. */
+  hasSignal: boolean;
+  /** This listener's top-N order differs from the anonymous baseline. */
+  personalized: boolean;
+  /** Mean |personalRank − anonymousRank| across the listener's surfaced top-N. */
+  meanDisplacement: number;
+  /** Listener has impression-derived implicit skip signals available. */
+  hasImplicitSignals: boolean;
+  /** # of the listener's surfaced events showing a "you tend to skip…" reason. */
+  skipReasonEvents: number;
+  /** Novelty share (0–100) of this listener's personalized top-N (the exploration-floor `novel` flag). */
+  noveltyShare: number;
+  /** Flattened human reasons across the listener's surfaced events (the explainable signal labels). */
+  reasons: string[];
+};
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+/** Whether and how much real listeners' rankings diverge from the anonymous baseline. */
+export function computePersonalizationLift(rows: PersonalizationListenerRow[]): {
+  listeners: number;
+  personalizedShare: number;
+  meanDisplacement: number;
+  medianDisplacement: number;
+} {
+  const listeners = rows.length;
+  if (listeners === 0) {
+    return { listeners: 0, personalizedShare: 0, meanDisplacement: 0, medianDisplacement: 0 };
+  }
+  const personalized = rows.filter((row) => row.personalized);
+  const displacements = personalized.map((row) => row.meanDisplacement);
+  const meanDisplacement =
+    displacements.length > 0
+      ? Math.round((displacements.reduce((sum, value) => sum + value, 0) / displacements.length) * 10) / 10
+      : 0;
+  return {
+    listeners,
+    personalizedShare: Math.round((personalized.length / listeners) * 100),
+    meanDisplacement,
+    medianDisplacement: Math.round(median(displacements) * 10) / 10,
+  };
+}
+
+/** Which explainable signals drove personalization, ranked by how often they appear across listeners. */
+export function computeSignalAttribution(
+  rows: PersonalizationListenerRow[],
+  limit = 8
+): Array<{ label: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    for (const reason of row.reasons) {
+      counts.set(reason, (counts.get(reason) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
+/**
+ * The headline Outcome-2 read: do SKIPS measurably move rankings? Reports how many listeners have
+ * implicit skip signals and how many actually see a "you tend to skip…" reason on a surfaced event.
+ * Implicit cooling stays capped below the explicit `remove` envelope (PRD 18/21), so skips nudge but
+ * never bury — that invariant is stated descriptively, never as a grade.
+ */
+export function computeSkipInfluence(rows: PersonalizationListenerRow[]): {
+  listenersWithImplicit: number;
+  listenersWithSkipReason: number;
+  skipReasonShare: number;
+  skipReasonEvents: number;
+} {
+  const listeners = rows.length;
+  const listenersWithImplicit = rows.filter((row) => row.hasImplicitSignals).length;
+  const listenersWithSkipReason = rows.filter((row) => row.skipReasonEvents > 0).length;
+  const skipReasonEvents = rows.reduce((sum, row) => sum + row.skipReasonEvents, 0);
+  return {
+    listenersWithImplicit,
+    listenersWithSkipReason,
+    skipReasonShare: listeners > 0 ? Math.round((listenersWithSkipReason / listeners) * 100) : 0,
+    skipReasonEvents,
+  };
+}
+
+/**
+ * Loop-protection read: personalization must not collapse novelty vs the anonymous baseline. The
+ * floor "holds" when listeners' mean personalized novelty share is not below the anonymous baseline
+ * — i.e. deep personalization isn't quietly burying the quiet/local shows it hasn't clicked yet.
+ */
+export function computePersonalizationGuardrails(
+  rows: PersonalizationListenerRow[],
+  baselineNoveltyShare: number
+): { meanNoveltyShare: number; baselineNoveltyShare: number; floorHolds: boolean } {
+  const personalized = rows.filter((row) => row.personalized);
+  const shares = (personalized.length > 0 ? personalized : rows).map((row) => row.noveltyShare);
+  const meanNoveltyShare =
+    shares.length > 0 ? Math.round(shares.reduce((sum, value) => sum + value, 0) / shares.length) : 0;
+  return {
+    meanNoveltyShare,
+    baselineNoveltyShare,
+    floorHolds: meanNoveltyShare >= baselineNoveltyShare,
+  };
+}
+
+/** How many traceable listeners actually have enough signal to be personalized at all. */
+export function computePersonalizationCoverage(
+  rows: PersonalizationListenerRow[],
+  traceableTotal: number
+): { traceable: number; withSignal: number; personalized: number } {
+  return {
+    traceable: traceableTotal,
+    withSignal: rows.filter((row) => row.hasSignal).length,
+    personalized: rows.filter((row) => row.personalized).length,
+  };
+}
+
+/** Aggregate-only Deeper Personalization reading — no listener identities, never a quality score. */
+export type PersonalizationReading = {
+  generatedAt: string;
+  /** False when there are no traceable listeners with enough signal to aggregate. */
+  available: boolean;
+  methodology: {
+    windowStart: string;
+    windowEnd: string;
+    scorerVersion: string;
+    commit: string | null;
+    listenersAnalyzed: number;
+    note: string;
+  };
+  lift: ReturnType<typeof computePersonalizationLift>;
+  skip: ReturnType<typeof computeSkipInfluence>;
+  attribution: Array<{ label: string; count: number }>;
+  guardrails: ReturnType<typeof computePersonalizationGuardrails>;
+  coverage: ReturnType<typeof computePersonalizationCoverage>;
+};
+
+/** Serialize the personalization reading into a dated, paste-ready markdown block (no storage). */
+export function serializePersonalizationMarkdown(reading: PersonalizationReading): string {
+  const date = reading.generatedAt.slice(0, 10);
+  const m = reading.methodology;
+  if (!reading.available) {
+    return [
+      `### Deeper Personalization Benchmark — ${date}`,
+      "",
+      "_No traceable listeners with enough signal yet — nothing to aggregate._",
+    ].join("\n");
+  }
+  return [
+    `### Deeper Personalization Benchmark — ${date}`,
+    "",
+    `- **Window:** ${m.windowStart || "?"} → ${m.windowEnd || "?"}`,
+    `- **Scorer:** v${m.scorerVersion}${m.commit ? ` (commit ${m.commit})` : ""}`,
+    `- **Method:** ${m.note}`,
+    `- _Descriptive snapshot — not a single quality score; aggregate only, no listener identities._`,
+    "",
+    `**Lift:** ${reading.lift.personalizedShare}% of ${reading.lift.listeners} listeners get a different top-N · mean displacement ${reading.lift.meanDisplacement} ranks (median ${reading.lift.medianDisplacement}).`,
+    `**Skips:** ${reading.skip.listenersWithSkipReason}/${reading.lift.listeners} listeners (${reading.skip.skipReasonShare}%) see a "you tend to skip…" reason · ${reading.skip.skipReasonEvents} surfaced events cooled — capped below explicit remove.`,
+    `**Guardrail:** personalized novelty ${reading.guardrails.meanNoveltyShare}% vs anonymous baseline ${reading.guardrails.baselineNoveltyShare}% — floor ${reading.guardrails.floorHolds ? "holds" : "⚠ REGRESSED"}.`,
+    `**Coverage:** ${reading.coverage.personalized}/${reading.coverage.withSignal} personalized of ${reading.coverage.traceable} traceable listeners.`,
+    `**Top signals:** ${reading.attribution.map((entry) => `${entry.label} ×${entry.count}`).join(" · ") || "—"}`,
+  ].join("\n");
+}

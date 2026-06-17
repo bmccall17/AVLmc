@@ -64,6 +64,8 @@ export type ListenerTraceEvent = {
   reasons: string[];
   spotifyMatched: boolean;
   components: RankedComponent[];
+  /** Under-the-radar show — boosted by the exploration floor (PRD 21 / C4). Used by PRD 28. */
+  novel: boolean;
 };
 
 export type ListenerTrace = {
@@ -173,17 +175,36 @@ async function listAnonymousListeners(): Promise<ListenerSummary[]> {
 
 const cache = new Map<string, { at: number; value: ListenerTrace }>();
 
-export async function loadListenerTrace(identityKey: string): Promise<ListenerTrace | null> {
-  const cached = cache.get(identityKey);
-  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
-    return cached.value;
-  }
+/**
+ * One listener's scoring inputs + personal-vs-anonymous surfaced ranking. Extracted so BOTH the
+ * Listener Trace (per-listener view) and the PRD 28 Deeper Personalization Benchmark (aggregate
+ * roll-up) reuse one scoring pass instead of duplicating the per-listener loader fan-out. The
+ * caller supplies the shared events/counts/anonymousScores (loaded once) so an aggregate caller
+ * scores N listeners against a single anonymous baseline.
+ */
+export type ListenerScoring = {
+  identity: { userId?: string; sessionId?: string };
+  connections: Awaited<ReturnType<typeof listMusicConnections>>;
+  profileItems: Awaited<ReturnType<typeof listMusicProfileItems>>;
+  preferences: ListenerDiscoveryPreferences;
+  signals: Awaited<ReturnType<typeof listDiscoveryPreferenceSignals>>;
+  states: Awaited<ReturnType<typeof listDiscoveryStates>>;
+  implicitSignals: Awaited<ReturnType<typeof listImplicitSignals>>;
+  connectedActive: boolean;
+  optedOut: boolean;
+  tasteContributes: boolean;
+  surfaced: ListenerTraceEvent[];
+};
 
+export async function scoreListenerAgainstAnonymous(
+  identityKey: string,
+  events: EventRecord[],
+  counts: Record<string, CommunityCounts | undefined>,
+  anonymousScores: Record<string, DiscoveryScore>
+): Promise<ListenerScoring | null> {
   const identity = parseIdentity(identityKey);
   if (!identity) return null;
 
-  const events = await safeUpcomingEvents();
-  const counts = await safeCounts(events.map((event) => event.id));
   const eventIds = events.map((event) => event.id);
 
   const [connections, profileItems, preferences, signals, implicitSignals, corrections, states, savedKeys] =
@@ -221,10 +242,39 @@ export async function loadListenerTrace(identityKey: string): Promise<ListenerTr
     savedFavorites,
     spotifyMatchCorrections: corrections,
   });
-  const anonymousScores = scoreDiscoveryEvents({ events, counts });
 
   const anonRank = rankMap(anonymousScores);
-  const surfacedEvents = buildSurfaced(events, personalScores, anonymousScores, anonRank);
+  const surfaced = buildSurfaced(events, personalScores, anonymousScores, anonRank);
+
+  return {
+    identity,
+    connections,
+    profileItems,
+    preferences,
+    signals,
+    states,
+    implicitSignals,
+    connectedActive,
+    optedOut,
+    tasteContributes,
+    surfaced,
+  };
+}
+
+export async function loadListenerTrace(identityKey: string): Promise<ListenerTrace | null> {
+  const cached = cache.get(identityKey);
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+    return cached.value;
+  }
+
+  const events = await safeUpcomingEvents();
+  const counts = await safeCounts(events.map((event) => event.id));
+  const anonymousScores = scoreDiscoveryEvents({ events, counts });
+
+  const scoring = await scoreListenerAgainstAnonymous(identityKey, events, counts, anonymousScores);
+  if (!scoring) return null;
+
+  const { identity, connections, profileItems, preferences, signals, states } = scoring;
 
   const stateValues = Object.values(states).filter(
     (state): state is DiscoveryPersonEventState => Boolean(state)
@@ -234,10 +284,10 @@ export async function loadListenerTrace(identityKey: string): Promise<ListenerTr
     identityKey,
     kind: identity.userId ? "user" : "anonymous",
     label: identity.userId ? `Listener #${identity.userId}` : `Anonymous · …${identityKey.slice(-6)}`,
-    connected: connectedActive,
+    connected: scoring.connectedActive,
     profileItemCount: profileItems.length,
     signalCount: signals.length,
-    optedOut,
+    optedOut: scoring.optedOut,
   };
 
   const value: ListenerTrace = {
@@ -275,8 +325,8 @@ export async function loadListenerTrace(identityKey: string): Promise<ListenerTr
       planning: stateValues.filter((state) => state.planning).length,
       removed: stateValues.filter((state) => state.removed).length,
     },
-    tasteContributes,
-    surfacedEvents,
+    tasteContributes: scoring.tasteContributes,
+    surfacedEvents: scoring.surfaced,
   };
 
   cache.set(identityKey, { at: Date.now(), value });
@@ -315,6 +365,7 @@ function buildSurfaced(
         reasons: score.reasons.map((reason) => reason.label),
         spotifyMatched: score.spotifyMatched,
         components: explainComponents(score.components),
+        novel: score.components.novelty.base > 0,
       };
     });
 }

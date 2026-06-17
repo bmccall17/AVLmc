@@ -38,6 +38,8 @@ export function InsightSection({ insight }: { insight: RecommendationInsight }) 
 
       <SocialStrip insight={insight} />
 
+      <PersonalizationStrip insight={insight} />
+
       {insight.movers.length > 0 && (
         <div className="admin-subsection">
           <h3>What changes when signed in</h3>
@@ -187,6 +189,117 @@ function SocialStrip({ insight }: { insight: RecommendationInsight }) {
           <small className="admin-stat-detail">novelty {s.socialNoveltyShare}% vs baseline {s.baselineNoveltyShare}%</small>
           <small className="admin-stat-def">Confirms the Phase 11 exploration floor isn&apos;t crowded out with social on.</small>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Deeper Personalization Benchmark strip (PRD 28 / Phase 10, Outcome 2): a real-listener aggregate
+ * read of whether personalization gives meaningfully different and more useful rankings than the
+ * anonymous baseline — lift/displacement, the skip-influence headline, which signals drove it,
+ * coverage, and the loop-protection guardrail. Aggregate only (no listener identities); descriptive,
+ * never a quality score. The reproducible synthetic-behavior fixture is parked (see PRD 28).
+ */
+function PersonalizationStrip({ insight }: { insight: RecommendationInsight }) {
+  const p = insight.personalization;
+  const [copied, setCopied] = useState(false);
+
+  async function copyMarkdown() {
+    try {
+      await navigator.clipboard.writeText(p.markdown);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  if (!p.available) {
+    return (
+      <div className="admin-subsection admin-personalization-strip">
+        <h3>Deeper Personalization benchmark</h3>
+        <p className="admin-meta">
+          No traceable listeners with enough signal yet — nothing to aggregate. This reads real
+          listeners, so it fills in once signed-in listeners accumulate taste/behavior signals.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-subsection admin-personalization-strip">
+      <div className="admin-baseline-methodology-head">
+        <div>
+          <h3>Deeper Personalization benchmark</h3>
+          <p className="admin-meta">
+            Aggregate roll-up of {p.methodology.listenersAnalyzed} real listeners&apos; rankings vs. the
+            anonymous baseline — <em>descriptive, not a quality score; aggregate only, no listener identities.</em>
+          </p>
+        </div>
+        <button type="button" className="admin-button" onClick={copyMarkdown}>
+          {copied ? "Copied ✓" : "Copy personalization benchmark as markdown"}
+        </button>
+      </div>
+      <div className="admin-stat-row">
+        <div className="admin-stat-card">
+          <span className="admin-stat-value">{p.lift.personalizedShare}%</span>
+          <span className="admin-stat-label">Listeners personalized</span>
+          <small className="admin-stat-detail">
+            mean displacement {p.lift.meanDisplacement} ranks · median {p.lift.medianDisplacement}
+          </small>
+          <small className="admin-stat-def">
+            Share of the {p.lift.listeners} analyzed listeners whose top-N differs from anonymous, and by how far.
+          </small>
+        </div>
+        <div className="admin-stat-card">
+          <span className="admin-stat-value">{p.skip.skipReasonShare}%</span>
+          <span className="admin-stat-label">Skips move ranking</span>
+          <small className="admin-stat-detail">
+            {p.skip.listenersWithSkipReason}/{p.lift.listeners} listeners · {p.skip.skipReasonEvents} events cooled
+          </small>
+          <small className="admin-stat-def">
+            Listeners seeing a &ldquo;you tend to skip…&rdquo; reason — implicit cooling, capped below explicit remove.
+          </small>
+        </div>
+        <div className={`admin-stat-card${p.guardrails.floorHolds ? "" : " warning"}`}>
+          <span className="admin-stat-value">{p.guardrails.floorHolds ? "Holds" : "⚠ regressed"}</span>
+          <span className="admin-stat-label">Novelty floor (personalized)</span>
+          <small className="admin-stat-detail">
+            personalized {p.guardrails.meanNoveltyShare}% vs baseline {p.guardrails.baselineNoveltyShare}%
+          </small>
+          <small className="admin-stat-def">
+            Loop-protection: personalization isn&apos;t burying the quiet/local shows below the anonymous floor.
+          </small>
+        </div>
+        <div className="admin-stat-card">
+          <span className="admin-stat-value">{p.coverage.personalized}</span>
+          <span className="admin-stat-label">Coverage</span>
+          <small className="admin-stat-detail">
+            of {p.coverage.withSignal} with signal · {p.coverage.traceable} traceable
+          </small>
+          <small className="admin-stat-def">
+            How many listeners have enough taste/behavior signal for personalization to do anything.
+          </small>
+        </div>
+      </div>
+      <div className="admin-stat-card">
+        <span className="admin-stat-label">Top signals driving personalization</span>
+        <div className="admin-signal-mix">
+          {p.attribution.length === 0 ? (
+            <p className="admin-meta">No personalization reasons surfaced yet.</p>
+          ) : (
+            p.attribution.map((entry) => (
+              <div className="admin-signal-mix-row" key={entry.label}>
+                <span>{entry.label}</span>
+                <strong>{entry.count}</strong>
+              </div>
+            ))
+          )}
+        </div>
+        <small className="admin-stat-def">
+          Explainable reasons across the analyzed listeners&apos; surfaced events — per-listener evidence lives in Listener Trace.
+        </small>
       </div>
     </div>
   );

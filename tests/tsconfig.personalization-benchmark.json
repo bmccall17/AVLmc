@@ -1,0 +1,17 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "/tmp/avlmc-personalization-benchmark-tests",
+    "rootDir": "..",
+    "target": "es2022"
+  },
+  "include": [
+    "../next-env.d.ts",
+    "personalization-benchmark.test.ts",
+    "../lib/admin/insight-metrics.ts"
+  ]
+}
