@@ -14,6 +14,7 @@
  */
 
 const BRAND_NAME = "AVL Music Companion";
+const BRAND_TAGLINE = "Asheville shows, worth showing up for";
 
 // Design-spec tokens (inline, since email clients don't run Tailwind).
 const COLOR_BG = "#0A0A0A"; // deep true black — the core foundation
@@ -70,16 +71,17 @@ export function renderMagicLinkEmail({ url, host }: MagicLinkEmailParams): Rende
     <title>${escapeHtml(subject)}</title>
   </head>
   <body style="margin:0; padding:0; background-color:${COLOR_BG}; color:${COLOR_TEXT}; font-family:${FONT_STACK}; -webkit-font-smoothing:antialiased;">
-    <span style="display:none; max-height:0; overflow:hidden; opacity:0;">Tap the button to sign in to ${BRAND_NAME}. This link expires in 24 hours.</span>
+    <span style="display:none; max-height:0; overflow:hidden; opacity:0;">Your sign-in link is here. No password to forget, no merch table to find. Expires in 24 hours.</span>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${COLOR_BG};">
       <tr>
         <td align="center" style="padding:40px 16px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; background-color:${COLOR_SURFACE}; border:1px solid ${COLOR_BORDER}; border-radius:16px;">
             <tr>
               <td style="padding:36px 36px 28px 36px;">
-                <p style="margin:0 0 28px 0; font-size:10px; line-height:1; letter-spacing:0.22em; text-transform:uppercase; color:${COLOR_TEXT_FAINT};">${BRAND_NAME}</p>
-                <h1 style="margin:0 0 14px 0; font-size:30px; line-height:1.05; font-weight:900; letter-spacing:-0.02em; color:${COLOR_TEXT};">Sign in</h1>
-                <p style="margin:0 0 32px 0; font-size:15px; line-height:1.5; color:${COLOR_TEXT_MUTED};">Tap the button below to sign in to your account. No password needed.</p>
+                <p style="margin:0 0 6px 0; font-size:10px; line-height:1; letter-spacing:0.22em; text-transform:uppercase; color:${COLOR_TEXT_FAINT};">${BRAND_NAME}</p>
+                <p style="margin:0 0 28px 0; font-size:10px; line-height:1; letter-spacing:0.18em; text-transform:uppercase; color:${COLOR_TEXT_FAINT};">${BRAND_TAGLINE}</p>
+                <h1 style="margin:0 0 14px 0; font-size:30px; line-height:1.05; font-weight:900; letter-spacing:-0.02em; color:${COLOR_TEXT};">You&rsquo;re on the list</h1>
+                <p style="margin:0 0 32px 0; font-size:15px; line-height:1.5; color:${COLOR_TEXT_MUTED};">Tap the button to sign in &mdash; no password to forget, no will-call line to wait in.</p>
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="border-radius:10px; background-color:${COLOR_BUTTON_BG};">
@@ -97,7 +99,7 @@ export function renderMagicLinkEmail({ url, host }: MagicLinkEmailParams): Rende
             <tr>
               <td style="padding:20px 36px 32px 36px;">
                 <p style="margin:0; font-size:9px; line-height:1.6; letter-spacing:0.18em; text-transform:uppercase; color:${COLOR_TEXT_FAINT};">Link expires in 24 hours &middot; ${safeHost}</p>
-                <p style="margin:10px 0 0 0; font-size:12px; line-height:1.5; color:${COLOR_TEXT_FAINT};">If you didn&rsquo;t request this, you can safely ignore this email.</p>
+                <p style="margin:10px 0 0 0; font-size:12px; line-height:1.5; color:${COLOR_TEXT_FAINT};">If you didn&rsquo;t request this, you can safely ignore it &mdash; we&rsquo;ll keep your seat warm.</p>
               </td>
             </tr>
           </table>
@@ -107,13 +109,14 @@ export function renderMagicLinkEmail({ url, host }: MagicLinkEmailParams): Rende
   </body>
 </html>`;
 
-  const text = `Sign in to ${BRAND_NAME}
+  const text = `You're on the list — ${BRAND_NAME}
+${BRAND_TAGLINE}
 
-Use this link to sign in (no password needed):
+Tap this link to sign in (no password to forget, no will-call line):
 ${url}
 
 This link expires in 24 hours.
-If you didn't request this, you can safely ignore this email.`;
+If you didn't request this, you can safely ignore it — we'll keep your seat warm.`;
 
   return { subject, html, text };
 }
