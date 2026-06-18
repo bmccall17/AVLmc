@@ -83,6 +83,10 @@ export function ListenerProfileButton({
   const [isSaving, setIsSaving] = useState(false);
   const [email, setEmail] = useState("");
   const [emailState, setEmailState] = useState<ActionState>({ kind: "idle", message: "" });
+  const [accountLinks, setAccountLinks] = useState<{
+    providers: { provider: string; type: string }[];
+    emails: { email: string; source: string; verified: boolean; isPrimary: boolean }[];
+  } | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const spotifyConnection = musicConnections.find((connection) => connection.provider === "spotify");
   const spotifyConnected = Boolean(spotifyConnection && !spotifyConnection.disconnectedAt);
@@ -90,6 +94,20 @@ export function ListenerProfileButton({
   const signalCount = musicProfileItems.length;
   const previewItems = musicProfileItems.slice(0, 6);
   const isSignedIn = Boolean(user?.id);
+  const accountEmails = accountLinks?.emails ?? [];
+  const hasEmailSignIn = (accountLinks?.providers ?? []).some(
+    (provider) => provider.type === "email" || provider.provider === "resend"
+  );
+  const accountEmail =
+    accountEmails.find((entry) => entry.isPrimary)?.email ??
+    accountEmails[0]?.email ??
+    user?.email ??
+    "";
+  // Offer an email sign-in method to a signed-in listener who has none yet (e.g. Spotify-first). The
+  // target is an email already verified on their account, so the magic link resolves back to it — no
+  // new linking, no takeover surface (PRD 35 posture).
+  const showAddEmailAccess =
+    isSignedIn && accountLinks !== null && !hasEmailSignIn && Boolean(accountEmail);
   const profileLabel = isSignedIn ? "Signed in listener" : "Personalize your board";
   const profileDetail = isSignedIn
     ? signalCount > 0
@@ -138,6 +156,33 @@ export function ListenerProfileButton({
       closeButtonRef.current?.focus();
     }
   }, [isOpen]);
+
+  // When a signed-in listener opens the profile, learn which sign-in methods + emails their account
+  // already has, so we can offer an email sign-in method to Spotify-first users who lack one (PRD 35).
+  useEffect(() => {
+    if (!isOpen || !isSignedIn) {
+      return;
+    }
+    let active = true;
+    void (async () => {
+      try {
+        const response = await fetch("/api/me/account-links", { cache: "no-store" });
+        if (response.ok && active) {
+          setAccountLinks(
+            (await response.json()) as {
+              providers: { provider: string; type: string }[];
+              emails: { email: string; source: string; verified: boolean; isPrimary: boolean }[];
+            }
+          );
+        }
+      } catch {
+        // Best-effort: if this fails, the add-email affordance just won't show.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [isOpen, isSignedIn]);
 
   function updateWeight(key: ListenerPreferenceKey, value: number) {
     setDraftPreferences((current) =>
@@ -262,8 +307,8 @@ export function ListenerProfileButton({
     setSaveState({ kind: "notice", message: "Defaults ready. Save to apply them." });
   }
 
-  async function sendEmailLink() {
-    const trimmed = email.trim();
+  async function sendEmailLink(targetEmail?: string) {
+    const trimmed = (targetEmail ?? email).trim();
     if (!trimmed) {
       return;
     }
@@ -457,6 +502,35 @@ export function ListenerProfileButton({
                       </small>
                     </div>
                   ) : null}
+                  {isSignedIn && accountEmails.length > 0 ? (
+                    <p className="empty-copy">
+                      Account email{accountEmails.length > 1 ? "s" : ""}:{" "}
+                      {accountEmails
+                        .map((entry) => `${entry.email}${entry.isPrimary ? " (primary)" : ""}`)
+                        .join(", ")}
+                    </p>
+                  ) : null}
+
+                  {showAddEmailAccess ? (
+                    <div className="listener-spotify-optional">
+                      <button
+                        className="ghost-control"
+                        disabled={emailState.kind === "notice"}
+                        onClick={() => void sendEmailLink(accountEmail)}
+                        type="button"
+                      >
+                        Email me a sign-in link
+                      </button>
+                      <small>
+                        Adds a no-password email way back into <strong>this same account</strong> — we&apos;ll
+                        send a one-tap link to {accountEmail}. Handy if your Spotify access ever lapses.
+                      </small>
+                      {emailState.message ? (
+                        <p className={`form-message ${emailState.kind}`}>{emailState.message}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   {isSignedIn ? (
                     <Link className="ghost-control saved-space-link" href="/saved">
                       <Bookmark aria-hidden="true" size={15} strokeWidth={2.4} />

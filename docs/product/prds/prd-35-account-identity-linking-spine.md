@@ -116,16 +116,21 @@ Shipped (June 18, 2026):
   existing hit); does **not** enable `allowDangerousEmailAccountLinking` — a not-signed-in OAuth email
   collision now surfaces as `OAuthAccountNotLinked`, mapped to the PRD 37 `duplicate_account` recovery
   rather than a silent fork. Typecheck/lint/`test:registry` green; Snyk-clean.
+- **Profile-menu "Email me a sign-in link" entry point** (`components/ListenerProfileButton.tsx`): a
+  signed-in listener who lacks an email sign-in method (e.g. Spotify-first) is offered a one-tap magic
+  link sent to an email **already verified on their account** (fetched from `GET /api/me/account-links`),
+  so it resolves back to the same account — a no-password fallback if Spotify access lapses. The account's
+  associated emails are shown read-only. No new route/table; reuses `api-me-account-links` + the `resend`
+  provider; posture-safe (no blind linking). Typecheck/lint/`test:registry` green; Snyk-clean.
 
-Remaining (live proof + polish — tracked in `backlog.md`):
+Remaining (live proof + Tier 2 — tracked in `backlog.md`):
 - The live cross-browser/device run of the PRD 38 runbook (real OAuth + Spotify credentials) to *prove*
   the loop — the only non-autonomous step.
-- A small edge: "add email access" while signed in via Spotify using a **brand-new** email (not the
-  Spotify-recorded one) goes through the email-provider path, which does not auto-link to the session the
-  way OAuth does; the common case (a magic link to the already-recorded Spotify email) resolves correctly
-  via the wrapper. Optional explicit `linkAccount` for the new-email case if the runbook flags it.
-- Profile-menu "Add email access" entry point for Spotify-first users + the emails display ("Connect
-  Spotify" already exists; `GET /api/me/account-links` already returns the emails).
+- **Tier 2:** linking a **brand-new/different** email while signed in (not an email already on the
+  account). The email-provider path doesn't auto-link to the session like OAuth does, so this needs a
+  session-bound signed-token + confirm route (+ a Resend send helper, and hardening `findUserIdByEmail`
+  to `verified`-only). Deliberately deferred — security-sensitive and lower-urgency than the entry point
+  above, which already covers the common Spotify-first case via the account's verified email.
 
 ## Dependencies
 

@@ -11,11 +11,14 @@ Updated: June 18, 2026
   **proof**, which needs a human + live Spotify credentials: walk
   [`account-signin-linking-reliability-checklist.md`](account-signin-linking-reliability-checklist.md)
   across the supported browser/device matrix (all six legs), and run `checkAccountIntegrity`
-  (`lib/account-integrity.ts`) on the resulting rows after linking + reconnection. Two small follow-ups to
-  confirm or fix during the pass: (a) "add email access" while signed in via Spotify using a **brand-new**
-  email (the email-provider path doesn't auto-link to the session the way OAuth does — the recorded-Spotify-
-  email case already resolves via the wrapper); (b) a profile-menu "Add email access" entry point for
-  Spotify-first users. `$0`, no Spotify writes, Snyk-clean.
+  (`lib/account-integrity.ts`) on the resulting rows after linking + reconnection. `$0`, no Spotify writes,
+  Snyk-clean.
+
+  **Done (Jun 18, 2026):** the profile-menu "Email me a sign-in link" entry point for Spotify-first users
+  (sends a magic link to an email already verified on their account → resolves back to it; no backend
+  change). **Tier 2 (deferred):** linking a **brand-new/different** email while signed in needs a
+  session-bound signed-token + confirm route (the email-provider path doesn't auto-link to the session like
+  OAuth does), plus hardening `findUserIdByEmail` to `verified`-only — security-sensitive, lower urgency.
 
 * _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. Active focus is the Phase 15 follow-up above and the Personalized Discovery follow-ups tracked in [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
 
