@@ -68,6 +68,7 @@ export type DerivedCountKey =
   | "users"
   | "accounts"
   | "user_emails"
+  | "spotify_access_requests"
   | "music_connections"
   | "music_profile_items"
   | "listener_discovery_preferences"
@@ -477,6 +478,18 @@ const NODES: RegistryNode[] = [
     countKey: "user_emails",
   },
   {
+    id: "db-spotify-access-requests",
+    kind: "datastore",
+    layer: "data",
+    label: "spotify_access_requests",
+    description:
+      "Spotify tester-slot access requests (PRD 36): a not-yet-approved listener's Spotify email + status (pending/slot_added/approved/rejected) while Spotify is in Development Mode (25-user allowlist). One open request per user; the slot add is an external dashboard action this only tracks. The Spotify email is private to listener + admin — never exposed publicly.",
+    sourceOfTruth: "spotify_access_requests",
+    access: "internal",
+    ownership: "automated",
+    countKey: "spotify_access_requests",
+  },
+  {
     id: "db-music-connections",
     kind: "datastore",
     layer: "data",
@@ -735,6 +748,28 @@ const NODES: RegistryNode[] = [
     ownership: "automated",
   },
   {
+    id: "api-me-spotify-access-request",
+    kind: "surface",
+    layer: "identity",
+    label: "Spotify Access Request API",
+    description:
+      "Signed-in-only listener plane (PRD 36): submit/refresh your OWN Spotify tester-slot access request (your Spotify email → `pending`) and read its status. Exactly one open request per user; the acting id comes from the session, never the body. The Spotify email is private to the listener + admin. Returns 401 when anonymous.",
+    sourceOfTruth: "app/api/me/spotify-access-request/route.ts",
+    access: "public",
+    ownership: "automated",
+  },
+  {
+    id: "api-admin-spotify-access",
+    kind: "surface",
+    layer: "operations",
+    label: "Admin Spotify Access API",
+    description:
+      "Admin-cookie-gated Spotify tester-slot review (PRD 36): list the open request queue with each listener's Spotify email and mark slot_added/approved/rejected after adding them in the Spotify Developer Dashboard (≤25 users / Extended Quota). The slot add is an external action this only tracks. Admin-only — no self-serve.",
+    sourceOfTruth: "app/api/admin/spotify-access/route.ts",
+    access: "internal",
+    ownership: "automated",
+  },
+  {
     id: "api-me-curator-application",
     kind: "surface",
     layer: "identity",
@@ -955,6 +990,9 @@ const EDGES: RegistryEdge[] = [
   { from: "int-authjs", to: "db-user-emails", kind: "flowsTo", label: "records provider email" },
   { from: "db-user-emails", to: "db-users", kind: "dependsOn", label: "emails per account (cascade)" },
   { from: "api-me-account-links", to: "db-user-emails", kind: "dependsOn", label: "linked providers + emails" },
+  { from: "db-spotify-access-requests", to: "db-users", kind: "dependsOn", label: "request per user (cascade)" },
+  { from: "api-me-spotify-access-request", to: "db-spotify-access-requests", kind: "dependsOn", label: "submit + my status" },
+  { from: "api-admin-spotify-access", to: "db-spotify-access-requests", kind: "dependsOn", label: "review queue + slot-added" },
   { from: "ui-listener-profile", to: "api-me", kind: "flowsTo", label: "reads/writes" },
   { from: "api-me", to: "svc-music", kind: "dependsOn", label: "sync taste" },
   { from: "api-me", to: "svc-listener-prefs", kind: "dependsOn", label: "save settings" },

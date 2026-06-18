@@ -1,12 +1,16 @@
 # Reliable Account Sign-In & Spotify Connection — Master PRD (Epic)
 
-Updated: June 17, 2026
+Updated: June 18, 2026
 
-**Status: In progress (June 17, 2026) — C1 foundation shipped, C2–C4 documented.** Decomposed into four
+**Status: In progress (June 18, 2026) — C1 foundation + C2 shipped, C3–C4 documented.** Decomposed into four
 dependency-sequenced cycle PRDs (35–38), one per desired outcome. C1 (PRD 35) shipped the safe, verifiable
 half of the linking spine (`user_emails` table + back-fill, the pure decision matrix + tests, the multi-email
 service, sign-in email recording, `GET /api/me/account-links`); the live-auth wiring (adapter `getUserByEmail`
 resolution + the explicit linking callback + profile entry points) is staged for the C4 cross-browser pass.
+C2 (PRD 36) shipped the Spotify tester-slot access request end-to-end: a `spotify_access_requests` table
+(one open request per user), the listener `me/spotify-access-request` submit/status surface turning the beta
+wall into "Request access" → "pending" → "added — retry now," and the admin `/admin/spotify-access` review
+queue that prompts the manual ≤25-slot add — the successful retry lands on the C1 account.
 This is **Phase 15** in [`master-roadmap.md`](master-roadmap.md) and the direct sequel to
 **Phase 14** (Onboarding & Email Sign-in, [PRD 34](prds/prd-34-onboarding-email-signin.md)), which added the
 magic-link provider but explicitly deferred account *linking* and duplicate-identity handling.

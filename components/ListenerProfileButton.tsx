@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Bookmark, Plus, RotateCcw, SlidersHorizontal, Star, Trash2, UserCircle, Users, X } from "lucide-react";
 import { MusicConnectionActions } from "@/components/MusicConnectionActions";
+import { SpotifyAccessRequest } from "@/components/SpotifyAccessRequest";
 import type { AuthFeatureFlags } from "@/lib/auth-flags";
 import type { DiscoveryScoreComponents } from "@/lib/discovery";
 import {
@@ -388,7 +389,11 @@ export function ListenerProfileButton({
 
                 <div className="listener-source-actions">
                   {spotifyLimitedBetaNotice ? (
-                    <p className="form-message notice">{SPOTIFY_LIMITED_BETA_MESSAGE}</p>
+                    isSignedIn ? (
+                      <SpotifyAccessRequest accountEmail={user?.email} />
+                    ) : (
+                      <p className="form-message notice">{SPOTIFY_LIMITED_BETA_MESSAGE}</p>
+                    )
                   ) : null}
 
                   {!isSignedIn ? (

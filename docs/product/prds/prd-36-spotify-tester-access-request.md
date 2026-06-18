@@ -43,14 +43,34 @@ because of PRD 35 the successful connection links onto their **existing** accoun
 
 ## Implementation Status
 
-**Documented (June 17, 2026).** Not yet built.
+**Shipped (June 18, 2026).** Delivered:
 
-Planned deliverables:
-- `spotify_access_requests` schema (additive) + an `app/api/me/spotify-access-request` route.
-- An admin review panel + `app/api/admin/*` endpoint surfacing the Spotify email and a slot-added action.
-- Connect-Spotify "Request access" + status states in the profile UI.
-- Operator doc note: how to add the email to Spotify *User Management* (≤25) / Extended Quota.
-- System Registry registration; `generate:system-map`; `test:registry` green.
+- **`spotify_access_requests` table** (`db/schema.sql`, additive + `42P01`-tolerant): `user_id` (FK
+  `users`, cascade), `spotify_email`, `status` (`pending`/`slot_added`/`approved`/`rejected`), `note`,
+  `requested_at`, `resolved_at`. A partial unique `spotify_access_requests_one_open_idx` enforces **one
+  open request per user** (a retry edits the open row, never forks). Registered as
+  `db-spotify-access-requests` (countKey `spotify_access_requests`); map regenerated; `test:registry` green.
+- **Pure core** (`lib/spotify-access-requests-core.ts`): email validation/normalization + the status
+  lifecycle (open vs. terminal, admin-settable set) with a typed `SpotifyAccessRequestValidationError`.
+  Unit-tested (`npm run test:spotify-access`, 7 cases).
+- **Data service** (`lib/spotify-access-requests.ts`, `server-only`): `submitMySpotifyAccessRequest`
+  (validate + upsert the one open row), `getMySpotifyAccessRequest`, `listSpotifyAccessRequestsForAdmin`,
+  `setSpotifyAccessRequestStatus` (stamps `resolved_at` on terminal). Reads `42P01/42703`-tolerant; no
+  tokens read/returned.
+- **Listener plane** — `GET/POST app/api/me/spotify-access-request` (`requireUserId()`-gated, self-scoped,
+  401 anonymous), registered `api-me-spotify-access-request`. `components/SpotifyAccessRequest.tsx` turns
+  the beta wall in `ListenerProfileButton` into "Request access" → "pending" → "added — retry now" with a
+  one-tap reconnect.
+- **Admin plane** — `GET/PATCH app/api/admin/spotify-access` (admin-cookie-gated), registered
+  `api-admin-spotify-access`; `components/admin/SpotifyAccessSection.tsx` + `app/admin/spotify-access`
+  review page list the open queue with each listener's Spotify email, a one-click "mark slot-added," and
+  restate the manual step (add the email to *User Management* ≤25 / apply for Extended Quota in the
+  Spotify Developer Dashboard).
+- `$0`; Spotify email private to listener + admin; no Spotify writes; new code Snyk-clean (0 issues);
+  typecheck/lint/tests green.
+
+The successful-retry-onto-the-existing-account guarantee rides on PRD 35's linking spine and is exercised
+end-to-end in the C4 cross-browser pass.
 
 ## Dependencies
 

@@ -386,6 +386,7 @@ Auth.js user records for signed-in listeners.
 - **Fed by / required by:**
   - ← Auth.js (flowsTo) — user records
   - ← user_emails (dependsOn) — emails per account (cascade)
+  - ← spotify_access_requests (dependsOn) — request per user (cascade)
   - ← saved_items (dependsOn) — owned by user (cascade)
   - ← listener_follows (dependsOn) — follower/followee (cascade)
   - ← curators (dependsOn) — persona over a user (cascade)
@@ -416,6 +417,21 @@ Multiple verified emails per account (PRD 35): the magic-link email plus the ema
 - **Fed by / required by:**
   - ← Auth.js (flowsTo) — records provider email
   - ← Account Links API (dependsOn) — linked providers + emails
+
+#### spotify_access_requests  `db-spotify-access-requests`
+
+Spotify tester-slot access requests (PRD 36): a not-yet-approved listener's Spotify email + status (pending/slot_added/approved/rejected) while Spotify is in Development Mode (25-user allowlist). One open request per user; the slot add is an external dashboard action this only tracks. The Spotify email is private to listener + admin — never exposed publicly.
+
+- **Kind:** Data store
+- **Source of truth:** `spotify_access_requests`
+- **Access:** internal
+- **Ownership:** automated
+- **Live count:** `spotify_access_requests` (resolved in portal/API)
+- **Flows to / depends on:**
+  - → users (dependsOn) — request per user (cascade)
+- **Fed by / required by:**
+  - ← Spotify Access Request API (dependsOn) — submit + my status
+  - ← Admin Spotify Access API (dependsOn) — review queue + slot-added
 
 #### music_connections  `db-music-connections`
 
@@ -790,6 +806,17 @@ Signed-in-only, self-scoped (PRD 35): returns the caller's linked sign-in provid
 - **Flows to / depends on:**
   - → user_emails (dependsOn) — linked providers + emails
 
+#### Spotify Access Request API  `api-me-spotify-access-request`
+
+Signed-in-only listener plane (PRD 36): submit/refresh your OWN Spotify tester-slot access request (your Spotify email → `pending`) and read its status. Exactly one open request per user; the acting id comes from the session, never the body. The Spotify email is private to the listener + admin. Returns 401 when anonymous.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/me/spotify-access-request/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → spotify_access_requests (dependsOn) — submit + my status
+
 #### Curator Application API  `api-me-curator-application`
 
 Signed-in-only listener plane (PRD 29): submit a self-authored curator application and read your OWN curator standing. Promoted instantly under the self-serve gate, else `pending` for admin review. The acting user id comes from the session, never the body; applications are private to the applicant + admin (never public, no pay-to-play). Returns 401 when anonymous.
@@ -828,6 +855,17 @@ Signed-in-only /saved view with three private lists (events, venues, artists), i
 ### Operations
 
 _Jobs, admin, observability._
+
+#### Admin Spotify Access API  `api-admin-spotify-access`
+
+Admin-cookie-gated Spotify tester-slot review (PRD 36): list the open request queue with each listener's Spotify email and mark slot_added/approved/rejected after adding them in the Spotify Developer Dashboard (≤25 users / Extended Quota). The slot add is an external action this only tracks. Admin-only — no self-serve.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/admin/spotify-access/route.ts`
+- **Access:** internal
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → spotify_access_requests (dependsOn) — review queue + slot-added
 
 #### Admin Curators API  `api-admin-curators`
 
@@ -1001,6 +1039,9 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | Auth.js | → | user_emails | flowsTo | records provider email |
 | user_emails | → | users | dependsOn | emails per account (cascade) |
 | Account Links API | → | user_emails | dependsOn | linked providers + emails |
+| spotify_access_requests | → | users | dependsOn | request per user (cascade) |
+| Spotify Access Request API | → | spotify_access_requests | dependsOn | submit + my status |
+| Admin Spotify Access API | → | spotify_access_requests | dependsOn | review queue + slot-added |
 | Listener Profile | → | Listener (me) API | flowsTo | reads/writes |
 | Listener (me) API | → | Music Taste Sync | dependsOn | sync taste |
 | Listener (me) API | → | Listener Preferences | dependsOn | save settings |
@@ -1050,4 +1091,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_65 nodes, 89 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_68 nodes, 92 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

@@ -50,6 +50,10 @@ const COUNT_QUERIES: Array<{ key: DerivedCountKey; text: string }> = [
   { key: "accounts", text: "select count(*)::int as count from public.accounts" },
   { key: "user_emails", text: "select count(*)::int as count from public.user_emails" },
   {
+    key: "spotify_access_requests",
+    text: "select count(*)::int as count from public.spotify_access_requests",
+  },
+  {
     key: "music_connections",
     text: "select count(*)::int as count from public.music_connections",
   },

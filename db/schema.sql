@@ -126,6 +126,31 @@ where u.email is not null
     select 1 from public.user_emails ue where lower(ue.email) = lower(u.email)
   );
 
+-- ---- Spotify tester-slot access requests (PRD 36 / Phase 15) --------------------
+-- While Spotify is in Development Mode (a hard 25-user allowlist), a not-yet-approved listener can
+-- request access: we capture their Spotify account email + a status the admin works through. The
+-- 25-slot add itself is an external Spotify Developer Dashboard action (User Management / Extended
+-- Quota); this table only tracks the request so the admin sees who is waiting and the listener sees
+-- honest "pending" / "added — retry now" status. The Spotify email is private to the listener +
+-- admin (never public). Additive + 42P01-tolerant per db/schema.sql being the single source of truth.
+create table if not exists public.spotify_access_requests (
+  id serial primary key,
+  user_id integer not null references public.users(id) on delete cascade,
+  spotify_email text not null,
+  status text not null default 'pending'
+    check (status in ('pending', 'slot_added', 'approved', 'rejected')),
+  note text,
+  requested_at timestamptz not null default now(),
+  resolved_at timestamptz
+);
+
+-- At most one OPEN request (pending or slot_added) per user — a retry edits the open row, never forks.
+create unique index if not exists spotify_access_requests_one_open_idx
+  on public.spotify_access_requests (user_id)
+  where status in ('pending', 'slot_added');
+create index if not exists spotify_access_requests_status_idx
+  on public.spotify_access_requests (status);
+
 -- ---- Optional music identity / taste (Spotify) ---------------------------------
 create table if not exists public.music_connections (
   id text primary key,

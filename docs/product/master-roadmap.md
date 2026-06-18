@@ -26,7 +26,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 12 | [Social / Curator Graph (Epic)](social-curator-prd.md) | Shipped | Opt-in follow/curator graph + inner-circle attribution; trusted-circle/curator activity as an optional, bounded ranking input distinct from public heat. Privacy-first, no pay-to-play, no Spotify writes. Initiative B of the discovery North Star; PRDs 23–27 across five cycles — **all shipped (Jun 17, 2026)**. |
 | 13 | [Curator Onboarding & Self-Management (Epic)](curator-onboarding-prd.md) | Shipped | Self-serve curator onboarding — instant under a configurable gate, admin-reviewed above it — plus guided persona setup, first-pick activation, and curator self-management of their own picks/persona; spam-resistant, privacy-safe, no pay-to-play, admin oversight retained. Completes the curator story from Phase 12. PRDs 29–33 across five cycles — **all shipped (Jun 17, 2026)**. |
 | 14 | [Onboarding, Email Sign-in & Board Discoverability](prds/prd-34-onboarding-email-signin.md) | Shipped | Test-user-feedback fix: email magic-link accounts (persistent, no Spotify) as the primary sign-in, honest invite-only-beta gating of Spotify, anonymous tuning surfaced as the default, a legible curator empty state, and an editable date window. `$0` (Resend free tier), anonymous-first. Driven by [`onboarding-signin_desiredoutcomes.md`](onboarding-signin_desiredoutcomes.md). Shipped Jun 17, 2026. |
-| 15 | [Reliable Account Sign-In & Spotify Connection (Epic)](account-signin-linking-prd.md) | In progress (C1 foundation shipped Jun 17, 2026) | Make the two Phase 14 sign-in methods resolve to **one** identity: merge-safe account linking (magic-link ↔ Spotify, no duplicate `users` row, no lost data), a Spotify tester-slot access request while Spotify is in Development Mode, clear/recoverable auth & linking failures (no more "Beta testing"/redirect-loop/stale-session dead-ends), and a repeatable cross-browser test of the whole loop. `$0`, anonymous-first, no Spotify writes. Driven by [`account-signin-linking_desiredoutcomes.md`](account-signin-linking_desiredoutcomes.md). PRDs 35–38 across four cycles. |
+| 15 | [Reliable Account Sign-In & Spotify Connection (Epic)](account-signin-linking-prd.md) | In progress (C1 foundation + C2 shipped; C3–C4 documented) | Make the two Phase 14 sign-in methods resolve to **one** identity: merge-safe account linking (magic-link ↔ Spotify, no duplicate `users` row, no lost data), a Spotify tester-slot access request while Spotify is in Development Mode, clear/recoverable auth & linking failures (no more "Beta testing"/redirect-loop/stale-session dead-ends), and a repeatable cross-browser test of the whole loop. `$0`, anonymous-first, no Spotify writes. Driven by [`account-signin-linking_desiredoutcomes.md`](account-signin-linking_desiredoutcomes.md). PRDs 35–38 across four cycles. |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
@@ -464,7 +464,7 @@ clean; new code Snyk-clean; `$0`; anonymous board + ranking unchanged.
 > **Cross-machine note:** these commits live on local `main` and are **not pushed** until you push.
 > Run `git push` before driving `/orchestrator` from another machine, or it will read stale docs.
 
-### Phase 15: Reliable Account Sign-In & Spotify Connection (C1 foundation shipped Jun 17, 2026)
+### Phase 15: Reliable Account Sign-In & Spotify Connection (C1 foundation + C2 shipped; C3–C4 documented)
 
 The sequel to Phase 14. PRD 34 shipped two ways *in* (email magic link + Spotify) but left them as **two
 unlinked identities** with **dead-end failures**. Phase 15 makes the two methods resolve to **one** AVL Music
@@ -504,7 +504,21 @@ typecheck/lint/`test:registry`/`test:account-linking` green. **Staged for the C4
 (they mutate sign-in resolution and can't be validated without live OAuth): the `PostgresAdapter`
 `getUserByEmail` wrapper (`findUserIdByEmail` is ready to back it), the explicit linking callback applying
 `resolveAccountLink` (with the different-account collision routed to PRD 37 recovery), and the profile-menu
-"Connect Spotify / Add email" entry points. **C2–C4: documented, not yet built.**
+"Connect Spotify / Add email" entry points.
+
+**C2 shipped (Jun 18, 2026) — [PRD 36](prds/prd-36-spotify-tester-access-request.md) Spotify Tester-Slot
+Access Request:** the dev-mode dead-end is now a tracked request. An additive `spotify_access_requests` table
+(status `pending`/`slot_added`/`approved`/`rejected`, a partial unique enforcing **one open request per
+user**), a pure unit-tested core (`lib/spotify-access-requests-core.ts`: email validation + status
+lifecycle, `test:spotify-access`), a `server-only` service (`lib/spotify-access-requests.ts`), a self-scoped
+`GET/POST /api/me/spotify-access-request`, and an admin-cookie-gated `GET/PATCH /api/admin/spotify-access`
+with a review panel (`components/admin/SpotifyAccessSection.tsx` + `app/admin/spotify-access`) that lists the
+open queue with each listener's Spotify email and restates the manual ≤25 *User Management* / Extended-Quota
+step. The beta wall in `ListenerProfileButton` becomes "Request access" → "pending" → "added — retry now"
+(one-tap reconnect; the retry lands on the existing account via C1). Registered (`db-spotify-access-requests`,
+`api-me-spotify-access-request`, `api-admin-spotify-access`); map regenerated; Spotify email private to
+listener + admin; `$0`; Snyk-clean; typecheck/lint/`test:registry`/`test:spotify-access` green. **C3–C4:
+documented, not yet built.**
 
 ## Scaling Milestones & Tracking
 

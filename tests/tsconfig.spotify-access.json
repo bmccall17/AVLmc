@@ -1,0 +1,17 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "/tmp/avlmc-spotify-access-tests",
+    "rootDir": "..",
+    "target": "es2022"
+  },
+  "include": [
+    "../next-env.d.ts",
+    "spotify-access-requests.test.ts",
+    "../lib/spotify-access-requests-core.ts"
+  ]
+}
