@@ -27,7 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
         ? [
             Resend({
               apiKey: process.env.AUTH_RESEND_KEY,
-              from: process.env.AUTH_EMAIL_FROM,
+              from: resolveEmailFrom(process.env.AUTH_EMAIL_FROM),
             }),
           ]
         : []),
@@ -101,4 +101,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
 
 function splitScopes(scope: string | undefined) {
   return scope?.split(" ").filter(Boolean) ?? [];
+}
+
+/**
+ * Normalize the email-sender env (`AUTH_EMAIL_FROM`) for Resend. Resend requires
+ * `email@example.com` or `Name <email@example.com>` and rejects anything else (422). A very common
+ * deploy mistake is storing the value WITH surrounding quotes (e.g. `"AVLmc <a@b.com>"`) so the
+ * quotes become part of the address — strip a single wrapping pair + whitespace so that can't break
+ * sign-in. (Domain verification is separate — that surfaces as a 403, not a format error.)
+ */
+function resolveEmailFrom(raw: string | undefined): string | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  return trimmed.replace(/^["'](.*)["']$/, "$1").trim();
 }
