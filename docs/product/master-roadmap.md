@@ -464,7 +464,7 @@ clean; new code Snyk-clean; `$0`; anonymous board + ranking unchanged.
 > **Cross-machine note:** these commits live on local `main` and are **not pushed** until you push.
 > Run `git push` before driving `/orchestrator` from another machine, or it will read stale docs.
 
-### Phase 15: Reliable Account Sign-In & Spotify Connection (C1–C4 shipped; account loop wired & live in code — only the live cross-browser proof remains)
+### Phase 15: Reliable Account Sign-In & Spotify Connection (C1–C4 shipped & proven by executed tests — real-SQL loop + cross-browser recovery; only the live in-browser OAuth round-trip remains manual)
 
 The sequel to Phase 14. PRD 34 shipped two ways *in* (email magic link + Spotify) but left them as **two
 unlinked identities** with **dead-end failures**. Phase 15 makes the two methods resolve to **one** AVL Music
@@ -538,9 +538,16 @@ reconnection, returning-user + secondary-email resolve), the PRD 37 failure-stat
 reliability checklist `/ship` grades against. The no-reset guarantee is automated as a pure, unit-tested
 assertion (`lib/account-integrity.ts` / `test:account-integrity`, 7 cases): one `users` row, expected
 `accounts`/`user_emails`, one primary, globally-unique `lower(email)`, both emails present, no orphaned data.
-`$0` (local browsers, no paid cloud testing); Snyk-clean; typecheck/lint green. **Staged follow-up:** wiring
-the PRD 35 sign-in *resolution* (adapter `getUserByEmail` wrapper + linking callback) is a behavior change held
-out of the observe-only capstone (PRD 38 Non-Goal) — to be wired and validated live with the runbook.
+`$0` (local browsers, no paid cloud testing); Snyk-clean; typecheck/lint green.
+
+**Proven by executed tests (Jun 18, 2026):** the cross-browser recovery harness (`npm run test:e2e`,
+Chromium + Firefox, 16 assertions) and the real-SQL loop proof (`npm run test:account-loop` against a
+throwaway Neon DB — magic-link → link Spotify onto the same user → secondary email resolves to the one
+account → no-reset integrity → collision detected, 6 steps) both ran green, independently verified as
+1 user / 2 accounts / 2 emails / no duplicate; the throwaway DB was deleted. The PRD 35 `getUserByEmail`
+resolution is wired (`lib/auth-adapter.ts`) and signed-in OAuth linking is native Auth.js v5 behavior. The
+only remaining cell is the live in-browser OAuth round-trip (Spotify consent + WebKit/Safari + mobile/webview),
+which needs a human + live Spotify credentials — the documented manual pass.
 
 ## Scaling Milestones & Tracking
 

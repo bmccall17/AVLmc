@@ -2,9 +2,15 @@
 
 Updated: June 18, 2026
 
-**Status: Shipped & wired (June 18, 2026) — C1–C4 complete; the account loop is live in code (signed-in
-linking is native Auth.js v5 behavior + the `user_emails` resolution wrapper); only the live cross-browser
-*proof* (PRD 38 runbook, needs a human + Spotify credentials) remains.** Decomposed into four
+**Status: Shipped & proven (June 18, 2026) — C1–C4 complete and exercised by executed tests.** The full
+identity/linking loop is proven in **real SQL** (`npm run test:account-loop` against a throwaway Neon DB:
+magic-link → link Spotify onto the same user → secondary email resolves to the one account → no-reset
+integrity → not-signed-in collision detected, never forks), and the recovery surface is proven across
+**Chromium + Firefox** (`npm run test:e2e`). The only remaining cell is the live multi-engine OAuth
+*round-trip in a real browser* (Spotify consent + WebKit/Safari + mobile/webview), which needs a human +
+live Spotify credentials — the documented manual pass in
+[`account-signin-linking-reliability-checklist.md`](account-signin-linking-reliability-checklist.md).
+Decomposed into four
 dependency-sequenced cycle PRDs (35–38), one per desired outcome. C1 (PRD 35) shipped the safe, verifiable
 half of the linking spine (`user_emails` table + back-fill, the pure decision matrix + tests, the multi-email
 service, sign-in email recording, `GET /api/me/account-links`); the live-auth wiring (adapter `getUserByEmail`
