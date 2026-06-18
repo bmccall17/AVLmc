@@ -80,6 +80,8 @@ export function ListenerProfileButton({
     useState<ListenerCustomSignalDirection>("boost");
   const [saveState, setSaveState] = useState<ActionState>({ kind: "idle", message: "" });
   const [isSaving, setIsSaving] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailState, setEmailState] = useState<ActionState>({ kind: "idle", message: "" });
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const spotifyConnection = musicConnections.find((connection) => connection.provider === "spotify");
   const spotifyConnected = Boolean(spotifyConnection && !spotifyConnection.disconnectedAt);
@@ -87,12 +89,14 @@ export function ListenerProfileButton({
   const signalCount = musicProfileItems.length;
   const previewItems = musicProfileItems.slice(0, 6);
   const isSignedIn = Boolean(user?.id);
-  const profileLabel = isSignedIn ? "Signed in listener" : "Guest listener";
+  const profileLabel = isSignedIn ? "Signed in listener" : "Personalize your board";
   const profileDetail = isSignedIn
     ? signalCount > 0
       ? `${signalCount} taste signals`
       : "Manage discovery"
-    : "Tune locally or connect Spotify";
+    : features.email
+      ? "Sign in with email, or tune locally"
+      : "Tune your board locally";
   const sourceStatus = getSourceStatus({
     connected: spotifyConnected,
     connection: spotifyConnection,
@@ -257,6 +261,32 @@ export function ListenerProfileButton({
     setSaveState({ kind: "notice", message: "Defaults ready. Save to apply them." });
   }
 
+  async function sendEmailLink() {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      return;
+    }
+    setEmailState({ kind: "notice", message: "Sending your sign-in link…" });
+
+    try {
+      const result = (await signIn("resend", {
+        email: trimmed,
+        redirect: false,
+        callbackUrl: "/",
+      })) as { error?: string } | undefined;
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+      setEmailState({
+        kind: "success",
+        message: "Check your inbox for a one-tap sign-in link. It may take a minute.",
+      });
+    } catch {
+      setEmailState({ kind: "error", message: "Could not send the link. Try again in a moment." });
+    }
+  }
+
   function handleDialogKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key === "Escape") {
       setIsOpen(false);
@@ -359,19 +389,68 @@ export function ListenerProfileButton({
                   {spotifyLimitedBetaNotice ? (
                     <p className="form-message notice">{SPOTIFY_LIMITED_BETA_MESSAGE}</p>
                   ) : null}
+
+                  {!isSignedIn ? (
+                    <div className="listener-onboarding">
+                      <p className="listener-onboarding-copy">
+                        Your board personalizes from your taste — instantly here in this browser, and
+                        permanently when you sign in. No password, no Spotify required.
+                      </p>
+                      {features.email ? (
+                        <div className="listener-email-signin">
+                          <label htmlFor="listener-email">Sign in with email</label>
+                          <div className="listener-email-row">
+                            <input
+                              autoComplete="email"
+                              id="listener-email"
+                              inputMode="email"
+                              onChange={(event) => setEmail(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  void sendEmailLink();
+                                }
+                              }}
+                              placeholder="you@example.com"
+                              type="email"
+                              value={email}
+                            />
+                            <button
+                              className="primary-action"
+                              disabled={!email.trim() || emailState.kind === "notice"}
+                              onClick={() => void sendEmailLink()}
+                              type="button"
+                            >
+                              Email me a link
+                            </button>
+                          </div>
+                          <small>We&apos;ll email you a one-tap sign-in link. No password to remember.</small>
+                          {emailState.message ? (
+                            <p className={`form-message ${emailState.kind}`}>{emailState.message}</p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   {spotifyConnected ? (
                     <MusicConnectionActions tasteOptedOut={spotifyTastePaused} />
                   ) : features.spotify ? (
-                    <button
-                      className="primary-action"
-                      onClick={() => void signIn("spotify", { callbackUrl: "/" })}
-                      type="button"
-                    >
-                      Connect Spotify
-                    </button>
-                  ) : (
-                    <p className="empty-copy">Spotify sign-in is not configured.</p>
-                  )}
+                    <div className="listener-spotify-optional">
+                      <button
+                        className="ghost-control"
+                        onClick={() => void signIn("spotify", { callbackUrl: "/" })}
+                        type="button"
+                      >
+                        Connect Spotify (optional)
+                      </button>
+                      <small>
+                        Imports your top artists/tracks for sharper matches. Currently
+                        <strong> invite-only beta</strong> — taste import only works for approved accounts;
+                        everything else works without it.
+                      </small>
+                    </div>
+                  ) : null}
                   {isSignedIn ? (
                     <Link className="ghost-control saved-space-link" href="/saved">
                       <Bookmark aria-hidden="true" size={15} strokeWidth={2.4} />

@@ -1,5 +1,6 @@
 export type AuthFeatureFlags = {
   auth: boolean;
+  email: boolean;
   spotify: boolean;
   googleYouTube: boolean;
   appleMusic: boolean;
@@ -10,6 +11,12 @@ export function getAuthFeatureFlags(): AuthFeatureFlags {
 
   return {
     auth,
+    // Email magic-link sign-in (Auth.js Resend provider). Persistent account without Spotify.
+    // Stays off until a verified sender + API key are configured, so the UI hides it gracefully.
+    email:
+      auth &&
+      isEnabled(process.env.AUTH_EMAIL_ENABLED) &&
+      Boolean(process.env.AUTH_RESEND_KEY && process.env.AUTH_EMAIL_FROM),
     spotify:
       auth &&
       isEnabled(process.env.AUTH_SPOTIFY_ENABLED) &&

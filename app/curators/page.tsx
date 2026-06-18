@@ -31,7 +31,15 @@ export default async function CuratorsDirectoryPage() {
       </header>
 
       {curators.length === 0 ? (
-        <p className="empty-copy">No curators yet. Check back soon.</p>
+        <div className="curators-directory-empty">
+          <p>No curators yet — this is wide open.</p>
+          <p>
+            Be the first to curate Asheville shows. It&apos;s free, no pay-to-play, and takes a minute.
+          </p>
+          <Link className="primary-action" href="/curators/apply">
+            Become the first curator
+          </Link>
+        </div>
       ) : (
         <ul className="curators-directory-list">
           {curators.map((curator) => (

@@ -1,7 +1,7 @@
 export const SPOTIFY_LIMITED_BETA_CODE = "spotify_limited_beta_access";
 
 export const SPOTIFY_LIMITED_BETA_MESSAGE =
-  "Spotify personalization is currently in beta testing. Core AVL Music Companion features remain available.";
+  "Spotify import is invite-only while we're in Spotify's beta program, so taste sync isn't available for this account yet. Everything else works: sign in with your email and tune your board by hand — no Spotify required.";
 
 export class SpotifyLimitedBetaAccessError extends Error {
   code = SPOTIFY_LIMITED_BETA_CODE;

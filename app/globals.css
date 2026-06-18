@@ -1463,6 +1463,58 @@ body {
   justify-content: flex-start;
 }
 
+/* Onboarding + email sign-in (test-user friction fixes) */
+.listener-onboarding,
+.listener-spotify-optional {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.listener-onboarding-copy {
+  color: #d4d4d8 !important;
+  margin: 0;
+}
+
+.listener-email-signin {
+  display: grid;
+  gap: 6px;
+}
+
+.listener-email-signin label {
+  color: #fafafa;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.listener-email-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.listener-email-row input {
+  background: rgba(9, 9, 11, 0.6);
+  border: 1px solid rgba(82, 82, 91, 0.8);
+  border-radius: 8px;
+  color: #fafafa;
+  flex: 1 1 200px;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.listener-email-signin small,
+.listener-spotify-optional small {
+  color: #a1a1aa;
+  font-size: 0.74rem;
+}
+
+.listener-spotify-optional {
+  border-top: 1px solid rgba(63, 63, 70, 0.5);
+  margin-top: 6px;
+  padding-top: 10px;
+}
+
 .listener-component-list,
 .listener-custom-list {
   display: grid;
@@ -6246,6 +6298,34 @@ button.primary-action {
   color: #fcd34d;
   font-size: 0.74rem;
   font-weight: 700;
+}
+
+/* Legible empty state for the curator directory (was low-contrast muted text). */
+.curators-directory-empty {
+  background: rgba(24, 24, 27, 0.9);
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 22px 18px;
+}
+
+.curators-directory-empty p {
+  color: #e4e4e7;
+  margin: 0;
+}
+
+.curators-directory-empty p:first-child {
+  color: #fafafa;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.curators-directory-empty .primary-action {
+  justify-self: flex-start;
+  margin-top: 4px;
+  text-decoration: none;
 }
 
 /* Curator apply flow (PRD 30 / C2) */

@@ -152,6 +152,8 @@ export function EventBoard({
     getDefaultQuickFilters
   );
   const [sortMode, setSortMode] = useState<SortMode>(hasTasteProfile ? "best-match" : "best-bets");
+  // Editable date range within the rolling window. 0 = the full server window; >0 = next N days.
+  const [rangeDays, setRangeDays] = useState(0);
   const [eventCounts, setEventCounts] = useState(counts);
   const [eventScores, setEventScores] = useState(discoveryScores);
   const [listenerPreferences, setListenerPreferences] = useState(() =>
@@ -217,7 +219,10 @@ export function EventBoard({
     selectedVenues.length > 0 ||
     tag !== "all" ||
     activeQuickFilters.length > 0 ||
+    rangeDays !== 0 ||
     sortMode !== defaultSortMode;
+
+  const effectiveWindowLabel = rangeWindowLabel(rangeDays, windowLabel);
 
   useEffect(() => {
     if (!hasTasteProfile && sortMode === "best-match") {
@@ -378,10 +383,11 @@ export function EventBoard({
           matchesSearch(event, normalizedQuery) &&
           (selectedVenues.length === 0 || selectedVenues.includes(event.venueName)) &&
           (tag === "all" || event.tags.includes(tag)) &&
+          isWithinRange(event, rangeDays) &&
           activeQuickFilters.every((filter) => matchesQuickFilter(event, filter))
       )
       .sort((a, b) => compareEvents(a, b, eventCounts, eventScores, sortMode));
-  }, [activeQuickFilters, eventCounts, eventGenres, eventScores, query, selectedVenues, sortMode, tag, visibleEvents]);
+  }, [activeQuickFilters, eventCounts, eventGenres, eventScores, query, rangeDays, selectedVenues, sortMode, tag, visibleEvents]);
 
   function clearFilters() {
     setQuery("");
@@ -391,6 +397,7 @@ export function EventBoard({
     setTagQuery("");
     setQuickFiltersByCategory(getDefaultQuickFilters());
     setSortMode(defaultSortMode);
+    setRangeDays(0);
   }
 
   function toggleQuickFilter(category: QuickFilterCategory, filterId: QuickFilterId) {
@@ -643,7 +650,7 @@ export function EventBoard({
           <p className="eyebrow">For You</p>
           <h1>Find the Asheville show worth talking about.</h1>
           <p className="lede">
-            A rolling {windowLabel} live music board, ranked by your taste, local pulse, and curator signals.
+            A {rangeDays > 0 ? "" : "rolling "}{effectiveWindowLabel} live music board, ranked by your taste, local pulse, and curator signals.
           </p>
           <label className="sandbox-search">
             <Search aria-hidden="true" size={17} strokeWidth={2.4} />
@@ -681,6 +688,23 @@ export function EventBoard({
               Reset
             </button>
           ) : null}
+        </div>
+
+        <div className="filter-section">
+          <span className="filter-section-label">Dates</span>
+          <div className="filter-group" aria-label="Date range filters">
+            {DATE_RANGE_OPTIONS.map((option) => (
+              <button
+                aria-pressed={rangeDays === option.days}
+                className="filter-chip"
+                key={option.days}
+                onClick={() => setRangeDays(option.days)}
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {quickFilterGroups.slice(0, 2).map((group) => (
@@ -829,7 +853,7 @@ export function EventBoard({
       <section className="toolbar" aria-label="Event list summary">
         <div>
           <span className="toolbar-label">Window</span>
-          <strong>{windowLabel}</strong>
+          <strong>{effectiveWindowLabel}</strong>
         </div>
         <div>
           <span className="toolbar-label">Showing</span>
@@ -1525,6 +1549,38 @@ function getInitials(value: string) {
 
 function parseEventDate(event: EventRecord) {
   return new Date(event.startsAt ?? `${event.eventDate}T12:00:00`);
+}
+
+/** Selectable date ranges within the rolling window. 0 = the full server window (default). */
+const DATE_RANGE_OPTIONS: Array<{ days: number; label: string }> = [
+  { days: 0, label: "Full window" },
+  { days: 7, label: "Next 7 days" },
+  { days: 14, label: "Next 14 days" },
+];
+
+/** Is the event within `days` of today? `days === 0` means the full (server) window — always true. */
+function isWithinRange(event: EventRecord, days: number) {
+  if (days <= 0) {
+    return true;
+  }
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + days);
+  end.setHours(23, 59, 59, 999);
+  const date = parseEventDate(event);
+  return date >= start && date <= end;
+}
+
+/** Client-side label for the selected range; falls back to the server's full-window label. */
+function rangeWindowLabel(days: number, fullWindowLabel: string) {
+  if (days <= 0) {
+    return fullWindowLabel;
+  }
+  const start = new Date();
+  const end = new Date(start);
+  end.setDate(end.getDate() + days);
+  return `${formatMonthDay(start)} – ${formatMonthDay(end)}`;
 }
 
 function formatWeekday(date: Date) {

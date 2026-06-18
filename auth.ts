@@ -1,6 +1,7 @@
 import PostgresAdapter from "@auth/pg-adapter";
 import NextAuth from "next-auth";
 import Spotify from "next-auth/providers/spotify";
+import Resend from "next-auth/providers/resend";
 import { cookies } from "next/headers";
 import {
   ANONYMOUS_SESSION_COOKIE_NAME,
@@ -18,15 +19,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
 
   return {
     adapter: PostgresAdapter(getPool()),
-    providers: flags.spotify
-      ? [
-          Spotify({
-            clientId: process.env.AUTH_SPOTIFY_ID,
-            clientSecret: process.env.AUTH_SPOTIFY_SECRET,
-            authorization: `https://accounts.spotify.com/authorize?scope=${encodeURIComponent(SPOTIFY_SCOPES.join(" "))}`,
-          }),
-        ]
-      : [],
+    // Email magic-link is the primary, Spotify-independent sign-in (persistent account);
+    // Spotify is an optional, invite-only-beta taste-import enhancement on top. Each provider is
+    // only registered when its feature flag (creds present) is on.
+    providers: [
+      ...(flags.email
+        ? [
+            Resend({
+              apiKey: process.env.AUTH_RESEND_KEY,
+              from: process.env.AUTH_EMAIL_FROM,
+            }),
+          ]
+        : []),
+      ...(flags.spotify
+        ? [
+            Spotify({
+              clientId: process.env.AUTH_SPOTIFY_ID,
+              clientSecret: process.env.AUTH_SPOTIFY_SECRET,
+              authorization: `https://accounts.spotify.com/authorize?scope=${encodeURIComponent(SPOTIFY_SCOPES.join(" "))}`,
+            }),
+          ]
+        : []),
+    ],
     secret:
       process.env.AUTH_SECRET ??
       (process.env.NODE_ENV === "production" ? undefined : "local-auth-secret-change-me"),
@@ -52,15 +66,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
           return;
         }
 
-        await recordMusicConnection({
-          accessToken: account.access_token,
-          expiresAt: account.expires_at,
-          provider: account.provider,
-          refreshToken: account.refresh_token,
-          scopes: splitScopes(account.scope),
-          tokenType: account.token_type,
-          userId: String(user.id),
-        });
+        // Only music providers (Spotify) carry a taste-import token. Email magic-link sign-in has
+        // no music connection to record — recording one would create a bogus `accounts` row.
+        if (account.provider === "spotify") {
+          await recordMusicConnection({
+            accessToken: account.access_token,
+            expiresAt: account.expires_at,
+            provider: account.provider,
+            refreshToken: account.refresh_token,
+            scopes: splitScopes(account.scope),
+            tokenType: account.token_type,
+            userId: String(user.id),
+          });
+        }
 
         // Durable anonymous → account hand-off (PRD 20 / C3): migrate this browser's anonymous
         // session signals to the account so signing in is continuity, not a reset. Best-effort and
