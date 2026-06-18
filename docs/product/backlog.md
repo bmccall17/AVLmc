@@ -4,18 +4,22 @@ Updated: June 18, 2026
 
 ## Urgent
 
-* **Prod DB schema drift — apply `db/schema.sql` to the Neon `avlmc` project (`long-violet-36681196`).**
-  Discovered Jun 18, 2026 while debugging a curator-application 500. The production Neon DB (provisioned
-  in the Jun 16 Aiven→Neon migration) is **missing five tables** that later phases added: `curators`,
-  `curator_picks` (Phase 13), `listener_follows` (Phase 12), `user_emails` (Phase 15 C1),
-  `spotify_access_requests` (Phase 15 C2). Effects: curator application/become-a-curator 500s (INSERT hits
-  `42P01`), and the follow graph + Phase 15 multi-email linking + Spotify access requests are **inert on
-  prod** (their tables don't exist; reads degrade to empty, writes 500). Fix: run the current idempotent,
-  additive `db/schema.sql` (`create table if not exists` / `add column if not exists` throughout — creates
-  the missing tables, touches no existing data). Then re-confirm curator apply + Phase 15 features on prod.
-  **Root-cause follow-up:** make schema application part of the deploy/migration runbook so this can't drift
-  again. *(Defensive code option: have `applyForCurator` / `submitMySpotifyAccessRequest` tolerate `42P01`
-  with a clearer message — but provisioning is the real fix.)*
+* **Make `db/schema.sql` application part of the deploy/migration runbook (prevent schema drift).**
+  Root-cause follow-up to the Jun 18, 2026 incident below: prod schema drift had silently disabled whole
+  features. Add a deploy/CI step (or a documented manual step) that runs the idempotent `db/schema.sql`
+  against the prod Neon DB on every schema-touching release, so new `create table if not exists` /
+  `add column if not exists` statements always reach prod. *(Defensive code option, secondary: have
+  `applyForCurator` / `submitMySpotifyAccessRequest` tolerate `42P01` with a clearer message.)*
+
+  > **RESOLVED (Jun 18, 2026):** the immediate drift was fixed by applying `db/schema.sql` to the Neon
+  > `avlmc` project (`long-violet-36681196`). The prod DB (from the Jun 16 Aiven→Neon migration) had been
+  > **missing five tables** — `curators`, `curator_picks` (Phase 13), `listener_follows` (Phase 12),
+  > `user_emails` (Phase 15 C1), `spotify_access_requests` (Phase 15 C2) — which caused the
+  > "Curator application unavailable." 500 (INSERT → `42P01`) and left the follow graph + Phase 15
+  > multi-email linking + Spotify access requests inert. The idempotent/additive apply created all five
+  > (18 → 23 tables) with no data loss; the `user_emails` back-fill populated existing users' primary
+  > emails (2 users → 2 rows). Curator apply + Phase 15 features are now live on prod. This runbook item
+  > remains so it can't recur.
 
 * **Run the PRD 38 live cross-browser proof (Phase 15 — the only non-autonomous step).** The account loop
   is wired and live in code: signed-in OAuth linking is native Auth.js v5 behavior (verified in
