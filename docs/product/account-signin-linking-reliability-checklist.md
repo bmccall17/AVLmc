@@ -37,12 +37,15 @@ that don't need live OAuth (the data-integrity invariants — see `lib/account-i
 | Coverage | Engine(s) | How |
 | --- | --- | --- |
 | PRD 37 failure-recovery surface (every state → recoverable copy + action, no merge shortcut, unknown degrades) | **Chromium (Blink) + Firefox (Gecko)** | **Automated & executing** — `npm run test:e2e` (Playwright, `e2e/auth-recovery.spec.ts`) drives the real `app/auth/error` route per engine. 16 assertions green. |
-| No-reset data integrity (one user, expected accounts/emails, no orphaned data) | engine-independent | **Automated** — `npm run test:account-integrity` (`lib/account-integrity.ts`). |
+| **Full identity/linking loop in real SQL** (magic-link → link Spotify → secondary-email resolves to the one account → no-reset integrity → not-signed-in collision detected) | real Postgres | **Automated & executed** — `npm run test:account-loop` (`tests/account-loop.integration.mts`) drives the **real** adapter (`withMultiEmailResolution(PostgresAdapter)`) + services through the exact Auth.js sequence against a throwaway Neon DB. 6 steps green; verified 1 user / 2 accounts / 2 emails / 1 primary, no duplicate. Skips when `DATABASE_URL` is unset. |
+| No-reset data integrity (one user, expected accounts/emails, no orphaned data) | engine-independent | **Automated** — `npm run test:account-integrity` (`lib/account-integrity.ts`), and exercised live by `test:account-loop`. |
 | Failure taxonomy mapping (Auth.js params + our codes) | engine-independent | **Automated** — `npm run test:auth-failures`. |
 | Sign-in / linking / request / approval / reconnection legs (live OAuth + magic-link side effects) | all | **Manual** — needs live Spotify credentials + a real mail click; run the six-leg script below. |
 | WebKit/Safari + mobile + in-app-webview cells | WebKit / devices | **Manual** — WebKit's system libraries aren't installable in the CI sandbox; run on a real Mac/iOS device. |
 
 Run the automated layer with `npm run test:e2e && npm run test:account-integrity && npm run test:auth-failures`.
+For the real-SQL loop proof, provision a disposable Neon DB, then
+`DATABASE_URL=<throwaway> npm run test:account-loop` (delete the DB afterward).
 
 ## Repeatable loop script (run per matrix cell)
 

@@ -65,8 +65,16 @@ PRD 37 failure states to confirm each shows its recoverable guidance rather than
   drive the **real** `app/auth/error` route across **Chromium (Blink) + Firefox (Gecko)**, asserting every
   failure state renders its title + recoverable action (and no "merge anyway" shortcut, and that unknown
   errors degrade rather than dead-end) — **16 assertions green, actually run**, not just documented. WebKit
-  needs system libraries not installable in this sandbox, so it (plus mobile / in-app-webview and the live
-  OAuth + magic-link legs) stays the documented manual cell in the runbook.
+  needs system libraries not installable in this sandbox, so it (plus mobile / in-app-webview) stays a
+  documented manual cell in the runbook.
+- **Executed real-SQL loop proof** — `tests/account-loop.integration.mts` (`npm run test:account-loop`) drives
+  the **real** adapter (`withMultiEmailResolution(PostgresAdapter)`) + services through the exact Auth.js
+  sequence against a throwaway Neon database: magic-link create → link Spotify onto the **same** session user →
+  the Spotify-sourced secondary email resolves to that one account → `checkAccountIntegrity` passes → the
+  not-signed-in collision is detected (routes to recovery, never forks). **6 steps green**, independently
+  verified as 1 user / 2 accounts / 2 emails / 1 primary / no duplicate; the throwaway DB was deleted after.
+  Skips when `DATABASE_URL` is unset, so the normal suite stays DB-free. This proves the identity/linking
+  guarantee in real SQL — the live multi-engine OAuth round-trip itself remains the documented manual cell.
 - `$0` (free local browsers, no paid cross-browser cloud service); typecheck/lint/tests green.
 
 **Scoped out (PRD 38 Non-Goal — "does not alter the loop"):** wiring the staged PRD 35 sign-in *resolution*
