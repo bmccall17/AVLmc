@@ -70,14 +70,26 @@ compatibility); the real identity key is "which account owns this email," answer
 
 ## Implementation Status
 
-**Foundation + email resolution shipped (June 18, 2026); authenticated OAuth-link callback staged for
-live validation.**
+**Wired & live (June 18, 2026); awaiting only the live cross-browser proof (PRD 38 runbook).**
 
-The spine is built and green, and the **`getUserByEmail` multi-email resolution is now wired** — so a
-magic link to *any* recorded email lands on the one account. The remaining staged piece is the explicit
-authenticated OAuth-link-onto-current-session callback, held for live cross-browser validation (PRD 38's
-runbook) because it changes the live OAuth account-creation path; shipping it blind would risk the sign-in
-path stabilized in Phase 14.
+The merge-safe linking loop is now wired end-to-end in code. Confirmed against the installed
+`next-auth@5.0.0-beta.31` / `@auth/core` source (`lib/actions/callback/handle-login.js`):
+
+- **Signed-in OAuth linking is native Auth.js behavior.** When a listener is already signed in and
+  connects a second OAuth provider whose account isn't yet linked, the framework calls
+  `linkAccount({ ...account, userId: currentUser.id })` (handle-login.js:130–138) — it attaches the new
+  `accounts` row to the **current session user**, **without** `allowDangerousEmailAccountLinking`. So
+  "signed in via magic link → Connect Spotify" (and the reverse for a recorded email) lands on the one
+  account. No custom callback is required for this case.
+- **Our `getUserByEmail` wrapper** (`lib/auth-adapter.ts`) makes a magic link to *any* recorded email
+  resolve to the owning account, and turns the not-signed-in OAuth email collision into
+  `OAuthAccountNotLinked` → the PRD 37 `duplicate_account` recovery (handle-login.js:142–149) instead of a
+  silent fork.
+- **The `signIn` event** records each provider's returned email into `user_emails`, completing the
+  multi-email association.
+
+What remains is **not** code but **proof**: the live cross-browser/device execution of the PRD 38 runbook
+(real OAuth + live Spotify credentials), which can only be run by a human — see `backlog.md`.
 
 Shipped:
 - **`user_emails` table** (additive, `42P01`-tolerant) with a global `unique(lower(email))`, a
@@ -105,12 +117,15 @@ Shipped (June 18, 2026):
   collision now surfaces as `OAuthAccountNotLinked`, mapped to the PRD 37 `duplicate_account` recovery
   rather than a silent fork. Typecheck/lint/`test:registry` green; Snyk-clean.
 
-Staged (requires live cross-browser validation with the PRD 38 runbook — tracked in `backlog.md`):
-- The explicit authenticated OAuth-link callback applying `resolveAccountLink` (attach the second
-  provider's `accounts` row to the current session user; hand a different-account collision to PRD 37
-  recovery). Auth.js v5 may already link a second OAuth provider to a signed-in session — this must be
-  confirmed live before the callback is finalized.
-- Profile-menu "Connect Spotify" / "Add email access" entry points + the emails display.
+Remaining (live proof + polish — tracked in `backlog.md`):
+- The live cross-browser/device run of the PRD 38 runbook (real OAuth + Spotify credentials) to *prove*
+  the loop — the only non-autonomous step.
+- A small edge: "add email access" while signed in via Spotify using a **brand-new** email (not the
+  Spotify-recorded one) goes through the email-provider path, which does not auto-link to the session the
+  way OAuth does; the common case (a magic link to the already-recorded Spotify email) resolves correctly
+  via the wrapper. Optional explicit `linkAccount` for the new-email case if the runbook flags it.
+- Profile-menu "Add email access" entry point for Spotify-first users + the emails display ("Connect
+  Spotify" already exists; `GET /api/me/account-links` already returns the emails).
 
 ## Dependencies
 

@@ -464,7 +464,7 @@ clean; new code Snyk-clean; `$0`; anonymous board + ranking unchanged.
 > **Cross-machine note:** these commits live on local `main` and are **not pushed** until you push.
 > Run `git push` before driving `/orchestrator` from another machine, or it will read stale docs.
 
-### Phase 15: Reliable Account Sign-In & Spotify Connection (C1–C4 shipped + email resolution wired; authenticated OAuth-link staged for live validation)
+### Phase 15: Reliable Account Sign-In & Spotify Connection (C1–C4 shipped; account loop wired & live in code — only the live cross-browser proof remains)
 
 The sequel to Phase 14. PRD 34 shipped two ways *in* (email magic link + Spotify) but left them as **two
 unlinked identities** with **dead-end failures**. Phase 15 makes the two methods resolve to **one** AVL Music

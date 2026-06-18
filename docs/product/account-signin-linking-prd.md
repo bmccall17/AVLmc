@@ -2,8 +2,9 @@
 
 Updated: June 18, 2026
 
-**Status: Substantially shipped (June 18, 2026) — C1 foundation + C2 + C3 + C4 shipped; PRD 35 live-auth
-resolution staged as a follow-up.** Decomposed into four
+**Status: Shipped & wired (June 18, 2026) — C1–C4 complete; the account loop is live in code (signed-in
+linking is native Auth.js v5 behavior + the `user_emails` resolution wrapper); only the live cross-browser
+*proof* (PRD 38 runbook, needs a human + Spotify credentials) remains.** Decomposed into four
 dependency-sequenced cycle PRDs (35–38), one per desired outcome. C1 (PRD 35) shipped the safe, verifiable
 half of the linking spine (`user_emails` table + back-fill, the pure decision matrix + tests, the multi-email
 service, sign-in email recording, `GET /api/me/account-links`); the live-auth wiring (adapter `getUserByEmail`
@@ -23,12 +24,15 @@ PRD 35 sign-in *resolution* (adapter `getUserByEmail` wrapper + explicit linking
 tracked follow-up because it changes live auth behavior and must be validated with the C4 runbook under live
 OAuth (PRD 38 is observe-only by design).
 
-**Update (June 18, 2026):** the `getUserByEmail` multi-email *resolution* is now wired
-(`lib/auth-adapter.ts` `withMultiEmailResolution` → `auth.ts`) — additive and posture-safe (no
-`allowDangerousEmailAccountLinking`), so a magic link to any recorded email lands on the one account and a
-not-signed-in OAuth email collision surfaces as the PRD 37 `duplicate_account` recovery instead of forking.
-The only remaining piece is the explicit authenticated OAuth-link-onto-current-session callback, kept as the
-live-validated follow-up (see `backlog.md`).
+**Update (June 18, 2026) — the loop is wired and live in code; only the live *proof* remains.** Verified
+against the installed `next-auth@5.0.0-beta.31` source: signed-in OAuth account linking is **native** Auth.js
+behavior (`handle-login.js:130–138` calls `linkAccount` onto the current session user, no
+`allowDangerousEmailAccountLinking`), so "connect the other method to the same account" works without a custom
+callback. Our `getUserByEmail` wrapper (`lib/auth-adapter.ts` → `auth.ts`) makes any recorded email resolve to
+the one account and routes the not-signed-in email collision to the PRD 37 `duplicate_account` recovery instead
+of forking; the `signIn` event records each provider email into `user_emails`. The single non-autonomous
+remaining step is the **live cross-browser/device execution** of the PRD 38 runbook (real OAuth + live Spotify
+credentials), tracked in `backlog.md` — code cannot self-prove this.
 This is **Phase 15** in [`master-roadmap.md`](master-roadmap.md) and the direct sequel to
 **Phase 14** (Onboarding & Email Sign-in, [PRD 34](prds/prd-34-onboarding-email-signin.md)), which added the
 magic-link provider but explicitly deferred account *linking* and duplicate-identity handling.

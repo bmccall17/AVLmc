@@ -4,17 +4,18 @@ Updated: June 18, 2026
 
 ## Urgent
 
-* **Finalize & live-validate the PRD 35 authenticated OAuth-link (Phase 15 follow-up).** The merge-safe
-  spine and the **`getUserByEmail` multi-email resolution are now wired** (`lib/auth-adapter.ts` →
-  `auth.ts`), so a magic link to any recorded email lands on the one account. One piece remains: the
-  explicit authenticated OAuth-link-onto-current-session callback applying `resolveAccountLink` (attach the
-  second provider's `accounts` row to the current session user; route a different-account collision to the
-  PRD 37 `duplicate_account` recovery — `allowDangerousEmailAccountLinking` stays off). Auth.js v5 may
-  already link a second OAuth provider to a signed-in session; **confirm this live first**, then finalize
-  the callback only if needed, add the profile-menu "Connect Spotify / Add email" entry points, and validate
-  with [`account-signin-linking-reliability-checklist.md`](account-signin-linking-reliability-checklist.md)
-  under live OAuth across the supported matrix — running `checkAccountIntegrity` on the resulting rows. `$0`,
-  no Spotify writes, Snyk-clean.
+* **Run the PRD 38 live cross-browser proof (Phase 15 — the only non-autonomous step).** The account loop
+  is wired and live in code: signed-in OAuth linking is native Auth.js v5 behavior (verified in
+  `next-auth@5.0.0-beta.31` source), the `getUserByEmail` multi-email resolution is wired
+  (`lib/auth-adapter.ts` → `auth.ts`), and email collisions route to the PRD 37 recovery. What remains is
+  **proof**, which needs a human + live Spotify credentials: walk
+  [`account-signin-linking-reliability-checklist.md`](account-signin-linking-reliability-checklist.md)
+  across the supported browser/device matrix (all six legs), and run `checkAccountIntegrity`
+  (`lib/account-integrity.ts`) on the resulting rows after linking + reconnection. Two small follow-ups to
+  confirm or fix during the pass: (a) "add email access" while signed in via Spotify using a **brand-new**
+  email (the email-provider path doesn't auto-link to the session the way OAuth does — the recorded-Spotify-
+  email case already resolves via the wrapper); (b) a profile-menu "Add email access" entry point for
+  Spotify-first users. `$0`, no Spotify writes, Snyk-clean.
 
 * _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. Active focus is the Phase 15 follow-up above and the Personalized Discovery follow-ups tracked in [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
 

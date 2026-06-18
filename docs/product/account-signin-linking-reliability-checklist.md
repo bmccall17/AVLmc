@@ -12,12 +12,13 @@ are graded against during `/ship`.
 that don't need live OAuth (the data-integrity invariants — see `lib/account-integrity.ts` /
 `npm run test:account-integrity`).
 
-> **Note on the staged C1 live-auth wiring.** The PRD 35 sign-in *resolution* changes (the `PostgresAdapter`
-> `getUserByEmail` wrapper and the explicit linking callback) are a **behavior change** and are therefore
-> **out of scope for C4** (PRD 38 Non-Goal: "Changing any auth/linking behavior — this cycle observes and
-> asserts"). They remain a tracked follow-up to be wired *and* validated with live OAuth using this runbook —
-> see the epic's Open Decisions / `backlog.md`. Until then, this runbook exercises the behavior that ships
-> today (explicit provider sign-in + the additive multi-email recording) and the recovery surface.
+> **The account loop is wired and live in code; this runbook is the live *proof*.** Signed-in OAuth linking
+> is native Auth.js v5 behavior (verified in `next-auth@5.0.0-beta.31` `handle-login.js:130–138` — it calls
+> `linkAccount` onto the current session user, no `allowDangerousEmailAccountLinking`); the
+> `getUserByEmail` multi-email resolution is wired (`lib/auth-adapter.ts` → `auth.ts`); email collisions
+> route to the PRD 37 `duplicate_account` recovery. PRD 38 stays observe-only — it does not change behavior;
+> it *proves* the behavior that already ships. The one thing code can't self-prove is the live OAuth round-
+> trip across real browsers/devices, which is exactly this pass.
 
 ## Supported browser / device matrix
 
