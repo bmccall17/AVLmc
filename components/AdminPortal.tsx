@@ -85,12 +85,17 @@ export function AdminPortal({
             <small>AVL Music Companion</small>
           </div>
         </div>
-        <Link
-          className="admin-live-link"
-          href="/"
-        >
-          ← Back to live site
-        </Link>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Link className="admin-live-link" href="/admin/spotify-access">
+            Spotify tester access →
+          </Link>
+          <Link className="admin-live-link" href="/admin/curators">
+            Curators →
+          </Link>
+          <Link className="admin-live-link" href="/">
+            ← Back to live site
+          </Link>
+        </div>
       </header>
 
       <section className="admin-product-statement">
