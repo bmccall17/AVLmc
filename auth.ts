@@ -10,6 +10,7 @@ import {
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { getPool } from "@/lib/db";
 import { migrateSessionSignalsToUser } from "@/lib/discovery-memory";
+import { recordProviderEmail } from "@/lib/account-emails";
 import { recordMusicConnection } from "@/lib/music";
 
 const SPOTIFY_SCOPES = ["user-read-private", "user-read-email", "user-top-read"];
@@ -79,6 +80,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
             userId: String(user.id),
           });
         }
+
+        // Multi-email identity (PRD 35 / Phase 15): record the email this provider returned against
+        // the account so any of a listener's emails resolves to one identity. Best-effort + additive
+        // (it never changes sign-in resolution here) — a failure must never block sign-in.
+        await recordProviderEmail(String(user.id), account.provider, user.email);
 
         // Durable anonymous → account hand-off (PRD 20 / C3): migrate this browser's anonymous
         // session signals to the account so signing in is continuity, not a reset. Best-effort and

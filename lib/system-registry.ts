@@ -67,6 +67,7 @@ export type DerivedCountKey =
   | "event_person_event_state"
   | "users"
   | "accounts"
+  | "user_emails"
   | "music_connections"
   | "music_profile_items"
   | "listener_discovery_preferences"
@@ -464,6 +465,18 @@ const NODES: RegistryNode[] = [
     countKey: "accounts",
   },
   {
+    id: "db-user-emails",
+    kind: "datastore",
+    layer: "data",
+    label: "user_emails",
+    description:
+      "Multiple verified emails per account (PRD 35): the magic-link email plus the email each linked music platform returns. Global UNIQUE on lower(email) so any email resolves to one identity; users.email stays the primary/display value. Never exposed publicly.",
+    sourceOfTruth: "user_emails",
+    access: "internal",
+    ownership: "automated",
+    countKey: "user_emails",
+  },
+  {
     id: "db-music-connections",
     kind: "datastore",
     layer: "data",
@@ -711,6 +724,17 @@ const NODES: RegistryNode[] = [
     ownership: "automated",
   },
   {
+    id: "api-me-account-links",
+    kind: "surface",
+    layer: "identity",
+    label: "Account Links API",
+    description:
+      "Signed-in-only, self-scoped (PRD 35): returns the caller's linked sign-in providers (tokens stripped) and the emails associated with their one account. Backs the profile UI's \"sign in with magic link AND Spotify, one account\" view. Resolves the id from the session, never the body; 401 when anonymous.",
+    sourceOfTruth: "app/api/me/account-links/route.ts",
+    access: "public",
+    ownership: "automated",
+  },
+  {
     id: "api-me-curator-application",
     kind: "surface",
     layer: "identity",
@@ -928,6 +952,9 @@ const EDGES: RegistryEdge[] = [
   { from: "api-auth", to: "int-authjs", kind: "dependsOn" },
   { from: "int-authjs", to: "db-users", kind: "flowsTo", label: "user records" },
   { from: "int-authjs", to: "db-accounts", kind: "flowsTo", label: "oauth links" },
+  { from: "int-authjs", to: "db-user-emails", kind: "flowsTo", label: "records provider email" },
+  { from: "db-user-emails", to: "db-users", kind: "dependsOn", label: "emails per account (cascade)" },
+  { from: "api-me-account-links", to: "db-user-emails", kind: "dependsOn", label: "linked providers + emails" },
   { from: "ui-listener-profile", to: "api-me", kind: "flowsTo", label: "reads/writes" },
   { from: "api-me", to: "svc-music", kind: "dependsOn", label: "sync taste" },
   { from: "api-me", to: "svc-listener-prefs", kind: "dependsOn", label: "save settings" },

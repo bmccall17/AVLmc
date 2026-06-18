@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "/tmp/avlmc-account-linking-tests",
+    "rootDir": "..",
+    "target": "es2022"
+  },
+  "include": ["../next-env.d.ts", "account-linking.test.ts", "../lib/account-linking.ts"]
+}

@@ -81,6 +81,51 @@ create table if not exists public.verification_token (
 create unique index if not exists verification_token_identifier_token_idx
   on public.verification_token (identifier, token);
 
+-- ---- Account identity: multiple verified emails per account (PRD 35 / Phase 15) -------------
+-- One human = one users row, but an account can own several emails: the magic-link email plus the
+-- email each linked music platform (Spotify, …) returns. ANY recorded, verified email resolves to
+-- the same users.id, so connecting a second sign-in method never forks into a duplicate account.
+-- users.email stays as the primary/display value (Auth.js compatibility); user_emails is the real
+-- identity key ("which account owns this email"). Additive + 42P01-tolerant.
+create table if not exists public.user_emails (
+  id serial primary key,
+  user_id integer not null references public.users(id) on delete cascade,
+  email text not null,
+  -- provider-generic; only magic_link + spotify are wired in Phase 15 (others reserved for backlog).
+  source text not null default 'magic_link'
+    check (source in ('magic_link', 'spotify', 'google_youtube', 'apple_music')),
+  verified boolean not null default false,
+  is_primary boolean not null default false,
+  added_at timestamptz not null default now()
+);
+
+-- Global: any email is owned by at most one account (case-insensitive) — prevents cross-account forks.
+create unique index if not exists user_emails_email_lower_idx on public.user_emails (lower(email));
+-- At most one primary email per account.
+create unique index if not exists user_emails_one_primary_idx
+  on public.user_emails (user_id) where is_primary;
+create index if not exists user_emails_user_id_idx on public.user_emails (user_id);
+
+-- Back-fill existing users' primary email as the first user_emails row. Idempotent (NOT EXISTS guard).
+-- An already-authenticated email is verified; source is spotify when the user has a Spotify account,
+-- else magic_link.
+insert into public.user_emails (user_id, email, source, verified, is_primary)
+select
+  u.id,
+  u.email,
+  case
+    when exists (select 1 from public.accounts a where a."userId" = u.id and a.provider = 'spotify')
+      then 'spotify'
+    else 'magic_link'
+  end,
+  true,
+  true
+from public.users u
+where u.email is not null
+  and not exists (
+    select 1 from public.user_emails ue where lower(ue.email) = lower(u.email)
+  );
+
 -- ---- Optional music identity / taste (Spotify) ---------------------------------
 create table if not exists public.music_connections (
   id text primary key,

@@ -385,6 +385,7 @@ Auth.js user records for signed-in listeners.
 - **Live count:** `users` (resolved in portal/API)
 - **Fed by / required by:**
   - ← Auth.js (flowsTo) — user records
+  - ← user_emails (dependsOn) — emails per account (cascade)
   - ← saved_items (dependsOn) — owned by user (cascade)
   - ← listener_follows (dependsOn) — follower/followee (cascade)
   - ← curators (dependsOn) — persona over a user (cascade)
@@ -400,6 +401,21 @@ Auth.js OAuth account links (provider tokens live here; never exposed to the adm
 - **Live count:** `accounts` (resolved in portal/API)
 - **Fed by / required by:**
   - ← Auth.js (flowsTo) — oauth links
+
+#### user_emails  `db-user-emails`
+
+Multiple verified emails per account (PRD 35): the magic-link email plus the email each linked music platform returns. Global UNIQUE on lower(email) so any email resolves to one identity; users.email stays the primary/display value. Never exposed publicly.
+
+- **Kind:** Data store
+- **Source of truth:** `user_emails`
+- **Access:** internal
+- **Ownership:** automated
+- **Live count:** `user_emails` (resolved in portal/API)
+- **Flows to / depends on:**
+  - → users (dependsOn) — emails per account (cascade)
+- **Fed by / required by:**
+  - ← Auth.js (flowsTo) — records provider email
+  - ← Account Links API (dependsOn) — linked providers + emails
 
 #### music_connections  `db-music-connections`
 
@@ -671,6 +687,7 @@ Optional OAuth sign-in (Spotify provider) backed by the Postgres adapter.
 - **Flows to / depends on:**
   - → users (flowsTo) — user records
   - → accounts (flowsTo) — oauth links
+  - → user_emails (flowsTo) — records provider email
 - **Fed by / required by:**
   - ← Auth API (dependsOn)
 
@@ -761,6 +778,17 @@ Signed-in-only, idempotent, best-effort endpoint to share a show/song-list with 
 - **Ownership:** automated
 - **Flows to / depends on:**
   - → Social Activity (Inner-Circle) (dependsOn) — share with circle
+
+#### Account Links API  `api-me-account-links`
+
+Signed-in-only, self-scoped (PRD 35): returns the caller's linked sign-in providers (tokens stripped) and the emails associated with their one account. Backs the profile UI's "sign in with magic link AND Spotify, one account" view. Resolves the id from the session, never the body; 401 when anonymous.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/me/account-links/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → user_emails (dependsOn) — linked providers + emails
 
 #### Curator Application API  `api-me-curator-application`
 
@@ -970,6 +998,9 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | Auth API | → | Auth.js | dependsOn |  |
 | Auth.js | → | users | flowsTo | user records |
 | Auth.js | → | accounts | flowsTo | oauth links |
+| Auth.js | → | user_emails | flowsTo | records provider email |
+| user_emails | → | users | dependsOn | emails per account (cascade) |
+| Account Links API | → | user_emails | dependsOn | linked providers + emails |
 | Listener Profile | → | Listener (me) API | flowsTo | reads/writes |
 | Listener (me) API | → | Music Taste Sync | dependsOn | sync taste |
 | Listener (me) API | → | Listener Preferences | dependsOn | save settings |
@@ -1019,4 +1050,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_63 nodes, 86 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_65 nodes, 89 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
