@@ -70,12 +70,14 @@ compatibility); the real identity key is "which account owns this email," answer
 
 ## Implementation Status
 
-**Foundation shipped (June 17, 2026); live-auth wiring staged for the C4 cross-browser pass.**
+**Foundation + email resolution shipped (June 18, 2026); authenticated OAuth-link callback staged for
+live validation.**
 
-The safe, independently-verifiable spine is built and green; the two pieces that mutate sign-in
-*resolution* are deliberately staged because they can only be validated with live OAuth/magic-link
-across browsers (which is exactly PRD 38 / C4's job) — shipping them blind would risk the sign-in
-path just stabilized in Phase 14.
+The spine is built and green, and the **`getUserByEmail` multi-email resolution is now wired** — so a
+magic link to *any* recorded email lands on the one account. The remaining staged piece is the explicit
+authenticated OAuth-link-onto-current-session callback, held for live cross-browser validation (PRD 38's
+runbook) because it changes the live OAuth account-creation path; shipping it blind would risk the sign-in
+path stabilized in Phase 14.
 
 Shipped:
 - **`user_emails` table** (additive, `42P01`-tolerant) with a global `unique(lower(email))`, a
@@ -94,12 +96,20 @@ Shipped:
 - **`GET /api/me/account-links`** (`requireUserId()`-gated, self-scoped) returning the caller's
   linked providers + emails; registered as `api-me-account-links`.
 
-Staged (next, requires live cross-browser testing — tracked into C4):
-- The `PostgresAdapter` `getUserByEmail` wrapper that resolves an incoming email through
-  `user_emails` (so any recorded email lands on the one account). `findUserIdByEmail` is ready to
-  back it.
-- The explicit linking callback applying `resolveAccountLink` (attach to current session user;
-  hand a different-account collision to PRD 37 recovery rather than failing to `/auth/error`).
+Shipped (June 18, 2026):
+- **`PostgresAdapter` `getUserByEmail` wrapper** (`lib/auth-adapter.ts`: `withMultiEmailResolution`,
+  applied in `auth.ts`): an incoming email is resolved through `user_emails` when the adapter's own
+  lookup misses, so a magic link to a secondary/platform-sourced email lands on the existing account
+  instead of forking a duplicate user. Purely additive (only resolves *more* cases, never changes an
+  existing hit); does **not** enable `allowDangerousEmailAccountLinking` — a not-signed-in OAuth email
+  collision now surfaces as `OAuthAccountNotLinked`, mapped to the PRD 37 `duplicate_account` recovery
+  rather than a silent fork. Typecheck/lint/`test:registry` green; Snyk-clean.
+
+Staged (requires live cross-browser validation with the PRD 38 runbook — tracked in `backlog.md`):
+- The explicit authenticated OAuth-link callback applying `resolveAccountLink` (attach the second
+  provider's `accounts` row to the current session user; hand a different-account collision to PRD 37
+  recovery). Auth.js v5 may already link a second OAuth provider to a signed-in session — this must be
+  confirmed live before the callback is finalized.
 - Profile-menu "Connect Spotify" / "Add email access" entry points + the emails display.
 
 ## Dependencies

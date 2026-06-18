@@ -22,6 +22,13 @@ automated no-reset data-integrity assertions (`lib/account-integrity.ts`). The o
 PRD 35 sign-in *resolution* (adapter `getUserByEmail` wrapper + explicit linking callback) — is held as a
 tracked follow-up because it changes live auth behavior and must be validated with the C4 runbook under live
 OAuth (PRD 38 is observe-only by design).
+
+**Update (June 18, 2026):** the `getUserByEmail` multi-email *resolution* is now wired
+(`lib/auth-adapter.ts` `withMultiEmailResolution` → `auth.ts`) — additive and posture-safe (no
+`allowDangerousEmailAccountLinking`), so a magic link to any recorded email lands on the one account and a
+not-signed-in OAuth email collision surfaces as the PRD 37 `duplicate_account` recovery instead of forking.
+The only remaining piece is the explicit authenticated OAuth-link-onto-current-session callback, kept as the
+live-validated follow-up (see `backlog.md`).
 This is **Phase 15** in [`master-roadmap.md`](master-roadmap.md) and the direct sequel to
 **Phase 14** (Onboarding & Email Sign-in, [PRD 34](prds/prd-34-onboarding-email-signin.md)), which added the
 magic-link provider but explicitly deferred account *linking* and duplicate-identity handling.

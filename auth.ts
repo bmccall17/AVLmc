@@ -11,6 +11,7 @@ import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { getPool } from "@/lib/db";
 import { migrateSessionSignalsToUser } from "@/lib/discovery-memory";
 import { recordProviderEmail } from "@/lib/account-emails";
+import { withMultiEmailResolution } from "@/lib/auth-adapter";
 import { recordMusicConnection } from "@/lib/music";
 
 const SPOTIFY_SCOPES = ["user-read-private", "user-read-email", "user-top-read"];
@@ -19,7 +20,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
   const flags = getAuthFeatureFlags();
 
   return {
-    adapter: PostgresAdapter(getPool()),
+    // Multi-email identity (PRD 35): resolve incoming emails through `user_emails`, so signing in
+    // with ANY recorded email lands on the one account instead of forking a duplicate user.
+    adapter: withMultiEmailResolution(PostgresAdapter(getPool())),
     // Email magic-link is the primary, Spotify-independent sign-in (persistent account);
     // Spotify is an optional, invite-only-beta taste-import enhancement on top. Each provider is
     // only registered when its feature flag (creds present) is on.
