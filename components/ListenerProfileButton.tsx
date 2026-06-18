@@ -280,7 +280,8 @@ export function ListenerProfileButton({
       }
       setEmailState({
         kind: "success",
-        message: "Check your inbox for a one-tap sign-in link. It may take a minute.",
+        message:
+          "Check your inbox for a one-tap sign-in link from avlmc@agent828.com — it may take a minute, and check your spam folder if you don't see it.",
       });
     } catch {
       setEmailState({ kind: "error", message: "Could not send the link. Try again in a moment." });
