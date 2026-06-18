@@ -325,6 +325,20 @@ Community songs, notes, and voice memos attached to events; carries moderation s
   - ← Community Service (flowsTo) — songs/notes/voices
   - ← Admin Data Loader (dependsOn) — reads counts
 
+#### feedback  `db-feedback`
+
+Listener feedback (notes from the 404 detour + general). Anonymous-friendly capture: message, optional email, the path they came from, and the submitter's user id when signed in. Private to the admin; never surfaced publicly.
+
+- **Kind:** Data store
+- **Source of truth:** `feedback`
+- **Access:** internal
+- **Ownership:** automated
+- **Live count:** `feedback` (resolved in portal/API)
+- **Flows to / depends on:**
+  - → users (dependsOn) — optional submitter (set null)
+- **Fed by / required by:**
+  - ← Feedback API (flowsTo) — stores listener feedback
+
 #### reactions  `db-reactions`
 
 Lightweight per-session reactions (fire) on events.
@@ -389,6 +403,7 @@ Auth.js user records for signed-in listeners.
   - ← spotify_access_requests (dependsOn) — request per user (cascade)
   - ← saved_items (dependsOn) — owned by user (cascade)
   - ← listener_follows (dependsOn) — follower/followee (cascade)
+  - ← feedback (dependsOn) — optional submitter (set null)
   - ← curators (dependsOn) — persona over a user (cascade)
 
 #### accounts  `db-accounts`
@@ -670,6 +685,17 @@ Write endpoints for contributions, reactions, and ticket intents.
   - → Community Service (dependsOn)
 - **Fed by / required by:**
   - ← Community Panel (flowsTo) — writes
+
+#### Feedback API  `api-feedback`
+
+Public (anonymous-friendly) feedback write, used by the 404 detour and general feedback. Stores a short note + optional email + originating path; attaches the user id from the session when signed in, never from the body. Resilient — degrades gracefully if the table isn't provisioned. Feedback is private to the admin.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/feedback/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Flows to / depends on:**
+  - → feedback (flowsTo) — stores listener feedback
 
 #### Discovery Action API  `api-discovery`
 
@@ -1067,6 +1093,8 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | Curator Application API | → | Curators | dependsOn | apply + my status (self-serve) |
 | Curator Self-Management API | → | Curators | dependsOn | self-manage persona + picks |
 | Admin Curators API | → | Curators | dependsOn | promote/hide + picks + review queue |
+| Feedback API | → | feedback | flowsTo | stores listener feedback |
+| feedback | → | users | dependsOn | optional submitter (set null) |
 | Curators | → | curators | flowsTo | persona persistence |
 | Curators | → | curator_picks | flowsTo | per-show picks |
 | curators | → | users | dependsOn | persona over a user (cascade) |
@@ -1091,4 +1119,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_68 nodes, 92 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_70 nodes, 94 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

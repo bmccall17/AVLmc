@@ -515,3 +515,17 @@ create table if not exists public.admin_resources (
 
 create index if not exists admin_resources_type_status_idx
   on public.admin_resources (type, status);
+
+-- ---- Listener feedback (404 detour + general) ----------------------------------
+-- Lightweight, anonymous-friendly feedback capture (e.g. the 404 "we missed the connection"
+-- detour). Public write; private to the admin. Additive + 42P01-tolerant; the submit service
+-- degrades gracefully if this table isn't present yet, so the form never errors the listener.
+create table if not exists public.feedback (
+  id serial primary key,
+  message text not null,
+  email text,
+  path text,
+  user_id integer references public.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists feedback_created_at_idx on public.feedback (created_at desc);

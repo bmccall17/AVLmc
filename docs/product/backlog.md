@@ -81,6 +81,13 @@ Updated: June 18, 2026
   vs. signed-in only) and whether to notify the admin in-panel only or also via Resend. Private to
   submitter + admin; `$0`; Snyk-clean. *(Reported Jun 18, 2026.)*
 
+* **Admin viewer for listener feedback.** The 404 detour (`app/not-found.tsx`) + `POST /api/feedback`
+  now persist feedback to the `feedback` table (additive; `db-feedback` node), but there's **no admin
+  surface to read it yet**. Add a simple admin-cookie-gated read (`app/api/admin/feedback` + a
+  `components/admin/*Section.tsx` panel, or a column in an existing tab) listing recent notes (message,
+  optional email, path, when). Reuses the admin-review pattern. *(Shipped Jun 18, 2026: the 404 detour +
+  capture; the viewer is the fast-follow.)*
+
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
 ## Done

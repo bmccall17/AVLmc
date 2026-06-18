@@ -19,6 +19,7 @@
     "test:spotify-access": "rm -rf /tmp/avlmc-spotify-access-tests && tsc -p tests/tsconfig.spotify-access.json && node --test /tmp/avlmc-spotify-access-tests/tests/spotify-access-requests.test.js",
     "test:auth-failures": "rm -rf /tmp/avlmc-auth-failures-tests && tsc -p tests/tsconfig.auth-failures.json && node --test /tmp/avlmc-auth-failures-tests/tests/auth-failures.test.js",
     "test:auth-email": "rm -rf /tmp/avlmc-auth-email-tests && tsc -p tests/tsconfig.auth-email.json && node --test /tmp/avlmc-auth-email-tests/tests/auth-email.test.js",
+    "test:feedback": "rm -rf /tmp/avlmc-feedback-tests && tsc -p tests/tsconfig.feedback.json && node --test /tmp/avlmc-feedback-tests/tests/feedback.test.js",
     "test:account-integrity": "rm -rf /tmp/avlmc-account-integrity-tests && tsc -p tests/tsconfig.account-integrity.json && node --test /tmp/avlmc-account-integrity-tests/tests/account-integrity.test.js",
     "test:e2e": "playwright test",
     "test:account-loop": "TSX_TSCONFIG_PATH=tests/tsconfig.account-loop.json node --import tsx --test tests/account-loop.integration.mts",

@@ -6850,3 +6850,103 @@ button.primary-action {
 .auth-recovery-error {
   border-left: 4px solid #dc2626;
 }
+
+/* 404 detour (app/not-found.tsx) — the detour is here to serve you. */
+.not-found-shell {
+  max-width: 720px;
+}
+.not-found-title {
+  font-size: clamp(2rem, 6vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 8px 0 14px;
+}
+.not-found-lede {
+  color: var(--muted, #a1a1aa);
+  font-size: 1.05rem;
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+.not-found-shows,
+.not-found-insight,
+.not-found-feedback {
+  border: 1px solid var(--border, #27272a);
+  border-radius: 16px;
+  padding: 20px 22px;
+  background: var(--surface, rgba(24, 24, 27, 0.4));
+  margin-bottom: 18px;
+}
+.not-found-shows h2,
+.not-found-insight h2,
+.not-found-feedback h2 {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted, #a1a1aa);
+  margin: 0 0 12px;
+}
+.not-found-shows ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.not-found-shows li a {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border, #27272a);
+  background: rgba(10, 10, 10, 0.35);
+  text-decoration: none;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+.not-found-shows li a:hover {
+  border-color: #f97316;
+  transform: translateY(-1px);
+}
+.not-found-shows li a strong {
+  color: #fafafa;
+}
+.not-found-shows li a small {
+  color: var(--muted, #a1a1aa);
+  font-size: 0.8rem;
+}
+.not-found-insight p {
+  color: var(--muted, #a1a1aa);
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+.not-found-feedback p {
+  color: var(--muted, #a1a1aa);
+  margin: 0 0 12px;
+}
+.not-found-feedback textarea,
+.not-found-feedback input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(10, 10, 10, 0.5);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 10px;
+  color: #fafafa;
+  padding: 10px 12px;
+  font: inherit;
+  margin-bottom: 10px;
+}
+.not-found-feedback textarea:focus,
+.not-found-feedback input:focus {
+  outline: none;
+  border-color: #f97316;
+}
+.not-found-feedback-actions,
+.not-found-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.not-found-actions {
+  margin-top: 22px;
+}

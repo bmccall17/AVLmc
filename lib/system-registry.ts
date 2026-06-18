@@ -79,7 +79,8 @@ export type DerivedCountKey =
   | "event_shared_songs"
   | "listener_follows"
   | "curators"
-  | "curator_picks";
+  | "curator_picks"
+  | "feedback";
 
 export type RegistryNode = {
   /** Stable identifier; referenced by edges and by later cycles. Never reuse or repurpose. */
@@ -400,6 +401,18 @@ const NODES: RegistryNode[] = [
     countKey: "contributions",
   },
   {
+    id: "db-feedback",
+    kind: "datastore",
+    layer: "data",
+    label: "feedback",
+    description:
+      "Listener feedback (notes from the 404 detour + general). Anonymous-friendly capture: message, optional email, the path they came from, and the submitter's user id when signed in. Private to the admin; never surfaced publicly.",
+    sourceOfTruth: "feedback",
+    access: "internal",
+    ownership: "automated",
+    countKey: "feedback",
+  },
+  {
     id: "db-reactions",
     kind: "datastore",
     layer: "data",
@@ -639,6 +652,17 @@ const NODES: RegistryNode[] = [
     label: "Community API",
     description: "Write endpoints for contributions, reactions, and ticket intents.",
     sourceOfTruth: "app/api/community/contributions/route.ts",
+    access: "public",
+    ownership: "automated",
+  },
+  {
+    id: "api-feedback",
+    kind: "surface",
+    layer: "community",
+    label: "Feedback API",
+    description:
+      "Public (anonymous-friendly) feedback write, used by the 404 detour and general feedback. Stores a short note + optional email + originating path; attaches the user id from the session when signed in, never from the body. Resilient — degrades gracefully if the table isn't provisioned. Feedback is private to the admin.",
+    sourceOfTruth: "app/api/feedback/route.ts",
     access: "public",
     ownership: "automated",
   },
@@ -1019,6 +1043,8 @@ const EDGES: RegistryEdge[] = [
   { from: "api-me-curator-application", to: "svc-curators", kind: "dependsOn", label: "apply + my status (self-serve)" },
   { from: "api-me-curator", to: "svc-curators", kind: "dependsOn", label: "self-manage persona + picks" },
   { from: "api-admin-curators", to: "svc-curators", kind: "dependsOn", label: "promote/hide + picks + review queue" },
+  { from: "api-feedback", to: "db-feedback", kind: "flowsTo", label: "stores listener feedback" },
+  { from: "db-feedback", to: "db-users", kind: "dependsOn", label: "optional submitter (set null)" },
   { from: "svc-curators", to: "db-curators", kind: "flowsTo", label: "persona persistence" },
   { from: "svc-curators", to: "db-curator-picks", kind: "flowsTo", label: "per-show picks" },
   { from: "db-curators", to: "db-users", kind: "dependsOn", label: "persona over a user (cascade)" },
