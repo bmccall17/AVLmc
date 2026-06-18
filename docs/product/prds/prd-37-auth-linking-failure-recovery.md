@@ -47,14 +47,32 @@ session, or open in a supported browser.
 
 ## Implementation Status
 
-**Documented (June 17, 2026).** Not yet built.
+**Shipped (June 18, 2026).** Delivered:
 
-Planned deliverables:
-- `lib/auth-failures.ts` — a pure, unit-tested code → `{ title, message, action }` taxonomy.
-- A real `app/auth/error` recovery page rendering the matching entry (replacing the blind redirect).
-- Beta / connect / link surfaces in `components/ListenerProfileButton.tsx` pulling from the same table.
-- Stale-session clear-and-retry action; browser-fallback detection + guidance.
-- System Registry registration as needed; `test:registry` green.
+- **Typed failure taxonomy** (`lib/auth-failures.ts`, pure): the single source of truth mapping each
+  `AuthFailureCode` (`spotify_limited_beta`, `access_denied`, `duplicate_account`, `redirect_loop`,
+  `stale_session`, `browser_fallback`, + an honest `unknown` default) → `{ severity, title, message,
+  action, secondaryAction? }`, each with exactly one primary recoverable action. `resolveAuthFailure`
+  maps both Auth.js `?error=` params (`AccessDenied`, `OAuthAccountNotLinked`, `SessionRequired`,
+  OAuth callback errors → the dev-mode beta path) and our own codes, case-insensitive, degrading to
+  `unknown` instead of a dead-end. Severities split *limitation* (beta — requestable) vs. *error*
+  (cancelled/expired — retryable) vs. *conflict* (duplicate — sign-in-then-link). The canonical
+  Spotify copy is reused from `lib/spotify-limited-access.ts` so the beta surface can't drift.
+  Unit-tested (`npm run test:auth-failures`, 6 cases incl. the no-"merge anyway" guard).
+- **Real recovery page** — `app/auth/error/page.tsx` now reads `?error=`/`?code=` and renders
+  `components/AuthRecovery.tsx` (the matching taxonomy entry + action buttons), replacing the old
+  blind redirect to `/?spotify=<code>`. Client actions: retry Spotify (`signIn`), clear a stale
+  session (`signOut`), or navigate (request access / use email / sign-in-then-link / open browser).
+  Severity-tinted styling in `app/globals.css`.
+- **No takeover shortcut** — the `duplicate_account` entry's only action is *sign into that account,
+  then connect* (the PRD 35 link path); there is no "merge anyway" anywhere (asserted in the test).
+- `spotify_limited_beta` resolves to **Request access** (the PRD 36 flow); the profile beta surface
+  and the recovery page share the one canonical message. No registry change needed (pure helper +
+  a page; only API routes/datastores are registry nodes). `$0`; Snyk-clean (0 issues);
+  typecheck/lint/`test:registry`/`test:auth-failures` green.
+
+Browser-fallback *detection* (which signal trips `browser_fallback`) and the end-to-end assertion
+that each state renders its recoverable copy are exercised in the C4 cross-browser pass.
 
 ## Dependencies
 

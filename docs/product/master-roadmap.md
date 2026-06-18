@@ -464,7 +464,7 @@ clean; new code Snyk-clean; `$0`; anonymous board + ranking unchanged.
 > **Cross-machine note:** these commits live on local `main` and are **not pushed** until you push.
 > Run `git push` before driving `/orchestrator` from another machine, or it will read stale docs.
 
-### Phase 15: Reliable Account Sign-In & Spotify Connection (C1 foundation + C2 shipped; C3–C4 documented)
+### Phase 15: Reliable Account Sign-In & Spotify Connection (C1 foundation + C2 + C3 shipped; C4 documented)
 
 The sequel to Phase 14. PRD 34 shipped two ways *in* (email magic link + Spotify) but left them as **two
 unlinked identities** with **dead-end failures**. Phase 15 makes the two methods resolve to **one** AVL Music
@@ -517,8 +517,18 @@ open queue with each listener's Spotify email and restates the manual ≤25 *Use
 step. The beta wall in `ListenerProfileButton` becomes "Request access" → "pending" → "added — retry now"
 (one-tap reconnect; the retry lands on the existing account via C1). Registered (`db-spotify-access-requests`,
 `api-me-spotify-access-request`, `api-admin-spotify-access`); map regenerated; Spotify email private to
-listener + admin; `$0`; Snyk-clean; typecheck/lint/`test:registry`/`test:spotify-access` green. **C3–C4:
-documented, not yet built.**
+listener + admin; `$0`; Snyk-clean; typecheck/lint/`test:registry`/`test:spotify-access` green.
+
+**C3 shipped (Jun 18, 2026) — [PRD 37](prds/prd-37-auth-linking-failure-recovery.md) Auth & Linking Failure
+Recovery:** every auth/linking dead-end now resolves to accurate copy + one recoverable action. A pure,
+unit-tested taxonomy (`lib/auth-failures.ts`: `spotify_limited_beta`/`access_denied`/`duplicate_account`/
+`redirect_loop`/`stale_session`/`browser_fallback` + an honest `unknown`, with `resolveAuthFailure` mapping
+both Auth.js `?error=` params and our own codes), a real `app/auth/error` recovery page
+(`components/AuthRecovery.tsx`) replacing the blind redirect to `/?spotify=<code>`, and severity-tinted
+styling. The duplicate-account path routes only to authenticated linking (no "merge anyway"); the beta state
+points at the C2 Request-access flow; the canonical Spotify copy is shared so the error page, beta surface,
+and profile can't drift. `test:auth-failures` (6 cases); `$0`; Snyk-clean; typecheck/lint/`test:registry`
+green. **C4: documented, not yet built.**
 
 ## Scaling Milestones & Tracking
 
