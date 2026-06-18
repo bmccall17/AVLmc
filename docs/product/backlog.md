@@ -4,6 +4,19 @@ Updated: June 18, 2026
 
 ## Urgent
 
+* **Prod DB schema drift — apply `db/schema.sql` to the Neon `avlmc` project (`long-violet-36681196`).**
+  Discovered Jun 18, 2026 while debugging a curator-application 500. The production Neon DB (provisioned
+  in the Jun 16 Aiven→Neon migration) is **missing five tables** that later phases added: `curators`,
+  `curator_picks` (Phase 13), `listener_follows` (Phase 12), `user_emails` (Phase 15 C1),
+  `spotify_access_requests` (Phase 15 C2). Effects: curator application/become-a-curator 500s (INSERT hits
+  `42P01`), and the follow graph + Phase 15 multi-email linking + Spotify access requests are **inert on
+  prod** (their tables don't exist; reads degrade to empty, writes 500). Fix: run the current idempotent,
+  additive `db/schema.sql` (`create table if not exists` / `add column if not exists` throughout — creates
+  the missing tables, touches no existing data). Then re-confirm curator apply + Phase 15 features on prod.
+  **Root-cause follow-up:** make schema application part of the deploy/migration runbook so this can't drift
+  again. *(Defensive code option: have `applyForCurator` / `submitMySpotifyAccessRequest` tolerate `42P01`
+  with a clearer message — but provisioning is the real fix.)*
+
 * **Run the PRD 38 live cross-browser proof (Phase 15 — the only non-autonomous step).** The account loop
   is wired and live in code: signed-in OAuth linking is native Auth.js v5 behavior (verified in
   `next-auth@5.0.0-beta.31` source), the `getUserByEmail` multi-email resolution is wired
@@ -37,6 +50,32 @@ Updated: June 18, 2026
 * **YouTube (Google) sign-in & account-linking provider** — Parked for a future sprint, after Phase 15 (Spotify) account linking ships. Phase 15's [`account-signin-linking-prd.md`](account-signin-linking-prd.md) builds the linking + multi-email model **generically**: the `googleYouTube` flag already exists (`lib/auth-flags.ts`, off) and `user_emails.source = 'google_youtube'` is a reserved value. Remaining work: register a Google/YouTube provider in `auth.ts`, wire its read-only scopes + a `music_connections` provider, surface "Connect YouTube / add this email" through the PRD 35 `me/account-links` surface, and add it to the PRD 38 cross-browser test. No new `users` row — the returned email associates to the existing account like Spotify's. `$0`, no writes, Snyk-clean.
 
 * **Apple Music sign-in & account-linking provider** — Parked for a future sprint, after Phase 15 (Spotify) account linking ships. Same shape as the YouTube stem: the `appleMusic` flag exists (`lib/auth-flags.ts`, off) and `user_emails.source = 'apple_music'` is reserved. Remaining work: register an Apple provider in `auth.ts` (Sign in with Apple / MusicKit), wire read-only access + a `music_connections` provider, expose linking through the PRD 35 `me/account-links` surface, and extend the PRD 38 test. Associates the Apple-returned email to the existing account; no duplicate identity. `$0`, no writes, Snyk-clean. *(Flag any Apple Developer Program cost before starting — must stay within `$0` or be explicitly approved.)*
+
+* **Transactional / magic-link email design pass (align to the Design Spec).** The Auth.js Resend
+  magic-link email (from `avlmc@agent828.com`) currently uses the default unstyled template. Customize it
+  via a `sendVerificationRequest` on the `Resend` provider in `auth.ts` to match
+  [`docs/design/AVLmc-Design-Spec.md`](../design/AVLmc-Design-Spec.md): dark `#0A0A0A` background, zinc
+  surfaces, crisp white primary text, uppercase-tracked metadata, a single high-contrast CTA button, AVLmc
+  mark. Keep it deliverability-safe (inline styles, dark-mode-friendly, plain-text fallback). `$0` (Resend
+  free tier). *(Reported Jun 18, 2026 — the email "works" but is visually off-brand.)*
+
+* **Design-spec alignment pass for the new Phase 15 / account surfaces.** Audit the surfaces added across
+  Phase 15 + the onboarding/sign-in work against [`docs/design/AVLmc-Design-Spec.md`](../design/AVLmc-Design-Spec.md)
+  (dark monochrome, zinc surfaces/borders, glassmorphism, uppercase-tracked metadata, orange/rose accents
+  reserved for interaction): the `app/auth/error` recovery page + `components/AuthRecovery.tsx`, the
+  `components/SpotifyAccessRequest.tsx` + admin `SpotifyAccessSection`, and the listener-profile email
+  sign-in / Spotify-access additions in `components/ListenerProfileButton.tsx`. Bring the ad-hoc `.form-message`
+  / `.listener-spotify-optional` styling and the recovery page's inline border colors into line with the spec.
+  `$0`, no behavior change. *(Reported Jun 18, 2026.)*
+
+* **"Recommend a curator" — replace the `mailto:` with a minimal in-app form.** Today the recommend-a-curator
+  action opens a manual email (`mailto:`), which is high-friction. Replace it with a short form (minimal
+  required fields — e.g. who they're recommending + an optional why/link) that submits without the user
+  composing an email. Reuse the Phase 13 request-queue pattern: a `requireUserId()`-gated (or anonymous-OK?)
+  `app/api/me/*` submit feeding an admin review surface (`app/api/admin/*` + a `*Section.tsx` panel), like
+  the curator-application and Spotify-access queues. Decide auth requirement (allow anonymous recommendations
+  vs. signed-in only) and whether to notify the admin in-panel only or also via Resend. Private to
+  submitter + admin; `$0`; Snyk-clean. *(Reported Jun 18, 2026.)*
 
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 

@@ -95,19 +95,18 @@ export function ListenerProfileButton({
   const previewItems = musicProfileItems.slice(0, 6);
   const isSignedIn = Boolean(user?.id);
   const accountEmails = accountLinks?.emails ?? [];
-  const hasEmailSignIn = (accountLinks?.providers ?? []).some(
-    (provider) => provider.type === "email" || provider.provider === "resend"
-  );
   const accountEmail =
     accountEmails.find((entry) => entry.isPrimary)?.email ??
     accountEmails[0]?.email ??
     user?.email ??
     "";
-  // Offer an email sign-in method to a signed-in listener who has none yet (e.g. Spotify-first). The
-  // target is an email already verified on their account, so the magic link resolves back to it — no
-  // new linking, no takeover surface (PRD 35 posture).
-  const showAddEmailAccess =
-    isSignedIn && accountLinks !== null && !hasEmailSignIn && Boolean(accountEmail);
+  // Any verified email on the account is a working magic-link sign-in identifier (the Email provider
+  // does not create an `accounts` row, so email sign-in can't be read from `accounts` — it's the
+  // presence of a verified email that matters). PRD 35 posture: resolves to the same account, no
+  // takeover surface. We surface this as an affirmative "enabled" state, not a perpetual connect CTA.
+  const emailSignInEnabled =
+    isSignedIn && (accountEmails.some((entry) => entry.verified) || Boolean(accountEmail));
+  const secondaryEmails = accountEmails.filter((entry) => entry.email !== accountEmail);
   const profileLabel = isSignedIn ? "Signed in listener" : "Personalize your board";
   const profileDetail = isSignedIn
     ? signalCount > 0
@@ -502,29 +501,27 @@ export function ListenerProfileButton({
                       </small>
                     </div>
                   ) : null}
-                  {isSignedIn && accountEmails.length > 0 ? (
-                    <p className="empty-copy">
-                      Account email{accountEmails.length > 1 ? "s" : ""}:{" "}
-                      {accountEmails
-                        .map((entry) => `${entry.email}${entry.isPrimary ? " (primary)" : ""}`)
-                        .join(", ")}
-                    </p>
-                  ) : null}
-
-                  {showAddEmailAccess ? (
+                  {emailSignInEnabled && accountEmail ? (
                     <div className="listener-spotify-optional">
+                      <p className="form-message success">
+                        <strong>Email sign-in is on.</strong> A one-tap magic link to{" "}
+                        <strong>{accountEmail}</strong> always signs you back into this same account — no
+                        password, no Spotify required.
+                      </p>
+                      {secondaryEmails.length > 0 ? (
+                        <small>
+                          Also linked: {secondaryEmails.map((entry) => entry.email).join(", ")}.
+                        </small>
+                      ) : null}
                       <button
                         className="ghost-control"
                         disabled={emailState.kind === "notice"}
                         onClick={() => void sendEmailLink(accountEmail)}
                         type="button"
                       >
-                        Email me a sign-in link
+                        Send me a fresh sign-in link
                       </button>
-                      <small>
-                        Adds a no-password email way back into <strong>this same account</strong> — we&apos;ll
-                        send a one-tap link to {accountEmail}. Handy if your Spotify access ever lapses.
-                      </small>
+                      <small>Useful to sign in on another device.</small>
                       {emailState.message ? (
                         <p className={`form-message ${emailState.kind}`}>{emailState.message}</p>
                       ) : null}
