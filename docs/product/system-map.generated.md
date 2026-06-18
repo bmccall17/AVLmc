@@ -692,7 +692,7 @@ _Optional sign-in & personalization._
 
 #### Auth.js  `int-authjs`
 
-Optional OAuth sign-in (Spotify provider) backed by the Postgres adapter.
+Optional sign-in backed by the Postgres adapter: email magic link (Resend, branded dark-mode email — lib/auth-email.ts) plus optional Spotify OAuth.
 
 - **Kind:** Integration
 - **Source of truth:** `auth.ts`

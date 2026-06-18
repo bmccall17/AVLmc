@@ -12,6 +12,7 @@ import { getPool } from "@/lib/db";
 import { migrateSessionSignalsToUser } from "@/lib/discovery-memory";
 import { recordProviderEmail } from "@/lib/account-emails";
 import { withMultiEmailResolution } from "@/lib/auth-adapter";
+import { sendMagicLinkEmail } from "@/lib/auth-email";
 import { recordMusicConnection } from "@/lib/music";
 
 const SPOTIFY_SCOPES = ["user-read-private", "user-read-email", "user-top-read"];
@@ -32,6 +33,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
             Resend({
               apiKey: process.env.AUTH_RESEND_KEY,
               from: resolveEmailFrom(process.env.AUTH_EMAIL_FROM),
+              // Replace Auth.js's stock light-mode email with the branded dark-mode
+              // sign-in email (see lib/auth-email.ts + docs/design/AVLmc-Design-Spec.md).
+              async sendVerificationRequest({ identifier, url, provider }) {
+                await sendMagicLinkEmail({
+                  to: identifier,
+                  url,
+                  apiKey: String(provider.apiKey),
+                  from: String(provider.from),
+                });
+              },
             }),
           ]
         : []),

@@ -659,7 +659,8 @@ const NODES: RegistryNode[] = [
     kind: "integration",
     layer: "identity",
     label: "Auth.js",
-    description: "Optional OAuth sign-in (Spotify provider) backed by the Postgres adapter.",
+    description:
+      "Optional sign-in backed by the Postgres adapter: email magic link (Resend, branded dark-mode email — lib/auth-email.ts) plus optional Spotify OAuth.",
     sourceOfTruth: "auth.ts",
     access: "internal",
     ownership: "automated",

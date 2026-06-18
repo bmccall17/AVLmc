@@ -40,10 +40,11 @@ that don't need live OAuth (the data-integrity invariants — see `lib/account-i
 | **Full identity/linking loop in real SQL** (magic-link → link Spotify → secondary-email resolves to the one account → no-reset integrity → not-signed-in collision detected) | real Postgres | **Automated & executed** — `npm run test:account-loop` (`tests/account-loop.integration.mts`) drives the **real** adapter (`withMultiEmailResolution(PostgresAdapter)`) + services through the exact Auth.js sequence against a throwaway Neon DB. 6 steps green; verified 1 user / 2 accounts / 2 emails / 1 primary, no duplicate. Skips when `DATABASE_URL` is unset. |
 | No-reset data integrity (one user, expected accounts/emails, no orphaned data) | engine-independent | **Automated** — `npm run test:account-integrity` (`lib/account-integrity.ts`), and exercised live by `test:account-loop`. |
 | Failure taxonomy mapping (Auth.js params + our codes) | engine-independent | **Automated** — `npm run test:auth-failures`. |
+| **Magic-link email rendering** (branded dark-mode body: true-black bg, white-on-black sign-in button, uppercase-tracked metadata, sign-in URL present + HTML-escaped) | engine-independent | **Automated** — `npm run test:auth-email` (`lib/auth-email.ts` `renderMagicLinkEmail`, 4 assertions). The *rendered look* in real mail clients is the manual leg-1 check below. |
 | Sign-in / linking / request / approval / reconnection legs (live OAuth + magic-link side effects) | all | **Manual** — needs live Spotify credentials + a real mail click; run the six-leg script below. |
 | WebKit/Safari + mobile + in-app-webview cells | WebKit / devices | **Manual** — WebKit's system libraries aren't installable in the CI sandbox; run on a real Mac/iOS device. |
 
-Run the automated layer with `npm run test:e2e && npm run test:account-integrity && npm run test:auth-failures`.
+Run the automated layer with `npm run test:e2e && npm run test:account-integrity && npm run test:auth-failures && npm run test:auth-email`.
 For the real-SQL loop proof, provision a disposable Neon DB, then
 `DATABASE_URL=<throwaway> npm run test:account-loop` (delete the DB afterward).
 
@@ -53,7 +54,10 @@ Run each leg signed out to start. Record pass/fail per browser. Where a DB check
 run them through the data-integrity assertions below.
 
 1. **Sign-in (magic link).** Enter email → receive the link → click it → land signed in. *Assert:* a `users`
-   row + an `email`/`resend` `accounts` row + a primary `user_emails` row.
+   row + an `email`/`resend` `accounts` row + a primary `user_emails` row. *Also assert* the delivered email
+   is the **branded dark-mode** body (true-black background, white-on-black "Sign in to AVL Music Companion"
+   button, uppercase-tracked footer), not the Auth.js stock template — and the button + fallback link both
+   open the sign-in URL. (`lib/auth-email.ts`; rendering is unit-tested by `npm run test:auth-email`.)
 2. **Sign-in (Spotify).** From a fresh browser, Connect Spotify. *Assert:* either an account is created (if
    allowlisted) or the PRD 37 `spotify_limited_beta` recovery shows **Request access** (not a dead-end).
 3. **Linking — email → Spotify.** Signed in via magic link, Connect Spotify. *Assert:* one `users` row, two
@@ -106,5 +110,6 @@ PRDs 35–37 (and any future provider sprint) are graded against this:
 - [ ] Non-allowlisted tester can request access, be slot-added, and retry onto the existing account (leg 5).
 - [ ] Every named failure state renders recoverable copy + one action across the matrix (failure-state table).
 - [ ] Returning users resume to the same identity with no loop / stale-session dead-end (leg 6).
+- [ ] The magic-link email renders in the branded dark-mode design with a working sign-in button (leg 1 + `test:auth-email`).
 - [ ] `$0`; no Spotify writes; anonymous board payload + ranking unchanged; new code Snyk-clean;
       typecheck/lint/tests green.
