@@ -2,7 +2,8 @@
 
 Updated: June 18, 2026
 
-**Status: In progress (June 18, 2026) — C1 foundation + C2 + C3 shipped, C4 documented.** Decomposed into four
+**Status: Substantially shipped (June 18, 2026) — C1 foundation + C2 + C3 + C4 shipped; PRD 35 live-auth
+resolution staged as a follow-up.** Decomposed into four
 dependency-sequenced cycle PRDs (35–38), one per desired outcome. C1 (PRD 35) shipped the safe, verifiable
 half of the linking spine (`user_emails` table + back-fill, the pure decision matrix + tests, the multi-email
 service, sign-in email recording, `GET /api/me/account-links`); the live-auth wiring (adapter `getUserByEmail`
@@ -14,7 +15,13 @@ queue that prompts the manual ≤25-slot add — the successful retry lands on t
 shipped the recovery layer: a pure, unit-tested failure taxonomy (`lib/auth-failures.ts`) and a real
 `app/auth/error` recovery page replacing the blind redirect, so every state (beta, access-denied,
 duplicate-account, redirect-loop, stale-session, browser-fallback) shows accurate copy + one recoverable
-action — the duplicate case routes only to authenticated linking, never a silent merge.
+action — the duplicate case routes only to authenticated linking, never a silent merge. C4 (PRD 38) shipped
+the verification capstone: the repeatable cross-browser runbook + reliability checklist
+([`account-signin-linking-reliability-checklist.md`](account-signin-linking-reliability-checklist.md)) and the
+automated no-reset data-integrity assertions (`lib/account-integrity.ts`). The one remaining piece — wiring the
+PRD 35 sign-in *resolution* (adapter `getUserByEmail` wrapper + explicit linking callback) — is held as a
+tracked follow-up because it changes live auth behavior and must be validated with the C4 runbook under live
+OAuth (PRD 38 is observe-only by design).
 This is **Phase 15** in [`master-roadmap.md`](master-roadmap.md) and the direct sequel to
 **Phase 14** (Onboarding & Email Sign-in, [PRD 34](prds/prd-34-onboarding-email-signin.md)), which added the
 magic-link provider but explicitly deferred account *linking* and duplicate-identity handling.

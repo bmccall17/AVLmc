@@ -464,7 +464,7 @@ clean; new code Snyk-clean; `$0`; anonymous board + ranking unchanged.
 > **Cross-machine note:** these commits live on local `main` and are **not pushed** until you push.
 > Run `git push` before driving `/orchestrator` from another machine, or it will read stale docs.
 
-### Phase 15: Reliable Account Sign-In & Spotify Connection (C1 foundation + C2 + C3 shipped; C4 documented)
+### Phase 15: Reliable Account Sign-In & Spotify Connection (C1 foundation + C2 + C3 + C4 shipped; live-auth resolution staged)
 
 The sequel to Phase 14. PRD 34 shipped two ways *in* (email magic link + Spotify) but left them as **two
 unlinked identities** with **dead-end failures**. Phase 15 makes the two methods resolve to **one** AVL Music
@@ -528,7 +528,19 @@ both Auth.js `?error=` params and our own codes), a real `app/auth/error` recove
 styling. The duplicate-account path routes only to authenticated linking (no "merge anyway"); the beta state
 points at the C2 Request-access flow; the canonical Spotify copy is shared so the error page, beta surface,
 and profile can't drift. `test:auth-failures` (6 cases); `$0`; Snyk-clean; typecheck/lint/`test:registry`
-green. **C4: documented, not yet built.**
+green.
+
+**C4 shipped (Jun 18, 2026) — [PRD 38](prds/prd-38-cross-browser-reliability-benchmark.md) Cross-Browser
+Reliability & Benchmark (capstone):** the loop is now provable, not assumed. A documented, repeatable runbook
+([`account-signin-linking-reliability-checklist.md`](account-signin-linking-reliability-checklist.md)) defines
+the supported browser/device matrix, a six-leg script (sign-in, linking both directions, request, approval,
+reconnection, returning-user + secondary-email resolve), the PRD 37 failure-state coverage table, and the
+reliability checklist `/ship` grades against. The no-reset guarantee is automated as a pure, unit-tested
+assertion (`lib/account-integrity.ts` / `test:account-integrity`, 7 cases): one `users` row, expected
+`accounts`/`user_emails`, one primary, globally-unique `lower(email)`, both emails present, no orphaned data.
+`$0` (local browsers, no paid cloud testing); Snyk-clean; typecheck/lint green. **Staged follow-up:** wiring
+the PRD 35 sign-in *resolution* (adapter `getUserByEmail` wrapper + linking callback) is a behavior change held
+out of the observe-only capstone (PRD 38 Non-Goal) — to be wired and validated live with the runbook.
 
 ## Scaling Milestones & Tracking
 

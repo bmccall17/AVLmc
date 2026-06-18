@@ -1,0 +1,17 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "/tmp/avlmc-account-integrity-tests",
+    "rootDir": "..",
+    "target": "es2022"
+  },
+  "include": [
+    "../next-env.d.ts",
+    "account-integrity.test.ts",
+    "../lib/account-integrity.ts"
+  ]
+}

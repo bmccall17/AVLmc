@@ -46,15 +46,30 @@ PRD 37 failure states to confirm each shows its recoverable guidance rather than
 
 ## Implementation Status
 
-**Documented (June 17, 2026).** Not yet built.
+**Shipped (June 18, 2026).** Delivered:
 
-Planned deliverables:
-- A supported browser/device matrix table.
-- A documented, repeatable loop script (manual steps + an automated harness where practical) covering all six
-  legs.
-- Data-integrity assertions for the no-reset guarantee.
-- Failure-state coverage for the PRD 37 taxonomy.
-- The Phase 15 reliability checklist, referenced from the epic.
+- **The runbook** — [`account-signin-linking-reliability-checklist.md`](../account-signin-linking-reliability-checklist.md):
+  the supported browser/device matrix (Chromium/Firefox/WebKit desktop + mobile, plus the embedded-webview /
+  cookies-blocked `browser_fallback` cases), a step-by-step repeatable script for all six legs (sign-in,
+  linking both directions, access request, approval, reconnection, returning-user session incl. the
+  secondary-email resolve), the PRD 37 failure-state coverage table, and the Phase 15 reliability checklist
+  `/ship` grades against (referenced from the epic).
+- **Automated no-reset data-integrity assertions** (the "harness where practical") — `lib/account-integrity.ts`
+  (pure): `checkAccountIntegrity(snapshot, expectation)` returns the list of violations, enforcing exactly one
+  `users` row, all `accounts`/`user_emails` on that id, one primary email, globally-unique `lower(email)`,
+  both the magic-link and Spotify-sourced emails present, and **no orphaned/re-keyed** `user_id`-keyed data.
+  Unit-tested (`npm run test:account-integrity`, 7 cases). The cross-browser pass snapshots rows after linking
+  + reconnection and runs them through this — the no-reset guarantee checked, not assumed.
+- **Failure-state coverage** — each PRD 37 state's mapping is asserted by `npm run test:auth-failures`; the
+  manual pass confirms each renders per browser.
+- `$0` (no paid cross-browser cloud service — local browsers + this runbook); Snyk-clean; typecheck/lint/tests
+  green.
+
+**Scoped out (PRD 38 Non-Goal — "does not alter the loop"):** wiring the staged PRD 35 sign-in *resolution*
+(the `PostgresAdapter` `getUserByEmail` wrapper + the explicit linking callback) is a behavior change, so it is
+a tracked follow-up to be wired **and** validated live with this runbook — not part of this observe-only
+capstone. The live manual cross-browser execution itself is the documented pass operators run; this cycle
+ships the repeatable instrument and the automatable assertions.
 
 ## Dependencies
 

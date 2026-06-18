@@ -1,10 +1,21 @@
 # AVL Music Companion Backlog
 
-Updated: June 17, 2026
+Updated: June 18, 2026
 
 ## Urgent
 
-* _None open._ The analytics/WAU‑MAU dependency below is resolved. Active focus has moved to the Personalized Discovery follow-ups tracked in [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
+* **Wire & validate the PRD 35 sign-in *resolution* (Phase 15 follow-up).** The merge-safe linking spine
+  (PRD 35) shipped its safe half; the two pieces that change live sign-in *resolution* are staged: the
+  `PostgresAdapter` `getUserByEmail` wrapper that resolves an incoming email through `user_emails`
+  (`findUserIdByEmail` is ready to back it) and the explicit `auth.ts` linking callback applying
+  `resolveAccountLink` (attach to the current session user; route a different-account collision to the PRD 37
+  `duplicate_account` recovery instead of failing to `/auth/error`), plus the profile-menu "Connect Spotify /
+  Add email" entry points. These mutate the live auth path, so they were deliberately held until C4's runbook
+  existed — wire them, then validate with [`account-signin-linking-reliability-checklist.md`](account-signin-linking-reliability-checklist.md)
+  under live OAuth across the supported matrix and run `checkAccountIntegrity` on the resulting rows. `$0`,
+  no Spotify writes, Snyk-clean.
+
+* _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. Active focus is the Phase 15 follow-up above and the Personalized Discovery follow-ups tracked in [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
 
 ## Scheduled
 

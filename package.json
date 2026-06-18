@@ -18,6 +18,7 @@
     "test:account-linking": "rm -rf /tmp/avlmc-account-linking-tests && tsc -p tests/tsconfig.account-linking.json && node --test /tmp/avlmc-account-linking-tests/tests/account-linking.test.js",
     "test:spotify-access": "rm -rf /tmp/avlmc-spotify-access-tests && tsc -p tests/tsconfig.spotify-access.json && node --test /tmp/avlmc-spotify-access-tests/tests/spotify-access-requests.test.js",
     "test:auth-failures": "rm -rf /tmp/avlmc-auth-failures-tests && tsc -p tests/tsconfig.auth-failures.json && node --test /tmp/avlmc-auth-failures-tests/tests/auth-failures.test.js",
+    "test:account-integrity": "rm -rf /tmp/avlmc-account-integrity-tests && tsc -p tests/tsconfig.account-integrity.json && node --test /tmp/avlmc-account-integrity-tests/tests/account-integrity.test.js",
     "test:social-guardrails": "rm -rf /tmp/avlmc-social-guardrails-tests && tsc -p tests/tsconfig.social-guardrails.json && node --test /tmp/avlmc-social-guardrails-tests/tests/social-guardrails.test.js",
     "test:personalization-benchmark": "rm -rf /tmp/avlmc-personalization-benchmark-tests && tsc -p tests/tsconfig.personalization-benchmark.json && node --test /tmp/avlmc-personalization-benchmark-tests/tests/personalization-benchmark.test.js",
     "test:registry": "node --import tsx --test tests/system-registry.test.ts",
