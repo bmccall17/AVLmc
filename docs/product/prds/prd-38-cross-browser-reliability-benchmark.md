@@ -60,10 +60,14 @@ PRD 37 failure states to confirm each shows its recoverable guidance rather than
   both the magic-link and Spotify-sourced emails present, and **no orphaned/re-keyed** `user_id`-keyed data.
   Unit-tested (`npm run test:account-integrity`, 7 cases). The cross-browser pass snapshots rows after linking
   + reconnection and runs them through this — the no-reset guarantee checked, not assumed.
-- **Failure-state coverage** — each PRD 37 state's mapping is asserted by `npm run test:auth-failures`; the
-  manual pass confirms each renders per browser.
-- `$0` (no paid cross-browser cloud service — local browsers + this runbook); Snyk-clean; typecheck/lint/tests
-  green.
+- **Failure-state coverage** — each PRD 37 state's mapping is asserted by `npm run test:auth-failures`.
+- **Executed cross-browser harness** — `playwright.config.ts` + `e2e/auth-recovery.spec.ts` (`npm run test:e2e`)
+  drive the **real** `app/auth/error` route across **Chromium (Blink) + Firefox (Gecko)**, asserting every
+  failure state renders its title + recoverable action (and no "merge anyway" shortcut, and that unknown
+  errors degrade rather than dead-end) — **16 assertions green, actually run**, not just documented. WebKit
+  needs system libraries not installable in this sandbox, so it (plus mobile / in-app-webview and the live
+  OAuth + magic-link legs) stays the documented manual cell in the runbook.
+- `$0` (free local browsers, no paid cross-browser cloud service); typecheck/lint/tests green.
 
 **Scoped out (PRD 38 Non-Goal — "does not alter the loop"):** wiring the staged PRD 35 sign-in *resolution*
 (the `PostgresAdapter` `getUserByEmail` wrapper + the explicit linking callback) is a behavior change, so it is
