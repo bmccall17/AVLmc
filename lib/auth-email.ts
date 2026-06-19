@@ -43,6 +43,13 @@ export type MagicLinkEmailParams = {
   url: string;
   /** The host the link points at, used in copy + subject. */
   host: string;
+  /**
+   * Absolute, publicly-reachable logo URL (e.g. `https://avlmc.vercel.app/icon.png`). Email
+   * clients can't load relative/local paths, so this must be a full https URL. Optional — when
+   * omitted the header degrades to the text wordmark alone (also the fallback when a client
+   * blocks remote images, which many do by default).
+   */
+  logoUrl?: string;
 };
 
 export type RenderedEmail = {
@@ -52,14 +59,20 @@ export type RenderedEmail = {
 };
 
 /**
- * Render the branded sign-in email. Pure: given the same url/host it always returns the
- * same `{ subject, html, text }`.
+ * Render the branded sign-in email. Pure: given the same url/host/logoUrl it always returns
+ * the same `{ subject, html, text }`.
  */
-export function renderMagicLinkEmail({ url, host }: MagicLinkEmailParams): RenderedEmail {
+export function renderMagicLinkEmail({ url, host, logoUrl }: MagicLinkEmailParams): RenderedEmail {
   const safeUrl = escapeHtml(url);
   const safeHost = escapeHtml(host);
 
   const subject = `Your ${BRAND_NAME} sign-in link`;
+
+  // Logo image (absolute https URL only). Kept above the text wordmark, which doubles as the
+  // fallback when a client blocks remote images. `alt` carries the brand name in that case.
+  const logoBlock = logoUrl
+    ? `<img src="${escapeHtml(logoUrl)}" width="48" height="48" alt="${BRAND_NAME}" style="display:block; width:48px; height:48px; border:0; border-radius:12px; margin:0 0 20px 0;" />`
+    : "";
 
   const html = `<!doctype html>
 <html lang="en">
@@ -78,6 +91,7 @@ export function renderMagicLinkEmail({ url, host }: MagicLinkEmailParams): Rende
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; background-color:${COLOR_SURFACE}; border:1px solid ${COLOR_BORDER}; border-radius:16px;">
             <tr>
               <td style="padding:36px 36px 28px 36px;">
+                ${logoBlock}
                 <p style="margin:0 0 6px 0; font-size:10px; line-height:1; letter-spacing:0.22em; text-transform:uppercase; color:${COLOR_TEXT_FAINT};">${BRAND_NAME}</p>
                 <p style="margin:0 0 28px 0; font-size:10px; line-height:1; letter-spacing:0.18em; text-transform:uppercase; color:${COLOR_TEXT_FAINT};">${BRAND_TAGLINE}</p>
                 <h1 style="margin:0 0 14px 0; font-size:30px; line-height:1.05; font-weight:900; letter-spacing:-0.02em; color:${COLOR_TEXT};">You&rsquo;re on the list</h1>
@@ -132,8 +146,14 @@ export async function sendMagicLinkEmail(params: {
   apiKey: string;
   from: string;
 }): Promise<void> {
-  const { host } = new URL(params.url);
-  const { subject, html, text } = renderMagicLinkEmail({ url: params.url, host });
+  // Derive the logo from the sign-in link's own origin so it resolves on whatever host sent it
+  // (prod, preview, or a custom domain) — `public/icon.png` is served at `<origin>/icon.png`.
+  const { host, origin } = new URL(params.url);
+  const { subject, html, text } = renderMagicLinkEmail({
+    url: params.url,
+    host,
+    logoUrl: `${origin}/icon.png`,
+  });
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",

@@ -34,8 +34,27 @@ test("escapes HTML-significant characters in the url (no attribute breakout)", (
   assert.ok(html.includes("&lt;script&gt;"), "angle brackets are entity-encoded");
 });
 
+test("renders the logo img when a logoUrl is provided", () => {
+  const { html } = renderMagicLinkEmail({
+    url: URL_FIXTURE,
+    host: "avlmc.vercel.app",
+    logoUrl: "https://avlmc.vercel.app/icon.png",
+  });
+  assert.ok(
+    html.includes('src="https://avlmc.vercel.app/icon.png"'),
+    "logo image points at the absolute URL"
+  );
+  assert.ok(/alt="AVL Music Companion"/.test(html), "logo has brand alt text for blocked-image fallback");
+});
+
+test("omits the logo img (wordmark-only) when no logoUrl is given", () => {
+  const { html } = renderMagicLinkEmail({ url: URL_FIXTURE, host: "avlmc.vercel.app" });
+  assert.ok(!html.includes("<img"), "no broken image element without a URL");
+  assert.ok(html.includes("AVL Music Companion"), "text wordmark still present");
+});
+
 test("is pure — identical inputs produce identical output", () => {
-  const a = renderMagicLinkEmail({ url: URL_FIXTURE, host: "avlmc.vercel.app" });
-  const b = renderMagicLinkEmail({ url: URL_FIXTURE, host: "avlmc.vercel.app" });
+  const a = renderMagicLinkEmail({ url: URL_FIXTURE, host: "avlmc.vercel.app", logoUrl: "https://x/icon.png" });
+  const b = renderMagicLinkEmail({ url: URL_FIXTURE, host: "avlmc.vercel.app", logoUrl: "https://x/icon.png" });
   assert.deepEqual(a, b);
 });
