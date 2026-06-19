@@ -55,14 +55,6 @@ Updated: June 18, 2026
 
 * **Apple Music sign-in & account-linking provider** — Parked for a future sprint, after Phase 15 (Spotify) account linking ships. Same shape as the YouTube stem: the `appleMusic` flag exists (`lib/auth-flags.ts`, off) and `user_emails.source = 'apple_music'` is reserved. Remaining work: register an Apple provider in `auth.ts` (Sign in with Apple / MusicKit), wire read-only access + a `music_connections` provider, expose linking through the PRD 35 `me/account-links` surface, and extend the PRD 38 test. Associates the Apple-returned email to the existing account; no duplicate identity. `$0`, no writes, Snyk-clean. *(Flag any Apple Developer Program cost before starting — must stay within `$0` or be explicitly approved.)*
 
-* **Transactional / magic-link email design pass (align to the Design Spec).** The Auth.js Resend
-  magic-link email (from `avlmc@agent828.com`) currently uses the default unstyled template. Customize it
-  via a `sendVerificationRequest` on the `Resend` provider in `auth.ts` to match
-  [`docs/design/AVLmc-Design-Spec.md`](../design/AVLmc-Design-Spec.md): dark `#0A0A0A` background, zinc
-  surfaces, crisp white primary text, uppercase-tracked metadata, a single high-contrast CTA button, AVLmc
-  mark. Keep it deliverability-safe (inline styles, dark-mode-friendly, plain-text fallback). `$0` (Resend
-  free tier). *(Reported Jun 18, 2026 — the email "works" but is visually off-brand.)*
-
 * **Design-spec alignment pass for the new Phase 15 / account surfaces.** Audit the surfaces added across
   Phase 15 + the onboarding/sign-in work against [`docs/design/AVLmc-Design-Spec.md`](../design/AVLmc-Design-Spec.md)
   (dark monochrome, zinc surfaces/borders, glassmorphism, uppercase-tracked metadata, orange/rose accents
@@ -91,6 +83,25 @@ Updated: June 18, 2026
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
 ## Done
+
+* **404 "detour" page + listener feedback capture** — Shipped (June 18, 2026). A broken link is treated as
+  a missed connection, not a dead end: `app/not-found.tsx` apologizes, shows three shows happening soon
+  (next 24h, else soonest upcoming, via `getUpcomingEvents`; resilient if events can't load), explains in
+  plain language how the board personalizes (with a tune-it link), offers a feedback form
+  (`components/FeedbackForm.tsx` → public `POST /api/feedback`) that returns to the board on send, a
+  "Skip & go home", and an "explore & recommend curators" link. Feedback persists to an additive `feedback`
+  table via `lib/feedback(-core).ts` (submit is `42P01`-tolerant so the form never errors before
+  provisioning); pure validation unit-tested (`test:feedback`, 5 cases); registered (`db-feedback`,
+  `api-feedback`); cross-browser e2e (`e2e/not-found.spec.ts`, Chromium + Firefox). Admin feedback viewer is
+  the parked fast-follow. `$0`, anonymous-first, Snyk-clean.
+
+* **Transactional / magic-link email design pass** — Shipped (June 18, 2026). The Auth.js Resend magic-link
+  email is now a branded dark-mode template (`lib/auth-email.ts`: `renderMagicLinkEmail` →
+  `{ subject, html, text }` with an HTML-escaped, deliverability-safe inline-styled body + a plain-text
+  fallback; `sendMagicLinkEmail` posts to Resend), wired via a `sendVerificationRequest` on the `Resend`
+  provider in `auth.ts`, aligned to [`docs/design/AVLmc-Design-Spec.md`](../design/AVLmc-Design-Spec.md).
+  Unit-tested (`test:auth-email`, 4 cases). `$0` (Resend free tier). *(The broader Phase 15 surfaces design
+  pass — recovery page, Spotify-access UI, profile additions — remains parked above.)*
 
 * **Support link — "buy me a coffee" (humble)** — Shipped (June 17, 2026). A quiet, on-brand support ask while the service is pre-revenue. Delivered:
   * `components/SupportButton.tsx` — a gold `Coffee` (lucide) icon in the topbar linking to `https://buymeacoffee.com/bmccall17` (new tab), with an accessible hover/focus tooltip (`aria-label`, `role="tooltip"`, keyboard-focusable).
