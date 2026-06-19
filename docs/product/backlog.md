@@ -20,6 +20,10 @@ Updated: June 18, 2026
   > (18 → 23 tables) with no data loss; the `user_emails` back-fill populated existing users' primary
   > emails (2 users → 2 rows). Curator apply + Phase 15 features are now live on prod. This runbook item
   > remains so it can't recur.
+  >
+  > **Recurred (and re-applied) Jun 18, 2026:** the new `feedback` table (404 detour) was also missing on
+  > prod after its release — applied via the same idempotent path (23 → 24 tables, prod now matches
+  > `db/schema.sql`). Two manual applies in one day is the signal this runbook item is needed.
 
 * **Run the PRD 38 live cross-browser proof (Phase 15 — the only non-autonomous step).** The account loop
   is wired and live in code: signed-in OAuth linking is native Auth.js v5 behavior (verified in
