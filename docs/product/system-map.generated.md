@@ -595,7 +595,7 @@ The public landing page that renders the ranked event board.
 
 #### Event Board  `ui-eventboard`
 
-Card grid of events with date/venue/tags, reactions, community, and discovery ordering.
+Card grid of events with shareable URL-backed filters, custom date ranges, reactions, community, and discovery ordering.
 
 - **Kind:** Surface
 - **Source of truth:** `components/EventBoard.tsx`

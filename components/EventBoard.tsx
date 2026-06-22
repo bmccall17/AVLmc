@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
-import { Bell, CalendarCheck, ChevronRight, ExternalLink, Flame, Headphones, Search, Star, UserPlus, X } from "lucide-react";
+import { Bell, CalendarCheck, Check, ChevronRight, ExternalLink, Flame, Headphones, Search, Share2, Star, UserPlus, X } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { SaveButton } from "@/components/SaveButton";
 import { SharedSongsCard, type SharedSongSummary } from "@/components/SharedSongsCard";
@@ -154,6 +154,10 @@ export function EventBoard({
   const [sortMode, setSortMode] = useState<SortMode>(hasTasteProfile ? "best-match" : "best-bets");
   // Editable date range within the rolling window. 0 = the full server window; >0 = next N days.
   const [rangeDays, setRangeDays] = useState(0);
+  const [customDateStart, setCustomDateStart] = useState("");
+  const [customDateEnd, setCustomDateEnd] = useState("");
+  const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "shared">("idle");
+  const [urlStateReady, setUrlStateReady] = useState(false);
   const [eventCounts, setEventCounts] = useState(counts);
   const [eventScores, setEventScores] = useState(discoveryScores);
   const [listenerPreferences, setListenerPreferences] = useState(() =>
@@ -185,6 +189,10 @@ export function EventBoard({
     () => Array.from(new Set(visibleEvents.flatMap((event) => event.tags).filter(isUsefulTag))).sort(),
     [visibleEvents]
   );
+  const dateBounds = useMemo(() => {
+    const dates = visibleEvents.map((event) => event.eventDate).sort();
+    return { max: dates.at(-1) ?? "", min: dates[0] ?? "" };
+  }, [visibleEvents]);
   // Precompute each event's canonical genres once (keyed off the event list, not the search
   // query) so genre quick filters are a cheap Set lookup rather than running the taxonomy's
   // normalization regex inside the per-keystroke filter loop.
@@ -220,9 +228,96 @@ export function EventBoard({
     tag !== "all" ||
     activeQuickFilters.length > 0 ||
     rangeDays !== 0 ||
+    customDateStart !== "" ||
+    customDateEnd !== "" ||
     sortMode !== defaultSortMode;
 
-  const effectiveWindowLabel = rangeWindowLabel(rangeDays, windowLabel);
+  const effectiveWindowLabel = rangeWindowLabel(
+    rangeDays,
+    windowLabel,
+    customDateStart,
+    customDateEnd
+  );
+
+  useEffect(() => {
+    if (urlStateReady) {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    setQuery((params.get("q") ?? "").slice(0, 120));
+    setSelectedVenues(
+      Array.from(
+        new Set(
+          params
+            .getAll("venue")
+            .map((value) => findExactOption(allVenues, value))
+            .filter((value): value is string => Boolean(value))
+        )
+      )
+    );
+
+    const sharedTag = findExactOption(allTags, params.get("tag") ?? "");
+    setTag(sharedTag ?? "all");
+
+    const sharedRange = Number(params.get("range"));
+    setRangeDays(DATE_RANGE_OPTIONS.some((option) => option.days === sharedRange) ? sharedRange : 0);
+
+    let sharedStart = validDateParam(params.get("from"));
+    let sharedEnd = validDateParam(params.get("to"));
+    if (sharedStart && sharedEnd && sharedStart > sharedEnd) {
+      [sharedStart, sharedEnd] = [sharedEnd, sharedStart];
+    }
+    setCustomDateStart(sharedStart);
+    setCustomDateEnd(sharedEnd);
+    if (sharedStart || sharedEnd) {
+      setRangeDays(0);
+    }
+
+    setQuickFiltersByCategory({
+      genre: validQuickFilter("genre", params.get("genre")),
+      vibe: validQuickFilter("vibe", params.get("vibe")),
+      when: validQuickFilter("when", params.get("when")),
+    });
+
+    const sharedSort = params.get("sort");
+    setSortMode(
+      isSortMode(sharedSort) && (hasTasteProfile || sharedSort !== "best-match")
+        ? sharedSort
+        : defaultSortMode
+    );
+    setUrlStateReady(true);
+  }, [allTags, allVenues, defaultSortMode, hasTasteProfile, urlStateReady]);
+
+  useEffect(() => {
+    if (!urlStateReady) {
+      return;
+    }
+
+    const url = buildFilterUrl(window.location.href, {
+      customDateEnd,
+      customDateStart,
+      defaultSortMode,
+      query,
+      quickFiltersByCategory,
+      rangeDays,
+      selectedVenues,
+      sortMode,
+      tag,
+    });
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [
+    customDateEnd,
+    customDateStart,
+    defaultSortMode,
+    query,
+    quickFiltersByCategory,
+    rangeDays,
+    selectedVenues,
+    sortMode,
+    tag,
+    urlStateReady,
+  ]);
 
   useEffect(() => {
     if (!hasTasteProfile && sortMode === "best-match") {
@@ -383,11 +478,11 @@ export function EventBoard({
           matchesSearch(event, normalizedQuery) &&
           (selectedVenues.length === 0 || selectedVenues.includes(event.venueName)) &&
           (tag === "all" || event.tags.includes(tag)) &&
-          isWithinRange(event, rangeDays) &&
+          isWithinRange(event, rangeDays, customDateStart, customDateEnd) &&
           activeQuickFilters.every((filter) => matchesQuickFilter(event, filter))
       )
       .sort((a, b) => compareEvents(a, b, eventCounts, eventScores, sortMode));
-  }, [activeQuickFilters, eventCounts, eventGenres, eventScores, query, rangeDays, selectedVenues, sortMode, tag, visibleEvents]);
+  }, [activeQuickFilters, customDateEnd, customDateStart, eventCounts, eventGenres, eventScores, query, rangeDays, selectedVenues, sortMode, tag, visibleEvents]);
 
   function clearFilters() {
     setQuery("");
@@ -398,6 +493,46 @@ export function EventBoard({
     setQuickFiltersByCategory(getDefaultQuickFilters());
     setSortMode(defaultSortMode);
     setRangeDays(0);
+    setCustomDateStart("");
+    setCustomDateEnd("");
+  }
+
+  function selectPresetRange(days: number) {
+    setRangeDays(days);
+    setCustomDateStart("");
+    setCustomDateEnd("");
+  }
+
+  async function shareFilters() {
+    const url = buildFilterUrl(window.location.href, {
+      customDateEnd,
+      customDateStart,
+      defaultSortMode,
+      query,
+      quickFiltersByCategory,
+      rangeDays,
+      selectedVenues,
+      sortMode,
+      tag,
+    }).toString();
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "AVLmc filtered shows", url });
+        setShareStatus("shared");
+      } else {
+        await copyText(url);
+        setShareStatus("copied");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+      await copyText(url);
+      setShareStatus("copied");
+    }
+
+    window.setTimeout(() => setShareStatus("idle"), 2200);
   }
 
   function toggleQuickFilter(category: QuickFilterCategory, filterId: QuickFilterId) {
@@ -682,12 +817,22 @@ export function EventBoard({
               {filteredEvents.length} of {visibleEvents.length} showing
             </strong>
           </div>
-          {hasActiveFilters ? (
-            <button className="filter-reset" onClick={clearFilters} type="button">
-              <X aria-hidden="true" size={15} strokeWidth={2.6} />
-              Reset
+          <div className="filter-panel-actions">
+            <button className="filter-reset" onClick={() => void shareFilters()} type="button">
+              {shareStatus === "idle" ? (
+                <Share2 aria-hidden="true" size={15} strokeWidth={2.6} />
+              ) : (
+                <Check aria-hidden="true" size={15} strokeWidth={2.6} />
+              )}
+              {shareStatus === "copied" ? "Link copied" : shareStatus === "shared" ? "Shared" : "Share filters"}
             </button>
-          ) : null}
+            {hasActiveFilters ? (
+              <button className="filter-reset" onClick={clearFilters} type="button">
+                <X aria-hidden="true" size={15} strokeWidth={2.6} />
+                Reset
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="filter-section">
@@ -695,15 +840,48 @@ export function EventBoard({
           <div className="filter-group" aria-label="Date range filters">
             {DATE_RANGE_OPTIONS.map((option) => (
               <button
-                aria-pressed={rangeDays === option.days}
+                aria-pressed={
+                  rangeDays === option.days && !customDateStart && !customDateEnd
+                }
                 className="filter-chip"
                 key={option.days}
-                onClick={() => setRangeDays(option.days)}
+                onClick={() => selectPresetRange(option.days)}
                 type="button"
               >
                 {option.label}
               </button>
             ))}
+            <div className="filter-date-range" role="group" aria-label="Custom date range">
+              <label>
+                <span>From</span>
+                <input
+                  aria-label="Start date"
+                  max={customDateEnd || dateBounds.max}
+                  min={dateBounds.min}
+                  onChange={(event) => {
+                    setRangeDays(0);
+                    setCustomDateStart(event.target.value);
+                  }}
+                  type="date"
+                  value={customDateStart}
+                />
+              </label>
+              <span aria-hidden="true">to</span>
+              <label>
+                <span>To</span>
+                <input
+                  aria-label="End date"
+                  max={dateBounds.max}
+                  min={customDateStart || dateBounds.min}
+                  onChange={(event) => {
+                    setRangeDays(0);
+                    setCustomDateEnd(event.target.value);
+                  }}
+                  type="date"
+                  value={customDateEnd}
+                />
+              </label>
+            </div>
           </div>
         </div>
 
@@ -1558,8 +1736,17 @@ const DATE_RANGE_OPTIONS: Array<{ days: number; label: string }> = [
   { days: 14, label: "Next 14 days" },
 ];
 
-/** Is the event within `days` of today? `days === 0` means the full (server) window — always true. */
-function isWithinRange(event: EventRecord, days: number) {
+/** Apply an inclusive custom range, or a next-N-days preset within the server window. */
+function isWithinRange(event: EventRecord, days: number, customStart: string, customEnd: string) {
+  if (customStart && event.eventDate < customStart) {
+    return false;
+  }
+  if (customEnd && event.eventDate > customEnd) {
+    return false;
+  }
+  if (customStart || customEnd) {
+    return true;
+  }
   if (days <= 0) {
     return true;
   }
@@ -1573,7 +1760,17 @@ function isWithinRange(event: EventRecord, days: number) {
 }
 
 /** Client-side label for the selected range; falls back to the server's full-window label. */
-function rangeWindowLabel(days: number, fullWindowLabel: string) {
+function rangeWindowLabel(
+  days: number,
+  fullWindowLabel: string,
+  customStart: string,
+  customEnd: string
+) {
+  if (customStart || customEnd) {
+    const startLabel = customStart ? formatMonthDay(parseDateParam(customStart)) : "First show";
+    const endLabel = customEnd ? formatMonthDay(parseDateParam(customEnd)) : "Last show";
+    return `${startLabel} – ${endLabel}`;
+  }
   if (days <= 0) {
     return fullWindowLabel;
   }
@@ -1581,6 +1778,17 @@ function rangeWindowLabel(days: number, fullWindowLabel: string) {
   const end = new Date(start);
   end.setDate(end.getDate() + days);
   return `${formatMonthDay(start)} – ${formatMonthDay(end)}`;
+}
+
+function parseDateParam(value: string) {
+  return new Date(`${value}T12:00:00`);
+}
+
+function validDateParam(value: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return "";
+  }
+  return Number.isNaN(parseDateParam(value).getTime()) ? "" : value;
 }
 
 function formatWeekday(date: Date) {
@@ -1918,6 +2126,64 @@ function getDefaultQuickFilters(): QuickFilterSelections {
     vibe: "all",
     when: "all",
   };
+}
+
+function validQuickFilter(category: QuickFilterCategory, value: string | null) {
+  const group = quickFilterGroups.find((candidate) => candidate.id === category);
+  return group?.filters.some((filter) => filter.id === value)
+    ? (value as QuickFilterId)
+    : "all";
+}
+
+function isSortMode(value: string | null): value is SortMode {
+  return Boolean(value && Object.prototype.hasOwnProperty.call(sortLabels, value));
+}
+
+type ShareableFilterState = {
+  customDateEnd: string;
+  customDateStart: string;
+  defaultSortMode: SortMode;
+  query: string;
+  quickFiltersByCategory: QuickFilterSelections;
+  rangeDays: number;
+  selectedVenues: string[];
+  sortMode: SortMode;
+  tag: string;
+};
+
+const FILTER_URL_PARAMS = ["q", "venue", "tag", "range", "from", "to", "when", "genre", "vibe", "sort"];
+
+function buildFilterUrl(href: string, state: ShareableFilterState) {
+  const url = new URL(href);
+  for (const key of FILTER_URL_PARAMS) {
+    url.searchParams.delete(key);
+  }
+
+  const query = state.query.trim().slice(0, 120);
+  if (query) url.searchParams.set("q", query);
+  for (const venue of state.selectedVenues) url.searchParams.append("venue", venue);
+  if (state.tag !== "all") url.searchParams.set("tag", state.tag);
+  if (state.customDateStart) url.searchParams.set("from", state.customDateStart);
+  if (state.customDateEnd) url.searchParams.set("to", state.customDateEnd);
+  if (!state.customDateStart && !state.customDateEnd && state.rangeDays > 0) {
+    url.searchParams.set("range", String(state.rangeDays));
+  }
+  for (const category of ["when", "genre", "vibe"] as const) {
+    const filter = state.quickFiltersByCategory[category];
+    if (filter !== "all") url.searchParams.set(category, filter);
+  }
+  if (state.sortMode !== state.defaultSortMode) url.searchParams.set("sort", state.sortMode);
+
+  return url;
+}
+
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  window.prompt("Copy this filtered AVLmc link:", value);
 }
 
 function findExactOption(options: string[], value: string) {

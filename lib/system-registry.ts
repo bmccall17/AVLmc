@@ -618,7 +618,7 @@ const NODES: RegistryNode[] = [
     kind: "surface",
     layer: "experience",
     label: "Event Board",
-    description: "Card grid of events with date/venue/tags, reactions, community, and discovery ordering.",
+    description: "Card grid of events with shareable URL-backed filters, custom date ranges, reactions, community, and discovery ordering.",
     sourceOfTruth: "components/EventBoard.tsx",
     access: "public",
     ownership: "automated",

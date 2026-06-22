@@ -577,6 +577,14 @@ body {
   min-width: 0;
 }
 
+.filter-panel-head .filter-panel-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: row;
+  gap: 8px;
+}
+
 .filter-panel-head strong {
   color: inherit;
   font-size: 1rem;
@@ -610,6 +618,42 @@ body {
 
 .filter-group-search {
   align-items: center;
+}
+
+.filter-date-range {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.filter-date-range label {
+  align-items: center;
+  background: white;
+  border: 1px solid #89d7df;
+  border-radius: 8px;
+  color: #035c68;
+  display: inline-flex;
+  gap: 7px;
+  min-height: 42px;
+  padding: 6px 9px;
+}
+
+.filter-date-range label > span {
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.filter-date-range input {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 850;
+  min-width: 126px;
+  outline: 0;
 }
 
 .filter-row span,
@@ -2786,7 +2830,8 @@ body {
 .sandbox-shell .filter-chip,
 .sandbox-shell .filter-control,
 .sandbox-shell .filter-reset,
-.sandbox-shell .filter-search-control {
+.sandbox-shell .filter-search-control,
+.sandbox-shell .filter-date-range label {
   background: rgba(39, 39, 42, 0.68);
   border-color: rgba(82, 82, 91, 0.88);
   color: #d4d4d8;
@@ -3157,6 +3202,11 @@ button.primary-action {
 
   .filter-panel-head .filter-reset {
     align-self: flex-start;
+  }
+
+  .filter-panel-head .filter-panel-actions {
+    align-self: flex-start;
+    flex-wrap: wrap;
   }
 
   .filter-section {
