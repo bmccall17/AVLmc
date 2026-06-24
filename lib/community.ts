@@ -539,37 +539,57 @@ const legacyContributionColumns = `
 
 async function listVisibleContributionsForEvent(eventId: string, viewerId?: string | null) {
   const viewer = viewerId ? Number(viewerId) : null;
-  const result = await query<ContributionRow>(
-    `
-      select
-        c.id, c.event_id, c.event_title, c.type,
-        case
-          when p.contribution_visibility = 'everyone' and cur.id is not null then cur.display_name
-          when p.contribution_visibility = 'everyone' then u.name
-          when p.contribution_visibility = 'followers' and f.id is not null then u.name
-          when c.user_id is null then c.display_name
-          else null
-        end as display_name,
-        case
-          when p.contribution_visibility = 'everyone' and cur.id is not null then cur.handle
-          else null
-        end as curator_handle,
-        c.body_text, c.song_title, c.song_artist, c.song_url,
-        c.music_provider, c.music_provider_item_id, c.music_provider_url,
-        c.audio_url, c.duration_seconds, c.session_id, c.user_id, c.created_at, c.status
-      from public.contributions c
-      left join public.users u on u.id = c.user_id
-      left join public.listener_discovery_preferences p on p.user_id = c.user_id
-      left join public.curators cur on cur.user_id = c.user_id and cur.status = 'active'
-      left join public.listener_follows f on f.followee_user_id = c.user_id and f.follower_user_id = $2 and f.status = 'active'
-      where c.event_id = $1
-        and c.status = 'visible'
-      order by c.created_at desc
-    `,
-    [eventId, viewer]
-  );
+  try {
+    const result = await query<ContributionRow>(
+      `
+        select
+          c.id, c.event_id, c.event_title, c.type,
+          case
+            when p.contribution_visibility = 'everyone' and cur.id is not null then cur.display_name
+            when p.contribution_visibility = 'everyone' then u.name
+            when p.contribution_visibility = 'followers' and f.id is not null then u.name
+            when c.user_id is null then c.display_name
+            else null
+          end as display_name,
+          case
+            when p.contribution_visibility = 'everyone' and cur.id is not null then cur.handle
+            else null
+          end as curator_handle,
+          c.body_text, c.song_title, c.song_artist, c.song_url,
+          c.music_provider, c.music_provider_item_id, c.music_provider_url,
+          c.audio_url, c.duration_seconds, c.session_id, c.user_id, c.created_at, c.status
+        from public.contributions c
+        left join public.users u on u.id = c.user_id
+        left join public.listener_discovery_preferences p on p.user_id = c.user_id
+        left join public.curators cur on cur.user_id = c.user_id and cur.status = 'active'
+        left join public.listener_follows f on f.followee_user_id = c.user_id and f.follower_user_id = $2 and f.status = 'active'
+        where c.event_id = $1
+          and c.status = 'visible'
+        order by c.created_at desc
+      `,
+      [eventId, viewer]
+    );
 
-  return result.rows.map(mapContributionRow);
+    return result.rows.map(mapContributionRow);
+  } catch (error) {
+    if (!isMissingRelationError(error) && !isMissingColumnError(error)) {
+      throw error;
+    }
+
+    // Fallback: joined tables don't exist yet — use simple contributions-only query
+    const fallback = await queryContributions(
+      `
+        select COLUMNS
+        from public.contributions
+        where event_id = $1
+          and status = 'visible'
+        order by created_at desc
+      `,
+      [eventId]
+    );
+
+    return fallback.rows.map(mapContributionRow);
+  }
 }
 
 async function queryContributions(sql: string, values: unknown[]) {
