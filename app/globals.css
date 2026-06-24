@@ -3070,7 +3070,6 @@ button.primary-action {
   margin-left: 6px;
   padding: 3px 7px;
 }
-
 .contribution-card audio {
   width: 100%;
 }
@@ -3079,6 +3078,8 @@ button.primary-action {
   color: var(--muted);
   line-height: 1.45;
   margin-bottom: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .contribution-meta {

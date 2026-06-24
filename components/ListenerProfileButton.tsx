@@ -129,6 +129,12 @@ export function ListenerProfileButton({
     setDraftPreferences(nextPreferences);
   }, [initialPreferences]);
 
+  function setContributionVisibility(visibility: "anonymous" | "followers" | "everyone") {
+    const nextPreferences = normalizeListenerPreferences(draftPreferences);
+    nextPreferences.contributionVisibility = visibility;
+    setDraftPreferences(nextPreferences);
+  }
+
   useEffect(() => {
     if (isSignedIn) {
       return;
@@ -719,6 +725,54 @@ export function ListenerProfileButton({
                   </small>
                 </span>
               </label>
+            </section>
+
+            <section className="listener-panel listener-sharing-panel">
+              <div className="listener-panel-heading">
+                <Users aria-hidden="true" size={18} strokeWidth={2.4} />
+                <div>
+                  <h3>Community Name Visibility</h3>
+                  <p>How your name appears on songs and notes you add to the community board.</p>
+                </div>
+              </div>
+              <div className="listener-visibility-options" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <label className="listener-radio">
+                  <input
+                    checked={draftPreferences.contributionVisibility === "anonymous"}
+                    onChange={() => setContributionVisibility("anonymous")}
+                    type="radio"
+                    name="contributionVisibility"
+                  />
+                  <span>
+                    <strong>Anonymous</strong>
+                    <small>Your name is never shown. Safest for privacy.</small>
+                  </span>
+                </label>
+                <label className="listener-radio">
+                  <input
+                    checked={draftPreferences.contributionVisibility === "followers"}
+                    onChange={() => setContributionVisibility("followers")}
+                    type="radio"
+                    name="contributionVisibility"
+                  />
+                  <span>
+                    <strong>Followers Only</strong>
+                    <small>Only people who follow you can see your name.</small>
+                  </span>
+                </label>
+                <label className="listener-radio">
+                  <input
+                    checked={draftPreferences.contributionVisibility === "everyone"}
+                    onChange={() => setContributionVisibility("everyone")}
+                    type="radio"
+                    name="contributionVisibility"
+                  />
+                  <span>
+                    <strong>Everyone</strong>
+                    <small>Your name is public. (Curators get a clickable profile link).</small>
+                  </span>
+                </label>
+              </div>
             </section>
 
             <div className="listener-modal-actions">

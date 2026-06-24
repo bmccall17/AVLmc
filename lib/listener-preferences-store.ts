@@ -9,6 +9,7 @@ import {
 
 type ListenerPreferenceRow = {
   custom_signals: unknown;
+  contribution_visibility: string | null;
   share_activity: boolean | null;
   updated_at: Date | string;
   weights: unknown;
@@ -20,7 +21,7 @@ export async function getListenerDiscoveryPreferences(
   try {
     const result = await query<ListenerPreferenceRow>(
       `
-        select weights, custom_signals, share_activity, updated_at
+        select weights, custom_signals, share_activity, contribution_visibility, updated_at
         from public.listener_discovery_preferences
         where user_id = $1
         limit 1
@@ -35,6 +36,7 @@ export async function getListenerDiscoveryPreferences(
 
     return normalizeListenerPreferences(
       {
+        contributionVisibility: row.contribution_visibility,
         customSignals: row.custom_signals,
         shareActivity: row.share_activity === true,
         weights: row.weights,
@@ -66,15 +68,17 @@ export async function saveListenerDiscoveryPreferences(
           user_id,
           weights,
           custom_signals,
-          share_activity
+          share_activity,
+          contribution_visibility
         )
-        values ($1, $2, $3::jsonb, $4::jsonb, $5)
+        values ($1, $2, $3::jsonb, $4::jsonb, $5, $6)
         on conflict (user_id) do update
           set weights = excluded.weights,
             custom_signals = excluded.custom_signals,
             share_activity = excluded.share_activity,
+            contribution_visibility = excluded.contribution_visibility,
             updated_at = now()
-        returning weights, custom_signals, share_activity, updated_at
+        returning weights, custom_signals, share_activity, contribution_visibility, updated_at
       `,
       [
         randomUUID(),
@@ -82,12 +86,14 @@ export async function saveListenerDiscoveryPreferences(
         JSON.stringify(payload.weights),
         JSON.stringify(payload.customSignals),
         payload.shareActivity,
+        payload.contributionVisibility,
       ]
     );
     const row = result.rows[0];
 
     return normalizeListenerPreferences(
       {
+        contributionVisibility: row?.contribution_visibility ?? payload.contributionVisibility,
         customSignals: row?.custom_signals ?? payload.customSignals,
         shareActivity: row?.share_activity ?? payload.shareActivity,
         weights: row?.weights ?? payload.weights,
@@ -131,6 +137,7 @@ async function saveWithoutShareActivity(
 
   return normalizeListenerPreferences(
     {
+      contributionVisibility: row?.contribution_visibility ?? payload.contributionVisibility,
       customSignals: row?.custom_signals ?? payload.customSignals,
       shareActivity: false,
       weights: row?.weights ?? payload.weights,

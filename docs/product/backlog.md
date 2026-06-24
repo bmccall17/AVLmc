@@ -43,6 +43,12 @@ Updated: June 18, 2026
 
 * _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. Active focus is the Phase 15 follow-up above and the Personalized Discovery follow-ups tracked in [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
 
+## Planned Next / Up Next
+
+- **Admin/Architecture Hover Tooltips**: Add onhover tooltips to the Admin/Architecture map that display lower-level implementation details (SQL fallback logic, query parameter mappings, and runtime driver errors).
+- **Nested Comments on Contributions**: Allow users to comment specifically on a listed song or note.
+- **Permanent Curator Fixtures**: Songs added by a curator should become permanent fixtures on their profile, so they never roll off even if the event is in the past.
+
 ## Scheduled
 
 * **Decommission Aiven — unhook completely (trigger: on/after June 23, 2026, once Neon has run stable ≈1 week).** Production migrated Aiven → Neon on June 16, 2026 (see [Deployment and Auth Investigation](deployment-auth-investigation.md)); Aiven is being kept **only** as a rollback safety net for one week. Once Neon is confirmed healthy under real traffic, fully retire Aiven:

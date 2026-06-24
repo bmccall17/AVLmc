@@ -105,7 +105,7 @@ export default async function EventPage({ params }: EventPageProps) {
   const artistSaved = savedKeySet.has(`artist:${normalizeText(event.artistName)}`);
   const publicCommunity = {
     ...community,
-    contributions: community.contributions.map(publicContribution),
+    contributions: community.contributions.map((c) => publicContribution(c, userId)),
   };
 
   return (

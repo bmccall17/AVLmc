@@ -28,6 +28,10 @@ export type ListenerCustomSignal = {
 export type ListenerDiscoveryPreferences = {
   customSignals: ListenerCustomSignal[];
   /**
+   * System-wide setting for how the listener's name appears on community contributions.
+   */
+  contributionVisibility: "anonymous" | "followers" | "everyone";
+  /**
    * Social / Curator Graph activity-sharing opt-in (PRD 23 / C1). Off by default. When false the
    * listener is absent from every "your people" read in later cycles; the public community counts
    * everyone already sees are unaffected. This is the single consent gate the graph checks.
@@ -125,6 +129,7 @@ export const DEFAULT_LISTENER_WEIGHTS: ListenerPreferenceWeights = {
 };
 
 export const DEFAULT_LISTENER_DISCOVERY_PREFERENCES: ListenerDiscoveryPreferences = {
+  contributionVisibility: "anonymous",
   customSignals: [],
   shareActivity: false,
   updatedAt: null,
@@ -139,6 +144,11 @@ export function normalizeListenerPreferences(
   const inputWeights = isRecord(input.weights) ? input.weights : input;
 
   return {
+    contributionVisibility: ["anonymous", "followers", "everyone"].includes(
+      input.contributionVisibility as string
+    )
+      ? (input.contributionVisibility as "anonymous" | "followers" | "everyone")
+      : "anonymous",
     customSignals: normalizeCustomSignals(input.customSignals),
     shareActivity: input.shareActivity === true,
     updatedAt: typeof input.updatedAt === "string" ? input.updatedAt : updatedAt,
@@ -150,6 +160,7 @@ export function serializeListenerPreferences(preferences: ListenerDiscoveryPrefe
   const normalized = normalizeListenerPreferences(preferences, preferences.updatedAt);
 
   return {
+    contributionVisibility: normalized.contributionVisibility,
     customSignals: normalized.customSignals,
     shareActivity: normalized.shareActivity,
     weights: normalized.weights,

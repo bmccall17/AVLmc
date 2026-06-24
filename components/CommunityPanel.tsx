@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import type {
   CommunityCounts,
   ContributionType,
@@ -371,6 +372,11 @@ export function CommunityPanel({
 
       <FormMessage state={reactionState} />
 
+      <div className="contribution-grid">
+        <ContributionList empty="No songs yet." items={grouped.songs} title={`Songs (${community.songs})`} />
+        <ContributionList empty="No notes yet." items={grouped.notes} title={`Notes (${community.notes})`} />
+      </div>
+
       <div className="community-form-grid">
         <form className="community-form" onSubmit={submitSong}>
           <h3>Recommend a song</h3>
@@ -474,11 +480,6 @@ export function CommunityPanel({
           <FormMessage state={noteState} />
         </form>
       </div>
-
-      <div className="contribution-grid">
-        <ContributionList empty="No songs yet." items={grouped.songs} title={`Songs (${community.songs})`} />
-        <ContributionList empty="No notes yet." items={grouped.notes} title={`Notes (${community.notes})`} />
-      </div>
     </section>
   );
 }
@@ -504,12 +505,62 @@ function ContributionList({
   );
 }
 
-function ContributionCard({ contribution }: { contribution: PublicContribution }) {
+function ContributionCard({ contribution: initialContribution }: { contribution: PublicContribution }) {
+  const [contribution, setContribution] = useState(initialContribution);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editBody, setEditBody] = useState(contribution.bodyText ?? "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`/api/community/contributions/${contribution.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bodyText: editBody }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Failed to save edit.");
+      if (data.contribution) {
+        setContribution({ ...contribution, ...data.contribution, isOwner: contribution.isOwner });
+        setIsEditing(false);
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to save edit.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <article className="contribution-card">
       <div className="contribution-meta">
-        <strong>{contribution.displayName || "Anonymous"}</strong>
-        <span>{formatCreatedAt(contribution.createdAt)}</span>
+        <strong>
+          {contribution.curatorHandle ? (
+            <Link href={`/curator/${encodeURIComponent(contribution.curatorHandle)}`}>
+              {contribution.displayName}
+            </Link>
+          ) : (
+            contribution.displayName || "Anonymous"
+          )}
+        </strong>
+        <span>
+          {formatCreatedAt(contribution.createdAt)}
+          {contribution.isOwner && !isEditing ? (
+            <>
+              {" · "}
+              <button
+                type="button"
+                className="ghost-control"
+                onClick={() => setIsEditing(true)}
+                style={{ padding: 0, height: "auto", fontSize: "inherit", fontWeight: "normal", color: "var(--foreground)" }}
+              >
+                Edit
+              </button>
+            </>
+          ) : null}
+        </span>
       </div>
       {contribution.type === "song" ? (
         <>
@@ -520,10 +571,38 @@ function ContributionCard({ contribution }: { contribution: PublicContribution }
             <span className="provider-pill">{formatProvider(contribution.musicProvider)}</span>
           ) : null}
           {contribution.songArtist ? <p>{contribution.songArtist}</p> : null}
-          {contribution.bodyText ? <p>{contribution.bodyText}</p> : null}
         </>
       ) : null}
-      {contribution.type === "comment" ? <p>{contribution.bodyText}</p> : null}
+      {isEditing ? (
+        <form onSubmit={handleSave} className="community-form" style={{ marginTop: 12 }}>
+          <textarea
+            value={editBody}
+            onChange={(e) => setEditBody(e.target.value)}
+            disabled={isSubmitting}
+            required
+            rows={3}
+            style={{ width: "100%" }}
+          />
+          <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+            <button type="submit" className="primary-action" disabled={isSubmitting}>
+              Save
+            </button>
+            <button
+              type="button"
+              className="ghost-control"
+              onClick={() => {
+                setEditBody(contribution.bodyText ?? "");
+                setIsEditing(false);
+              }}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        contribution.bodyText ? <p>{contribution.bodyText}</p> : null
+      )}
     </article>
   );
 }

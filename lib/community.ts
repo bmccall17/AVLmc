@@ -25,6 +25,7 @@ export type Contribution = {
   userId: string | null;
   createdAt: string;
   status: ContributionStatus;
+  curatorHandle: string | null;
 };
 
 export type Reaction = {
@@ -35,6 +36,8 @@ export type Reaction = {
   sessionId: string;
   userId: string | null;
   createdAt: string;
+  status: string;
+  curator_handle?: string | null;
 };
 
 export type CommunityCounts = {
@@ -50,7 +53,9 @@ export type EventCommunity = CommunityCounts & {
   contributions: Contribution[];
 };
 
-export type PublicContribution = Omit<Contribution, "sessionId" | "userId">;
+export type PublicContribution = Omit<Contribution, "sessionId" | "userId"> & {
+  isOwner?: boolean;
+};
 
 export type PublicEventCommunity = CommunityCounts & {
   contributions: PublicContribution[];
@@ -75,6 +80,7 @@ type ContributionRow = {
   user_id: number | string | null;
   created_at: Date | string;
   status: ContributionStatus;
+  curator_handle?: string | null;
 };
 
 type CountRow = {
@@ -94,10 +100,13 @@ const INTENT_SOURCES = new Set<EventIntentSource>(["avlmc", "spotify", "ticket_c
 const MAX_RECENT_CONTRIBUTIONS = 5;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 
-export async function getCommunityForEvent(eventId: string): Promise<EventCommunity> {
+export async function getCommunityForEvent(
+  eventId: string,
+  viewerId?: string | null
+): Promise<EventCommunity> {
   const [counts, contributions] = await Promise.all([
     getCountsForEvent(eventId),
-    listVisibleContributionsForEvent(eventId),
+    listVisibleContributionsForEvent(eventId, viewerId),
   ]);
 
   return {
@@ -449,11 +458,39 @@ export async function setContributionStatus(id: string, status: ContributionStat
   return result.rows[0] ? mapContributionRow(result.rows[0]) : null;
 }
 
-export function publicContribution(contribution: Contribution): PublicContribution {
+export async function updateContribution(
+  id: string,
+  userId: string,
+  input: {
+    bodyText?: string | null;
+  }
+) {
+  const result = await queryContributionUpdate(
+    `
+      update public.contributions
+      set body_text = coalesce($3, body_text),
+          updated_at = now()
+      where id = $1 and user_id = $2
+      returning COLUMNS
+    `,
+    [id, userId, cleanOptional(input.bodyText, 600) ?? null]
+  );
+
+  return result.rows[0] ? mapContributionRow(result.rows[0]) : null;
+}
+
+export function publicContribution(
+  contribution: Contribution,
+  viewerId?: string | null
+): PublicContribution {
   const { sessionId, userId, ...safe } = contribution;
   void sessionId;
   void userId;
-  return safe;
+
+  return {
+    ...safe,
+    isOwner: viewerId && userId ? viewerId === userId : false,
+  };
 }
 
 const contributionColumns = `
@@ -474,7 +511,8 @@ const contributionColumns = `
   session_id,
   user_id,
   created_at,
-  status
+  status,
+  null::text as curator_handle
 `;
 
 const legacyContributionColumns = `
@@ -495,19 +533,40 @@ const legacyContributionColumns = `
   session_id,
   user_id,
   created_at,
-  status
+  status,
+  null::text as curator_handle
 `;
 
-async function listVisibleContributionsForEvent(eventId: string) {
-  const result = await queryContributions(
+async function listVisibleContributionsForEvent(eventId: string, viewerId?: string | null) {
+  const viewer = viewerId ? Number(viewerId) : null;
+  const result = await query<ContributionRow>(
     `
-      select COLUMNS
-      from public.contributions
-      where event_id = $1
-        and status = 'visible'
-      order by created_at desc
+      select
+        c.id, c.event_id, c.event_title, c.type,
+        case
+          when p.contribution_visibility = 'everyone' and cur.id is not null then cur.display_name
+          when p.contribution_visibility = 'everyone' then u.name
+          when p.contribution_visibility = 'followers' and f.id is not null then u.name
+          when c.user_id is null then c.display_name
+          else null
+        end as display_name,
+        case
+          when p.contribution_visibility = 'everyone' and cur.id is not null then cur.handle
+          else null
+        end as curator_handle,
+        c.body_text, c.song_title, c.song_artist, c.song_url,
+        c.music_provider, c.music_provider_item_id, c.music_provider_url,
+        c.audio_url, c.duration_seconds, c.session_id, c.user_id, c.created_at, c.status
+      from public.contributions c
+      left join public.users u on u.id = c.user_id
+      left join public.listener_discovery_preferences p on p.user_id = c.user_id
+      left join public.curators cur on cur.user_id = c.user_id and cur.status = 'active'
+      left join public.listener_follows f on f.followee_user_id = c.user_id and f.follower_user_id = $2 and f.status = 'active'
+      where c.event_id = $1
+        and c.status = 'visible'
+      order by c.created_at desc
     `,
-    [eventId]
+    [eventId, viewer]
   );
 
   return result.rows.map(mapContributionRow);
@@ -640,6 +699,7 @@ function mapContributionRow(row: ContributionRow): Contribution {
     userId: row.user_id === null ? null : String(row.user_id),
     createdAt: toIsoString(row.created_at),
     status: row.status,
+    curatorHandle: row.curator_handle ?? null,
   };
 }
 

@@ -195,6 +195,7 @@ create table if not exists public.listener_discovery_preferences (
   -- Social / Curator Graph (PRD 23 / C1): the single activity-sharing consent gate. Off by
   -- default. When false, the listener is absent from every "your people" read in later cycles.
   share_activity boolean not null default false,
+  contribution_visibility text not null default 'anonymous' check (contribution_visibility in ('anonymous', 'followers', 'everyone')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (user_id)
@@ -203,6 +204,10 @@ create table if not exists public.listener_discovery_preferences (
 -- Additive column for databases provisioned before PRD 23. IF NOT EXISTS keeps schema.sql idempotent.
 alter table public.listener_discovery_preferences
   add column if not exists share_activity boolean not null default false;
+
+alter table public.listener_discovery_preferences
+  add column if not exists contribution_visibility text not null default 'anonymous'
+  check (contribution_visibility in ('anonymous', 'followers', 'everyone'));
 
 create index if not exists listener_discovery_preferences_user_id_idx
   on public.listener_discovery_preferences (user_id);
@@ -303,8 +308,12 @@ create table if not exists public.contributions (
   session_id text not null,
   user_id integer references public.users(id) on delete set null,
   created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   status text not null default 'visible' check (status in ('visible', 'hidden', 'pending'))
 );
+
+alter table public.contributions
+  add column if not exists updated_at timestamptz not null default now();
 
 create index if not exists contributions_event_id_status_idx
   on public.contributions (event_id, status, created_at desc);

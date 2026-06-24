@@ -1,0 +1,19 @@
+.contribution-card audio {
+  width: 100%;
+}
+
+.contribution-card p {
+  color: var(--muted);
+  line-height: 1.45;
+  margin-bottom: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.contribution-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
