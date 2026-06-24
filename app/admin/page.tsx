@@ -71,7 +71,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         data={data}
         systemMap={systemMap}
         health={health}
-        contributions={contributions.map(publicContribution)}
+        contributions={contributions.map((c) => publicContribution(c))}
         currentStatus={status}
       />
     </main>

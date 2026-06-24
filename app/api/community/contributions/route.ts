@@ -72,7 +72,7 @@ export async function POST(request: Request) {
       contribution: publicContribution(contribution),
       community: {
         ...community,
-        contributions: community.contributions.map(publicContribution)
+        contributions: community.contributions.map((c) => publicContribution(c))
       }
     });
     setAnonymousSessionCookie(response, sessionId);
