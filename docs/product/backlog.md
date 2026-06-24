@@ -86,6 +86,8 @@ Updated: June 18, 2026
 
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
+* **Admin Architecture Graph — Implementation Tooltips.** Improve the Admin|Architecture page (which renders from `lib/system-registry.ts`) with on-hover tooltips that expose lower-level implementation details to developers/agents. This includes SQL fallback logic (like missing column fallbacks), query parameter mappings, and runtime driver errors (e.g., Postgres uninferable types on nulls). Currently, the map provides a macro-view (services to tables), making micro-level parameter mapping breakages invisible on the graph.
+
 ## Done
 
 * **404 "detour" page + listener feedback capture** — Shipped (June 18, 2026). A broken link is treated as

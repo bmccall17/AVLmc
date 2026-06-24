@@ -376,7 +376,7 @@ export async function createContribution(input: {
         user_id,
         status
     )
-    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $13, $14, $15, $16, 'visible')
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'visible')
     returning ${legacyContributionColumns}
   `;
   const values = [
@@ -397,7 +397,24 @@ export async function createContribution(input: {
     input.sessionId,
     toNullableUserId(input.userId),
   ];
-  const result = await queryContributionInsert(insertSql, legacyInsertSql, values);
+
+  const legacyValues = [
+    values[0],
+    values[1],
+    values[2],
+    values[3],
+    values[4],
+    values[5],
+    values[6],
+    values[7],
+    values[8],
+    values[12],
+    values[13],
+    values[14],
+    values[15],
+  ];
+
+  const result = await queryContributionInsert(insertSql, legacyInsertSql, values, legacyValues);
 
   return mapContributionRow(result.rows[0]);
 }
@@ -520,7 +537,7 @@ async function queryContributionUpdate(sql: string, values: unknown[]) {
   }
 }
 
-async function queryContributionInsert(sql: string, legacySql: string, values: unknown[]) {
+async function queryContributionInsert(sql: string, legacySql: string, values: unknown[], legacyValues?: unknown[]) {
   try {
     return await query<ContributionRow>(sql, values);
   } catch (error) {
@@ -528,7 +545,7 @@ async function queryContributionInsert(sql: string, legacySql: string, values: u
       throw error;
     }
 
-    return query<ContributionRow>(legacySql, values);
+    return query<ContributionRow>(legacySql, legacyValues ?? values);
   }
 }
 
