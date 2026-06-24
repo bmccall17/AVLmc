@@ -6,6 +6,7 @@ import {
   submitMySpotifyAccessRequest,
 } from "@/lib/spotify-access-requests";
 import { SpotifyAccessRequestValidationError } from "@/lib/spotify-access-requests-core";
+import { SchemaNotProvisionedError } from "@/lib/schema-errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +49,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof SpotifyAccessRequestValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof SchemaNotProvisionedError) {
+      return NextResponse.json({ error: error.message }, { status: 503 });
     }
     console.error("Spotify access request failed:", error);
     return NextResponse.json({ error: "Could not submit your request." }, { status: 500 });

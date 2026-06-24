@@ -1,5 +1,6 @@
 import "server-only";
 import { query } from "@/lib/db";
+import { SchemaNotProvisionedError } from "@/lib/schema-errors";
 import {
   isAdminSettableSpotifyAccessStatus,
   isTerminalSpotifyAccessStatus,
@@ -88,29 +89,36 @@ export async function submitMySpotifyAccessRequest(input: {
   }
   const spotifyEmail = validateSpotifyEmail(input.spotifyEmail);
 
-  // Edit the open row if one exists (pending or slot_added); otherwise insert a fresh pending row.
-  const updated = await query<Row>(
-    `
-      update public.spotify_access_requests
-         set spotify_email = $2, requested_at = now()
-       where user_id = $1 and status in ('pending', 'slot_added')
-      returning id, user_id, spotify_email, status, note, requested_at, resolved_at
-    `,
-    [userId, spotifyEmail]
-  );
-  if (updated.rows[0]) {
-    return toMine(updated.rows[0]);
-  }
+  try {
+    // Edit the open row if one exists (pending or slot_added); otherwise insert a fresh pending row.
+    const updated = await query<Row>(
+      `
+        update public.spotify_access_requests
+           set spotify_email = $2, requested_at = now()
+         where user_id = $1 and status in ('pending', 'slot_added')
+        returning id, user_id, spotify_email, status, note, requested_at, resolved_at
+      `,
+      [userId, spotifyEmail]
+    );
+    if (updated.rows[0]) {
+      return toMine(updated.rows[0]);
+    }
 
-  const inserted = await query<Row>(
-    `
-      insert into public.spotify_access_requests (user_id, spotify_email, status)
-      values ($1, $2, 'pending')
-      returning id, user_id, spotify_email, status, note, requested_at, resolved_at
-    `,
-    [userId, spotifyEmail]
-  );
-  return toMine(inserted.rows[0]);
+    const inserted = await query<Row>(
+      `
+        insert into public.spotify_access_requests (user_id, spotify_email, status)
+        values ($1, $2, 'pending')
+        returning id, user_id, spotify_email, status, note, requested_at, resolved_at
+      `,
+      [userId, spotifyEmail]
+    );
+    return toMine(inserted.rows[0]);
+  } catch (error) {
+    if (isToleratedSchemaError(error)) {
+      throw new SchemaNotProvisionedError("Spotify access requests");
+    }
+    throw error;
+  }
 }
 
 /** The caller's current/most-recent request, or null if they've never asked (or table not migrated). */

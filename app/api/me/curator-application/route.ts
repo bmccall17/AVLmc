@@ -7,6 +7,7 @@ import {
   getSelfServeAvailability,
   CuratorValidationError,
 } from "@/lib/curators";
+import { SchemaNotProvisionedError } from "@/lib/schema-errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,6 +58,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof CuratorValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof SchemaNotProvisionedError) {
+      return NextResponse.json({ error: error.message }, { status: 503 });
     }
     console.error("Curator application failed:", error);
     return NextResponse.json({ error: "Curator application unavailable." }, { status: 500 });

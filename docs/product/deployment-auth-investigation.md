@@ -23,6 +23,33 @@ The first launch ran on **Aiven Free PostgreSQL**. Aiven's free tier has **no co
 
 Production moved to **Neon free**, whose free tier **includes a built-in connection pooler** (PgBouncer via a `-pooler` host) and a serverless driver — the exact capability needed for Vercel serverless at `$0`. App `DATABASE_URL` points at the pooled endpoint; migrations/dumps use the direct endpoint. Full data (accounts, OAuth links, community, taste) was migrated via `pg_dump`/`pg_restore`.
 
+## Schema apply runbook
+
+**Prod Neon does not auto-apply `db/schema.sql`.** A schema-touching release ships the SQL in the repo,
+but the new `create table` / `add column` statements only reach the database when someone runs them.
+Skipping this has silently broken whole features (June 18, 2026: prod was missing the Phase 12/13/15
+tables → "Curator application unavailable." 500s, then a missing `feedback` table). **After any release
+that changes `db/schema.sql`, run the apply step.**
+
+```sh
+vercel env pull .env.local   # writes the prod DATABASE_URL locally — never commit .env.local
+npm run db:apply             # applies db/schema.sql; prints "→ N public tables, 0 errors"
+```
+
+- **Idempotent.** Every statement is `… if not exists` / a `drop … if exists`+`add` pair / a
+  `NOT EXISTS`-guarded back-fill, so `db:apply` is safe to re-run and safe to run pre-emptively.
+- **Direct endpoint.** `scripts/apply-schema.ts` strips the `-pooler` host so DDL targets Neon's direct
+  endpoint (PgBouncer transaction-pooling can't run all DDL). Set `MIGRATION_DATABASE_URL` to override
+  the target (e.g. a throwaway branch for testing). Only the host is ever printed — never the full
+  connection string.
+- **Verify.** The printed public-table count should match the number of `datastore` nodes in
+  `lib/system-registry.ts` (see `docs/product/system-map.generated.md`). The prod Neon project is
+  `avlmc` / `long-violet-36681196`.
+- **Failure signal.** If a release missed this, `applyForCurator` and `submitMySpotifyAccessRequest`
+  now surface a clear **503 "… isn't set up yet — run `npm run db:apply`"** (via
+  `SchemaNotProvisionedError`) instead of an opaque 500 — that message is your cue to run the step
+  above.
+
 ## Source Notes
 
 - Vercel Hobby is the current `$0` hosting target for this personal prototype.

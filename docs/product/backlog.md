@@ -4,27 +4,6 @@ Updated: June 24, 2026
 
 ## Urgent
 
-* **Make `db/schema.sql` application part of the deploy/migration runbook (prevent schema drift).**
-  Root-cause follow-up to the Jun 18, 2026 incident below: prod schema drift had silently disabled whole
-  features. Add a deploy/CI step (or a documented manual step) that runs the idempotent `db/schema.sql`
-  against the prod Neon DB on every schema-touching release, so new `create table if not exists` /
-  `add column if not exists` statements always reach prod. *(Defensive code option, secondary: have
-  `applyForCurator` / `submitMySpotifyAccessRequest` tolerate `42P01` with a clearer message.)*
-
-  > **RESOLVED (Jun 18, 2026):** the immediate drift was fixed by applying `db/schema.sql` to the Neon
-  > `avlmc` project (`long-violet-36681196`). The prod DB (from the Jun 16 Aiven→Neon migration) had been
-  > **missing five tables** — `curators`, `curator_picks` (Phase 13), `listener_follows` (Phase 12),
-  > `user_emails` (Phase 15 C1), `spotify_access_requests` (Phase 15 C2) — which caused the
-  > "Curator application unavailable." 500 (INSERT → `42P01`) and left the follow graph + Phase 15
-  > multi-email linking + Spotify access requests inert. The idempotent/additive apply created all five
-  > (18 → 23 tables) with no data loss; the `user_emails` back-fill populated existing users' primary
-  > emails (2 users → 2 rows). Curator apply + Phase 15 features are now live on prod. This runbook item
-  > remains so it can't recur.
-  >
-  > **Recurred (and re-applied) Jun 18, 2026:** the new `feedback` table (404 detour) was also missing on
-  > prod after its release — applied via the same idempotent path (23 → 24 tables, prod now matches
-  > `db/schema.sql`). Two manual applies in one day is the signal this runbook item is needed.
-
 * **Run the PRD 38 live cross-browser proof (Phase 15 — the only non-autonomous step).** The account loop
   is wired and live in code: signed-in OAuth linking is native Auth.js v5 behavior (verified in
   `next-auth@5.0.0-beta.31` source), the `getUserByEmail` multi-email resolution is wired
@@ -45,33 +24,6 @@ Updated: June 24, 2026
 
 ## Planned Next / Up Next
 
-- **Moderation tab UX overhaul — _(semi-urgent)_.** The admin Moderation tab
-  (`components/AdminModeration.tsx`, backed by `POST /api/admin/contributions` + `lib/community.ts`)
-  is hard to operate today and slows real moderation. Four concrete problems:
-  1. **Confusing status model.** Each row carries one of `visible` / `hidden` / `pending` (plus an
-     `all` filter), shown as a bare `status-pill` with no explanation of what each state means or the
-     intended workflow — e.g. is `pending` "awaiting review" and the default for new items? what is an
-     operator actually supposed to do about it? Define and label the vocabulary
-     (`ContributionStatus` in `lib/community.ts`).
-  2. **Buttons don't map to a clear action.** Every row shows a conditional three-way toggle —
-     **Hide / Unhide / Pending** — where the primary moderator action isn't obvious, "Unhide"
-     (→ `visible`) reads oddly next to a `visible` pill, and "Pending" as a *button* is unclear.
-     Reframe around the real decision a moderator makes (approve / hide, with an explicit
-     "needs review") — one obvious primary action + a secondary, not three equal toggles.
-  3. **Not enough information per row.** A row shows status pill, event title, `type by name ·
-     datetime`, and a one-line summary — but no link to the event or the live contribution, raw
-     overlong song URLs, no provenance beyond `displayName` (anonymous vs signed-in / session), and
-     no full-content view when the body is long. A moderator can't quickly judge a borderline item.
-  4. **Rows take up too much space.** The large `<h2>` event title + two-column `article` layout
-     makes each entry tall, so very few items fit on screen. Make rows dense and scannable (compact
-     line, status as a colored chip, inline actions), and add per-status counts on the filter tabs.
-  **Desired outcome:** a moderator can scan many contributions at a glance, read each item's state
-  instantly, and act with one clear primary action — without oversized rows or guessing what a button
-  does. Scope: `components/AdminModeration.tsx` + its styles in `app/globals.css`
-  (`.admin-item` / `.status-pill` / `.admin-actions` / `.status-tabs`); clarify the status vocabulary
-  in `lib/community.ts` and the `POST /api/admin/contributions` contract; keep moderation behavior
-  correct (hide must remove a contribution from the public board). `$0`, security-at-inception, no
-  schema change expected. *(Reported Jun 24, 2026.)*
 - **Freshness & drift-awareness for Architecture implementation notes.** The per-node
   `implementationNotes` (and the registry's `description`s) are **hand-authored free-text**: they
   ride the `/ship` regen + drift guard so the generated map / JSON export / admin graph never fall
@@ -145,6 +97,44 @@ Updated: June 24, 2026
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
 ## Done
+
+* **`db/schema.sql` apply runbook (prevent schema drift)** — Shipped (June 24, 2026). The systemic fix
+  for the Jun 18 incidents (prod silently missing tables → "unavailable" 500s; two manual applies in one
+  day). **Scripted apply:** `npm run db:apply` (`scripts/apply-schema.ts`, tsx + `pg` directly, not the
+  `server-only` `lib/db`) runs the idempotent `db/schema.sql` against the Neon **direct** endpoint (strips
+  the `-pooler` host per the schema header), prefers `MIGRATION_DATABASE_URL` else `DATABASE_URL`, prints
+  `→ N public tables, 0 errors`, and exits non-zero on failure (host only is printed — never the
+  connection string). **Runbook:** a `## Schema apply runbook` section in
+  [`deployment-auth-investigation.md`](deployment-auth-investigation.md) — run `vercel env pull` then
+  `npm run db:apply` after any schema-touching release; idempotency, direct-endpoint, verification (table
+  count vs. registry datastore nodes), and incident history documented. **Defensive (the secondary half):**
+  `applyForCurator` + `submitMySpotifyAccessRequest` now catch `42P01`/`42703` on their write path and
+  throw a shared `SchemaNotProvisionedError` (`lib/schema-errors.ts`), which the two `app/api/me/*` routes
+  map to **503 + "… isn't set up yet — run `npm run db:apply`"** instead of an opaque 500.
+  **Idempotency proven** against a throwaway Neon branch (applied twice → `24 public tables, 0 errors`
+  both runs). `typecheck` / `lint` / `test:registry` (7) green; new/edited files
+  Snyk-clean; `$0`. No GitHub CI / Vercel build-hook (deliberately a documented manual step that fits the
+  local-`main` workflow). *(Running `db:apply` against prod stays the operator's release step.)*
+
+* **Moderation tab UX overhaul** — Shipped (June 24, 2026). The admin Moderation tab
+  (`components/AdminModeration.tsx`, inside `AdminPortal`; data via `app/admin/page.tsx`) was rebuilt
+  around all four complaints, **with no schema/type/API change** (`ContributionStatus`,
+  `setContributionStatus`, and `POST /api/admin/contributions` already supported it). **Status model:**
+  diagnosed that new contributions insert `'visible'` (no pre-moderation) and the public board only
+  renders `status = 'visible'`, so `hidden`/`pending` were both just invisible-to-public and `pending`
+  was never auto-set — `pending` is now an explicit **"Needs review"** flag (product-owner call:
+  visible-by-default kept, no new friction). **Actions:** the three-equal **Hide/Unhide/Pending** toggle
+  became a clear primary + secondary per state (visible → Hide / Flag for review; hidden → Restore /
+  Flag for review; needs-review → Restore / Hide). **Filtering:** the `/admin?status=` full-reload tabs
+  (which also bounced you off the Moderation tab) became **client-side filter buttons with live
+  per-status counts** — `app/admin/page.tsx` now loads the full set (`listContributions()`) and
+  `currentStatus` seeds the initial filter; actions update in place so items move between tabs. **Rows:**
+  the tall `<h2>` two-column layout is now a dense, scannable row — colored status chip, event-title
+  **link to `/event/[id]`**, contributor + a **curator @handle** provenance badge, **relative timestamp**
+  (absolute on hover), tidy "link ↗" for song URLs, and clamp/expand for long notes
+  (`app/globals.css`). The public-board invariant is intact (hide still drops a contribution from public).
+  `typecheck` / `lint` / `test:registry` (7) green; changed files Snyk-clean; `$0`. *(Live `/admin`
+  click-through + a `docs/product/snapshots/` refresh remain the manual follow-up.)*
 
 * **Admin │ Architecture — implementation-detail hover tooltips** — Shipped (June 24, 2026).
   Enhancement to the PRD 06 / C1 architecture surface (which had only a macro service→table view):

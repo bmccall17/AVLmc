@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { query } from "@/lib/db";
+import { SchemaNotProvisionedError } from "@/lib/schema-errors";
 import {
   buildCuratorTopList,
   canChangeHandle,
@@ -360,6 +361,9 @@ export async function applyForCurator(input: {
     }
     if (isForeignKeyViolation(error)) {
       throw new CuratorValidationError("That user does not exist.");
+    }
+    if (isToleratedSchemaError(error)) {
+      throw new SchemaNotProvisionedError("Curator applications");
     }
     throw error;
   }
