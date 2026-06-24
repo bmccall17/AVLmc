@@ -15,6 +15,10 @@ import {
   type CuratorStatus,
 } from "@/lib/curators";
 import { CURATOR_SELF_SERVE_GATE } from "@/lib/curators-core";
+import {
+  listCuratorRecommendationsForAdmin,
+  setCuratorRecommendationStatus,
+} from "@/lib/curator-recommendations";
 
 /**
  * Admin-gated curator management (PRD 25 / C3; self-serve review PRD 29). Promote/demote/hide
@@ -26,10 +30,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!(await requireAdmin())) return unauthorized();
-  const [curators, applications, notActivated, availability] = await Promise.all([
+  const [curators, applications, notActivated, recommendations, availability] = await Promise.all([
     listCuratorsForAdmin(),
     listCuratorApplications(),
     listNotActivatedCurators(),
+    listCuratorRecommendationsForAdmin(),
     getSelfServeAvailability(),
   ]);
   return NextResponse.json(
@@ -37,6 +42,7 @@ export async function GET() {
       curators,
       applications,
       notActivated,
+      recommendations,
       gate: {
         open: availability.open,
         activeCurators: availability.activeCurators,
@@ -86,6 +92,10 @@ export async function PATCH(request: Request) {
   try {
     if (body.target === "pick" && typeof body.id === "string") {
       const ok = await setPickStatus(body.id, body.status as CuratorPickStatus);
+      return ok ? NextResponse.json({ ok }) : notFound();
+    }
+    if (body.target === "recommendation" && typeof body.id === "string") {
+      const ok = await setCuratorRecommendationStatus(body.id, asString(body.status));
       return ok ? NextResponse.json({ ok }) : notFound();
     }
     if (typeof body.id === "string" && typeof body.status === "string") {

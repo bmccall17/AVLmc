@@ -6579,6 +6579,48 @@ button.primary-action {
   font-weight: 700;
 }
 
+/* Taste signature on directory cards (PRD 25 / C3): promoted top genres + venues, next/latest pick. */
+.curators-directory-taste {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 2px;
+}
+
+.curators-directory-chip {
+  align-items: center;
+  background: rgba(39, 39, 42, 0.9);
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  border-radius: 999px;
+  color: #e4e4e7;
+  display: inline-flex;
+  font-size: 0.74rem;
+  gap: 5px;
+  padding: 3px 10px;
+}
+
+.curators-directory-chip-kind {
+  color: #a5b4fc;
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.curators-directory-chip.kind-venue .curators-directory-chip-kind {
+  color: #6ee7b7;
+}
+
+.curators-directory-pick {
+  color: #d4d4d8;
+  display: block;
+  font-size: 0.78rem;
+  margin: 6px 0 2px;
+}
+
+.curators-directory-pick strong {
+  color: #fafafa;
+}
+
 /* Legible empty state for the curator directory (was low-contrast muted text). */
 .curators-directory-empty {
   background: rgba(24, 24, 27, 0.9);

@@ -9,6 +9,14 @@ export const metadata: Metadata = {
   description: "Local tastemakers curating Asheville shows on AVL Music Companion.",
 };
 
+/** Short, locale-stable date for a directory pick (e.g. "Aug 3"). Empty when missing/unparseable. */
+function formatPickDate(value: string | null): string {
+  if (!value) return "";
+  const time = new Date(value).getTime();
+  if (Number.isNaN(time)) return "";
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(time);
+}
+
 /**
  * Public curator directory (PRD 25 / C3) — replaces the "Curators — Coming soon" promise with the
  * real surface. Lists active, admin-promoted curators; regular listeners never appear here.
@@ -42,16 +50,44 @@ export default async function CuratorsDirectoryPage() {
         </div>
       ) : (
         <ul className="curators-directory-list">
-          {curators.map((curator) => (
-            <li key={curator.handle}>
-              <Link className="curators-directory-card" href={`/curator/${encodeURIComponent(curator.handle)}`}>
-                <strong>{curator.displayName}</strong>
-                <small>@{curator.handle}</small>
-                {curator.bio ? <p>{curator.bio}</p> : null}
-                <span className="curators-directory-count">{curator.pickCount} picks</span>
-              </Link>
-            </li>
-          ))}
+          {curators.map((curator) => {
+            const tasteChips = [
+              ...curator.topGenres.map((label) => ({ kind: "genre" as const, label })),
+              ...curator.topVenues.map((label) => ({ kind: "venue" as const, label })),
+            ];
+            return (
+              <li key={curator.handle}>
+                <Link className="curators-directory-card" href={`/curator/${encodeURIComponent(curator.handle)}`}>
+                  <strong>{curator.displayName}</strong>
+                  <small>@{curator.handle}</small>
+                  {curator.bio ? <p>{curator.bio}</p> : null}
+                  {tasteChips.length > 0 ? (
+                    <span className="curators-directory-taste">
+                      {tasteChips.map((chip) => (
+                        <span className={`curators-directory-chip kind-${chip.kind}`} key={`${chip.kind}:${chip.label}`}>
+                          <span className="curators-directory-chip-kind">{chip.kind}</span>
+                          {chip.label}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
+                  {curator.nextUpcomingPick ? (
+                    <span className="curators-directory-pick">
+                      <strong>Next:</strong> {curator.nextUpcomingPick.eventTitle}
+                      {formatPickDate(curator.nextUpcomingPick.eventDate)
+                        ? ` · ${formatPickDate(curator.nextUpcomingPick.eventDate)}`
+                        : ""}
+                    </span>
+                  ) : curator.latestPick ? (
+                    <span className="curators-directory-pick">
+                      <strong>Latest:</strong> {curator.latestPick.eventTitle}
+                    </span>
+                  ) : null}
+                  <span className="curators-directory-count">{curator.pickCount} picks</span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </main>

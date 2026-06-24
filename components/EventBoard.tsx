@@ -68,6 +68,8 @@ type EventActionResponse = {
   counts?: CommunityCounts;
   error?: string;
   state?: DiscoveryPersonEventState;
+  /** True when this Fire/Going surfaced a visible curator pick (signed-in active curators only). */
+  curatorPickAdded?: boolean;
 };
 
 type SpotifyArtistSearchResult = {
@@ -175,6 +177,7 @@ export function EventBoard({
   const top30EventIdSet = useMemo(() => new Set(top30EventIds), [top30EventIds]);
   const savedEventKeySet = useMemo(() => new Set(initialSavedEventKeys), [initialSavedEventKeys]);
   const [toastEvent, setToastEvent] = useState<EventRecord | null>(null);
+  const [curatorPickToast, setCuratorPickToast] = useState(false);
   const [signInNudge, setSignInNudge] = useState<{ event: EventRecord; action: CardAction } | null>(null);
   const [saveOfferEvent, setSaveOfferEvent] = useState<EventRecord | null>(null);
   const replayedIntent = useRef(false);
@@ -721,7 +724,11 @@ export function EventBoard({
     clearTooltip();
     setToastEvent(null);
     const cardAction: CardAction = action === "going" ? "planning" : "fire";
-    await recordCardAction(event, cardAction);
+    const data = await recordCardAction(event, cardAction);
+    if (data?.curatorPickAdded) {
+      setCuratorPickToast(true);
+      window.setTimeout(() => setCuratorPickToast(false), 3000);
+    }
     maybeShowSignInNudge(event, cardAction);
   }
 
@@ -1114,6 +1121,12 @@ export function EventBoard({
           <button onClick={() => void undoRemove(toastEvent)} type="button">
             Undo
           </button>
+        </div>
+      ) : null}
+
+      {curatorPickToast ? (
+        <div className="sandbox-toast" role="status">
+          <span>Added to your curator picks.</span>
         </div>
       ) : null}
 
@@ -1645,11 +1658,6 @@ function SocialDiscoveryBeats({
 }
 
 function CuratorComingSoon() {
-  const signupHref =
-    "mailto:?subject=AVLmc%20curator%20signup&body=I%27d%20like%20to%20be%20considered%20as%20an%20AVLmc%20curator.%0A%0AName%3A%0AMusic%20lane%3A%0ALinks%3A";
-  const recommendHref =
-    "mailto:?subject=AVLmc%20curator%20recommendation&body=I%27d%20like%20to%20recommend%20a%20curator%20for%20AVLmc.%0A%0AName%3A%0ALinks%3A%0AWhy%20they%20matter%3A";
-
   return (
     <section className="curator-callout" id="curators" aria-label="Curators">
       <div className="curator-callout-copy">
@@ -1663,17 +1671,17 @@ function CuratorComingSoon() {
         </p>
       </div>
       <div className="curator-actions">
-        <a className="curator-action is-playlist" href="/curators">
+        <Link className="curator-action is-playlist" href="/curators">
           Browse curators
-          <ExternalLink aria-hidden="true" size={13} strokeWidth={2.4} />
-        </a>
-        <a className="curator-action" href={signupHref}>
+          <ChevronRight aria-hidden="true" size={16} strokeWidth={2.4} />
+        </Link>
+        <Link className="curator-action" href="/curators/apply">
           <UserPlus aria-hidden="true" size={14} strokeWidth={2.6} />
           Sign up
-        </a>
-        <a className="curator-action" href={recommendHref}>
+        </Link>
+        <Link className="curator-action" href="/curators/recommend">
           Recommend a curator
-        </a>
+        </Link>
       </div>
     </section>
   );

@@ -174,3 +174,43 @@ export async function sendMagicLinkEmail(params: {
     throw new Error("Resend error: " + JSON.stringify(await res.json()));
   }
 }
+
+/**
+ * Fire a plain admin-notification email via Resend (e.g. a new curator recommendation landed in the
+ * queue). Reuses the same Resend POST as sign-in but is self-contained: it reads the sender + key
+ * from env and the recipient from `ADMIN_NOTIFY_EMAIL` (falling back to the sender address). When any
+ * of those is missing it no-ops — notifications are a nicety, never a blocker, and the caller still
+ * wraps this so a Resend failure can't break the underlying write.
+ */
+export async function sendAdminNotificationEmail(params: {
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<void> {
+  const apiKey = process.env.AUTH_RESEND_KEY?.trim();
+  // Mirror auth.ts resolveEmailFrom: strip a single wrapping quote pair Resend would otherwise reject.
+  const from = process.env.AUTH_EMAIL_FROM?.trim().replace(/^["'](.*)["']$/, "$1").trim();
+  const to = (process.env.ADMIN_NOTIFY_EMAIL?.trim() || from)?.replace(/^["'](.*)["']$/, "$1").trim();
+  if (!apiKey || !from || !to) {
+    return;
+  }
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from,
+      to,
+      subject: params.subject,
+      html: params.html,
+      text: params.text,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error("Resend error: " + JSON.stringify(await res.json()));
+  }
+}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CuratorApplyForm } from "@/components/CuratorApplyForm";
+import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { getOptionalUserId } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
  */
 export default async function CuratorApplyPage() {
   const userId = await getOptionalUserId();
+  const features = getAuthFeatureFlags();
 
   return (
     <main className="shell curators-directory-shell">
@@ -32,7 +34,7 @@ export default async function CuratorApplyPage() {
         </p>
       </header>
 
-      <CuratorApplyForm isSignedIn={Boolean(userId)} />
+      <CuratorApplyForm features={features} isSignedIn={Boolean(userId)} />
     </main>
   );
 }

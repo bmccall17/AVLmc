@@ -15,6 +15,7 @@
     "test:social-graph": "rm -rf /tmp/avlmc-social-graph-tests && tsc -p tests/tsconfig.social-graph.json && node --test /tmp/avlmc-social-graph-tests/tests/social-graph.test.js",
     "test:social-activity": "rm -rf /tmp/avlmc-social-activity-tests && tsc -p tests/tsconfig.social-activity.json && node --test /tmp/avlmc-social-activity-tests/tests/social-activity.test.js",
     "test:curators": "rm -rf /tmp/avlmc-curators-tests && tsc -p tests/tsconfig.curators.json && node --test /tmp/avlmc-curators-tests/tests/curators.test.js",
+    "test:curator-recommendations": "rm -rf /tmp/avlmc-curator-recommendations-tests && tsc -p tests/tsconfig.curator-recommendations.json && node --test /tmp/avlmc-curator-recommendations-tests/tests/curator-recommendations.test.js",
     "test:account-linking": "rm -rf /tmp/avlmc-account-linking-tests && tsc -p tests/tsconfig.account-linking.json && node --test /tmp/avlmc-account-linking-tests/tests/account-linking.test.js",
     "test:spotify-access": "rm -rf /tmp/avlmc-spotify-access-tests && tsc -p tests/tsconfig.spotify-access.json && node --test /tmp/avlmc-spotify-access-tests/tests/spotify-access-requests.test.js",
     "test:auth-failures": "rm -rf /tmp/avlmc-auth-failures-tests && tsc -p tests/tsconfig.auth-failures.json && node --test /tmp/avlmc-auth-failures-tests/tests/auth-failures.test.js",

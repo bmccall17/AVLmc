@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { signIn } from "next-auth/react";
 import Link from "next/link";
+import { EmailSignInPanel } from "@/components/EmailSignInPanel";
+import type { AuthFeatureFlags } from "@/lib/auth-flags";
 
 /** Mirror of the server `MyCuratorStatus` shape (PRD 29) — only the fields this form reads. */
 type MyCuratorStatus = {
@@ -30,7 +31,13 @@ const NOTE_MAX = 600;
  * Anonymous visitors get a sign-in nudge that returns them here. Already-active curators are shown a
  * "manage" affordance (C3), never the form. Applications are private — nothing here is public.
  */
-export function CuratorApplyForm({ isSignedIn }: { isSignedIn: boolean }) {
+export function CuratorApplyForm({
+  isSignedIn,
+  features,
+}: {
+  isSignedIn: boolean;
+  features: AuthFeatureFlags;
+}) {
   const [loading, setLoading] = useState(true);
   const [selfServeOpen, setSelfServeOpen] = useState(false);
   const [myStatus, setMyStatus] = useState<MyCuratorStatus>({ status: "none" });
@@ -111,14 +118,11 @@ export function CuratorApplyForm({ isSignedIn }: { isSignedIn: boolean }) {
   if (!isSignedIn) {
     return (
       <div className="curator-apply-panel">
-        <p>Sign in to apply to become a curator. Your application is private — only you and an admin can see it.</p>
-        <button
-          className="primary-action"
-          type="button"
-          onClick={() => void signIn("spotify", { callbackUrl: "/curators/apply" })}
-        >
-          Sign in to apply
-        </button>
+        <EmailSignInPanel
+          callbackUrl="/curators/apply"
+          description="Sign in to apply to become a curator. Your application is private — only you and an admin can see it. No password, no Spotify required."
+          features={features}
+        />
       </div>
     );
   }

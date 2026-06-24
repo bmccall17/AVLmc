@@ -19,6 +19,7 @@ import {
 } from "@/lib/discovery-memory";
 import { getEventById } from "@/lib/events";
 import { seedSharedSongsForEvent } from "@/lib/shared-songs";
+import { addPickIfActiveCurator, hidePickIfActiveCurator } from "@/lib/curators";
 
 const ACTIONS = new Set<DiscoveryEventAction>([
   "impression",
@@ -111,7 +112,27 @@ export async function POST(request: Request) {
     }
   }
 
-  const response = NextResponse.json({ counts, state });
+  // Curator picks (PRD 25 / C3): a signed-in ACTIVE curator's Fire/Going surfaces as a visible pick.
+  // Toggled on → upsert a visible pick; toggled off → hide it. No-op for non-curators. Fully
+  // failure-safe — a pick write must never break the reaction (same posture as shared songs).
+  let curatorPickAdded = false;
+  if ((action === "fire" || action === "planning") && userId) {
+    const toggledOn = action === "fire" ? state.fire : state.planning;
+    try {
+      if (toggledOn) {
+        curatorPickAdded = await addPickIfActiveCurator(userId, {
+          eventId: event.id,
+          eventTitle: event.eventTitle,
+        });
+      } else {
+        await hidePickIfActiveCurator(userId, event.id);
+      }
+    } catch (error) {
+      console.error("Curator pick upsert failed (non-fatal):", error);
+    }
+  }
+
+  const response = NextResponse.json({ counts, state, curatorPickAdded });
   setAnonymousSessionCookie(response, sessionId);
   return response;
 }

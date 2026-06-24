@@ -39,6 +39,8 @@ type EventActionResponse = {
   counts?: CommunityCounts;
   error?: string;
   state?: DiscoveryPersonEventState;
+  /** True when this Fire/Going surfaced a visible curator pick (signed-in active curators only). */
+  curatorPickAdded?: boolean;
 };
 
 export function CommunityPanel({
@@ -121,7 +123,9 @@ export function CommunityPanel({
       );
       setReactionState({
         kind: "success",
-        message: getIntentMessage(type, source),
+        message: data.curatorPickAdded
+          ? "Added to your curator picks."
+          : getIntentMessage(type, source),
       });
     } catch (error) {
       setReactionState({

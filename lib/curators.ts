@@ -69,7 +69,25 @@ export type CuratorPick = {
   eventDate: string | null;
 };
 
-export type CuratorDirectoryEntry = PublicCurator & { pickCount: number };
+/** A compact pick reference for directory cards (latest / next upcoming). */
+export type DirectoryPickSummary = {
+  eventId: string;
+  eventTitle: string;
+  eventDate: string | null;
+};
+
+/**
+ * A directory card's taste signature (PRD 25 / C3): the persona + pick count plus the same derived
+ * top-list signal the profile page shows, promoted into the card. Empty arrays / nulls when a
+ * curator has no picks yet.
+ */
+export type CuratorDirectoryEntry = PublicCurator & {
+  pickCount: number;
+  topGenres: string[];
+  topVenues: string[];
+  latestPick: DirectoryPickSummary | null;
+  nextUpcomingPick: DirectoryPickSummary | null;
+};
 
 export type CuratorProfile = {
   curator: PublicCurator;
@@ -106,10 +124,16 @@ type PickRow = {
 
 /* ---- Public reads --------------------------------------------------------------- */
 
-/** Active curators for the public directory, with their visible pick counts. */
+/**
+ * Active curators for the public directory, each with their visible pick count AND a derived taste
+ * signature (top genres, favorite venues, latest pick, next upcoming pick) — the same signal the
+ * profile page shows, promoted into the card. Two reads: the curators (ordered by pick count) and a
+ * single batched pull of every active curator's visible picks, grouped + derived in memory (so the
+ * directory stays one round-trip regardless of curator count, no N+1).
+ */
 export async function listCurators(): Promise<CuratorDirectoryEntry[]> {
   try {
-    const result = await query<CuratorRow & { pick_count: number | string }>(
+    const curatorsResult = await query<CuratorRow & { id: string; pick_count: number | string }>(
       `
         select c.id, c.user_id, c.handle, c.display_name, c.bio, c.avatar_url, c.status,
           count(p.id) filter (where p.status = 'visible')::int as pick_count
@@ -120,13 +144,89 @@ export async function listCurators(): Promise<CuratorDirectoryEntry[]> {
         order by pick_count desc, c.display_name asc
       `
     );
-    return result.rows.map((row) => ({ ...toPublicCurator(row), pickCount: Number(row.pick_count ?? 0) }));
+
+    // One batched pull of every active curator's visible picks (newest first), grouped by curator.
+    const picksResult = await query<PickRow & { curator_id: string }>(
+      `
+        select p.curator_id, p.event_id, p.event_title, p.note,
+          e.artist_name, e.venue_name, e.image_url, e.event_date, e.tags
+        from public.curator_picks p
+        join public.curators c on c.id = p.curator_id and c.status = 'active'
+        left join public.events e on e.id = p.event_id
+        where p.status = 'visible'
+        order by p.curator_id, p.created_at desc
+      `
+    );
+
+    const picksByCurator = new Map<string, Array<PickRow & { curator_id: string }>>();
+    for (const row of picksResult.rows) {
+      const list = picksByCurator.get(row.curator_id) ?? [];
+      list.push(row);
+      picksByCurator.set(row.curator_id, list);
+    }
+
+    return curatorsResult.rows.map((row) => ({
+      ...toPublicCurator(row),
+      pickCount: Number(row.pick_count ?? 0),
+      ...deriveTasteSignature(picksByCurator.get(row.id) ?? []),
+    }));
   } catch (error) {
     if (isToleratedSchemaError(error)) {
       return [];
     }
     throw error;
   }
+}
+
+/**
+ * Derive a directory card's taste signature from one curator's visible picks (newest first). Top
+ * genres/venues reuse `buildCuratorTopList`; latest = the first (newest) pick; next upcoming = the
+ * earliest pick whose event date is still in the future.
+ */
+function deriveTasteSignature(picks: Array<PickRow & { curator_id: string }>): {
+  topGenres: string[];
+  topVenues: string[];
+  latestPick: DirectoryPickSummary | null;
+  nextUpcomingPick: DirectoryPickSummary | null;
+} {
+  const topList = buildCuratorTopList(
+    picks.map((row) => ({
+      eventId: row.event_id,
+      eventTitle: row.event_title,
+      artistName: row.artist_name,
+      venueName: row.venue_name,
+      tags: row.tags,
+      note: row.note,
+    }))
+  );
+  const topGenres = topList.filter((entry) => entry.kind === "genre").slice(0, 3).map((entry) => entry.label);
+  const topVenues = topList.filter((entry) => entry.kind === "venue").slice(0, 2).map((entry) => entry.label);
+
+  const toSummary = (row: PickRow): DirectoryPickSummary => ({
+    eventId: row.event_id,
+    eventTitle: row.event_title,
+    eventDate: row.event_date instanceof Date ? row.event_date.toISOString() : row.event_date,
+  });
+
+  const latestPick = picks[0] ? toSummary(picks[0]) : null;
+
+  const now = Date.now();
+  let nextUpcoming: { row: PickRow; time: number } | null = null;
+  for (const row of picks) {
+    if (!row.event_date) continue;
+    const time = new Date(row.event_date).getTime();
+    if (Number.isNaN(time) || time < now) continue;
+    if (!nextUpcoming || time < nextUpcoming.time) {
+      nextUpcoming = { row, time };
+    }
+  }
+
+  return {
+    topGenres,
+    topVenues,
+    latestPick,
+    nextUpcomingPick: nextUpcoming ? toSummary(nextUpcoming.row) : null,
+  };
 }
 
 /** Full public profile for an active curator: persona + derived top-list + visible picks. */
@@ -639,6 +739,85 @@ export async function addMyPick(
     eventTitle: input.eventTitle,
     note: input.note,
   });
+}
+
+/**
+ * Resolve the caller's OWN active curator id, or null if they aren't an active curator (or the
+ * curator tables aren't migrated). Non-throwing sibling of requireOwnActiveCuratorId — for callers
+ * (e.g. Fire/Going) that act ONLY when the user happens to be a curator, without erroring for the
+ * common non-curator case.
+ */
+async function resolveOwnActiveCuratorId(userId: number | string): Promise<string | null> {
+  const id = Number(userId);
+  if (!Number.isInteger(id) || id < 1) {
+    return null;
+  }
+  try {
+    const result = await query<{ id: string; status: CuratorStatus }>(
+      `select id, status from public.curators where user_id = $1 limit 1`,
+      [id]
+    );
+    const row = result.rows[0];
+    if (!row || !canSelfManageCurator(row.status)) {
+      return null;
+    }
+    return row.id;
+  } catch (error) {
+    if (isToleratedSchemaError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Fire/Going hook (PRD 25 / C3): when a signed-in ACTIVE curator reacts to a show, surface it as a
+ * visible curator pick. No-op (returns false) for non-curators. Upserts on the unique
+ * (curator_id, event_id) — re-showing a previously hidden pick. Tolerates a not-yet-migrated DB.
+ */
+export async function addPickIfActiveCurator(
+  userId: number | string,
+  input: { eventId: string; eventTitle?: string }
+): Promise<boolean> {
+  const curatorId = await resolveOwnActiveCuratorId(userId);
+  if (!curatorId) {
+    return false;
+  }
+  try {
+    return await addCuratorPick({ curatorId, eventId: input.eventId, eventTitle: input.eventTitle });
+  } catch (error) {
+    if (isToleratedSchemaError(error)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Inverse of addPickIfActiveCurator: when an active curator UN-Fires / UN-Goings, hide the pick so
+ * it stops showing on their profile. No-op for non-curators. Returns true if a pick row was hidden.
+ */
+export async function hidePickIfActiveCurator(
+  userId: number | string,
+  eventId: string
+): Promise<boolean> {
+  const curatorId = await resolveOwnActiveCuratorId(userId);
+  const trimmedEventId = eventId?.trim();
+  if (!curatorId || !trimmedEventId) {
+    return false;
+  }
+  try {
+    const result = await query(
+      `update public.curator_picks set status = 'hidden' where curator_id = $1 and event_id = $2`,
+      [curatorId, trimmedEventId]
+    );
+    return (result.rowCount ?? 0) > 0;
+  } catch (error) {
+    if (isToleratedSchemaError(error)) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 /**

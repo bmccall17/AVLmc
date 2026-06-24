@@ -286,6 +286,27 @@ create index if not exists curator_picks_event_status_idx
 create index if not exists curator_picks_curator_idx
   on public.curator_picks (curator_id, status);
 
+-- "Recommend a curator" intake (parked backlog item, Reported Jun 18, 2026). A signed-in listener
+-- nominates someone who should curate ("I know someone who should") — distinct from a self-serve
+-- application (curators table) where the user applies as themselves. The nominee is free text (they
+-- may not be a user yet), so there is no FK to the nominee; only the submitter is a real user.
+-- Private to submitter + admin (never public, no pay-to-play). The admin works the pending queue.
+-- Additive + 42P01-tolerant per db/schema.sql being the single source of truth.
+create table if not exists public.curator_recommendations (
+  id text primary key,
+  user_id integer not null references public.users(id) on delete cascade,
+  nominee_name text not null,
+  nominee_link text,
+  reason text,
+  status text not null default 'pending'
+    check (status in ('pending', 'reviewed', 'dismissed')),
+  created_at timestamptz not null default now(),
+  resolved_at timestamptz
+);
+
+create index if not exists curator_recommendations_status_idx
+  on public.curator_recommendations (status);
+
 -- ---- Community contributions & reactions ---------------------------------------
 -- Interaction tables keep their own copy of event metadata (event_title, etc.) and
 -- deliberately have NO FK to events: events are re-ingested daily from AVLgo, so the

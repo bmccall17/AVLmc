@@ -28,6 +28,15 @@ type NotActivatedCurator = {
   displayName: string;
 };
 
+type CuratorRecommendation = {
+  id: string;
+  nomineeName: string;
+  nomineeLink: string | null;
+  reason: string | null;
+  submitterEmail: string | null;
+  createdAt: string | null;
+};
+
 type Gate = {
   open: boolean;
   activeCurators: number;
@@ -45,6 +54,7 @@ export function CuratorAdminPanel() {
   const [curators, setCurators] = useState<AdminCurator[]>([]);
   const [applications, setApplications] = useState<CuratorApplication[]>([]);
   const [notActivated, setNotActivated] = useState<NotActivatedCurator[]>([]);
+  const [recommendations, setRecommendations] = useState<CuratorRecommendation[]>([]);
   const [gate, setGate] = useState<Gate | null>(null);
   const [message, setMessage] = useState<string>("");
   const [userId, setUserId] = useState("");
@@ -59,11 +69,13 @@ export function CuratorAdminPanel() {
         curators?: AdminCurator[];
         applications?: CuratorApplication[];
         notActivated?: NotActivatedCurator[];
+        recommendations?: CuratorRecommendation[];
         gate?: Gate;
       };
       setCurators(data.curators ?? []);
       setApplications(data.applications ?? []);
       setNotActivated(data.notActivated ?? []);
+      setRecommendations(data.recommendations ?? []);
       setGate(data.gate ?? null);
     }
   }
@@ -103,6 +115,15 @@ export function CuratorAdminPanel() {
 
   async function toggleStatus(curator: AdminCurator) {
     await setStatus(curator.id, curator.status === "active" ? "hidden" : "active");
+  }
+
+  async function setRecommendationStatus(id: string, status: "reviewed" | "dismissed") {
+    await fetch("/api/admin/curators", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: "recommendation", id, status }),
+    });
+    void refresh();
   }
 
   return (
@@ -146,6 +167,40 @@ export function CuratorAdminPanel() {
           </li>
         ))}
         {applications.length === 0 ? <li className="empty-copy">No pending applications.</li> : null}
+      </ul>
+
+      <h3>Recommendations ({recommendations.length})</h3>
+      <p className="admin-curators-subtle">
+        Listeners nominating someone who should curate. Mark reviewed once you&apos;ve looked, or dismiss.
+      </p>
+      <ul className="admin-curators-list">
+        {recommendations.map((recommendation) => (
+          <li key={recommendation.id}>
+            <span>
+              <strong>{recommendation.nomineeName}</strong>
+              {/* The nominee link is listener-supplied free text. Render it as inert text (never a
+                  clickable href) so a `javascript:`/`data:` value can't become an admin XSS sink. */}
+              {recommendation.nomineeLink ? (
+                <small className="admin-curators-note">{recommendation.nomineeLink}</small>
+              ) : null}
+              {recommendation.reason ? (
+                <small className="admin-curators-note">“{recommendation.reason}”</small>
+              ) : null}
+              {recommendation.submitterEmail ? (
+                <small className="admin-curators-subtle">via {recommendation.submitterEmail}</small>
+              ) : null}
+            </span>
+            <span className="admin-curators-actions">
+              <button onClick={() => void setRecommendationStatus(recommendation.id, "reviewed")} type="button">
+                Reviewed
+              </button>
+              <button onClick={() => void setRecommendationStatus(recommendation.id, "dismissed")} type="button">
+                Dismiss
+              </button>
+            </span>
+          </li>
+        ))}
+        {recommendations.length === 0 ? <li className="empty-copy">No recommendations.</li> : null}
       </ul>
 
       <h3>Not activated ({notActivated.length})</h3>
