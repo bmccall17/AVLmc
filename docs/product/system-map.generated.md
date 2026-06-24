@@ -33,6 +33,9 @@ Primary upstream event feed (avlgo.com JSON export). Read on a daily schedule an
 - **Env vars (names only):** `AVLGO_API_URL`
 - **Health probe:** `avlgo-feed` (PRD 07)
 - **Reference:** https://www.avlgo.com
+- **Implementation notes:**
+  - _SQL fallback:_ On a non-OK response or any fetch/parse error the loader returns hardcoded seed events with shouldPersist=false, so the board never renders empty and a bad fetch never overwrites stored rows.
+  - _Note:_ Tolerates three payload shapes — a top-level array, { events: [] }, or { data: [] }.
 - **Flows to / depends on:**
   - → Event Ingestion (flowsTo) — daily JSON export
 
@@ -44,6 +47,8 @@ Hardcoded fallback events used when the AVLgo feed is unreachable, so the board 
 - **Source of truth:** `lib/events.ts`
 - **Access:** public
 - **Ownership:** manual
+- **Implementation notes:**
+  - _Note:_ Hardcoded in lib/events.ts; used only when the live feed is unreachable and never persisted (shouldPersist=false).
 - **Flows to / depends on:**
   - → Event Ingestion (flowsTo) — fallback when feed down
 
@@ -58,6 +63,9 @@ Optional. Supplies a signed-in listener's top artists/tracks for taste and power
 - **Env vars (names only):** `AUTH_SPOTIFY_ENABLED`, `AUTH_SPOTIFY_ID`, `AUTH_SPOTIFY_SECRET`
 - **Health probe:** `spotify-api` (PRD 07)
 - **Reference:** https://developer.spotify.com/documentation/web-api
+- **Implementation notes:**
+  - _Param mapping:_ Requests only read scopes (user-read-private, user-read-email, user-top-read); no write/library scope is requested.
+  - _Runtime gotcha:_ OAuth tokens stay server-side in the Auth.js accounts row and are never read by discovery scoring or exposed in any response.
 - **Flows to / depends on:**
   - → Music Taste Sync (flowsTo) — top artists/tracks
   - → Shared Listening (flowsTo) — artist top tracks
@@ -75,6 +83,9 @@ Fetches the AVLgo feed, normalizes fields, filters to music events, applies the 
 - **Access:** internal
 - **Ownership:** automated
 - **Env vars (names only):** `AVLGO_API_URL`
+- **Implementation notes:**
+  - _Note:_ Only a successful, non-empty fetch triggers upsertEvents; a failed fetch returns seed events without persisting.
+  - _SQL fallback:_ upsertEvents writes in batches (EVENT_UPSERT_BATCH_SIZE) with `on conflict (id) do update`, so the daily re-ingest updates rows in place rather than duplicating.
 - **Flows to / depends on:**
   - → Deduplication (flowsTo) — normalized rows
   - → Vercel Blob (flowsTo) — cache images
@@ -91,6 +102,9 @@ Groups near-identical events and picks a canonical record, hiding the rest. Surf
 - **Source of truth:** `lib/event-dedupe.ts`
 - **Access:** internal
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Param mapping:_ The grouping key is normalizeVenueKey(venue) + normalizeTitleCore(title) — article/plural-stripped word tokens — not the raw strings, so 'The Orange Peel' and 'Orange Peel' collapse.
+  - _Note:_ getCanonicalEvents picks one winner per normalized (venue, title-core, date) signature and hides the rest; the audit feeds the admin Gaps tab.
 - **Flows to / depends on:**
   - → events (flowsTo) — upsert canonical
 - **Fed by / required by:**
@@ -104,6 +118,9 @@ Pulls a connected listener's Spotify profile into music_connections and music_pr
 - **Source of truth:** `lib/music.ts`
 - **Access:** internal
 - **Ownership:** automated
+- **Implementation notes:**
+  - _SQL fallback:_ listMusicConnections / listMusicProfileItems retry a legacy query when the optional taste_opt_out_at / genres columns are absent (runWithMissingColumnFallback).
+  - _Runtime gotcha:_ The legacy fallbacks substitute explicitly-typed placeholders (null::timestamptz, '{}'::text[]) because Postgres can't infer a bare null/array's type in the select list.
 - **Flows to / depends on:**
   - → music_connections (flowsTo) — connection state
   - → music_profile_items (flowsTo) — taste items
@@ -120,6 +137,10 @@ When a signed-in listener Goes/Fires an event, resolves the artist's Spotify top
 - **Source of truth:** `lib/shared-songs.ts`
 - **Access:** internal
 - **Ownership:** automated
+- **Implementation notes:**
+  - _SQL fallback:_ Every read is 42P01 (undefined_table) tolerant and degrades to empty, so the public board survives a not-yet-migrated DB.
+  - _Param mapping:_ Batch reads bind $1::text[] of event ids; the single-event filter uses `$1::text is null or event_id = $1`.
+  - _Note:_ Seeding upserts `on conflict (event_id, provider, provider_track_id) do update` (dedup per track) and is best-effort, so a Spotify failure never breaks the reaction.
 - **Flows to / depends on:**
   - → event_shared_songs (flowsTo) — upsert shared songs
 - **Fed by / required by:**
@@ -134,6 +155,9 @@ Ranks events per request by blending taste profile, behavioral signals, and list
 - **Source of truth:** `lib/discovery.ts`
 - **Access:** internal
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Pure (no DB); SCORER_VERSION ('12.4') versions ranking output for the Insight baseline. Best partial match wins across the artist/venue/genre taste maps.
+  - _Runtime gotcha:_ Anonymous (and dial-0) callers get socialCircle = 0, keeping the anonymous board byte-for-byte unchanged.
 - **Flows to / depends on:**
   - → Event Board (flowsTo) — ranked order
   - → Signal Memory (dependsOn) — reads signals
@@ -151,6 +175,10 @@ Persists and reads per-listener behavioral signals (impressions, opens, fire, pl
 - **Source of truth:** `lib/discovery-memory.ts`
 - **Access:** internal
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Param mapping:_ Signal reads bind $1::text[] identity keys and a window via make_interval(days => $2::int); the implicit-signal window is 90 days.
+  - _Runtime gotcha:_ Per-dimension unions use explicit casts ('artist'::text as dimension) and tags are unnested via unnest(coalesce(tags, '{}'::text[])) to avoid null-array errors.
+  - _Note:_ migrateSessionSignalsToUser re-keys a browser's anonymous rows to the user inside a transaction; per-event state (unique (event_id, identity_key)) merges with GREATEST timestamps; a second run is a no-op.
 - **Flows to / depends on:**
   - → event_interaction_events (flowsTo) — append log
   - → event_person_event_state (flowsTo) — per-event state
@@ -166,6 +194,9 @@ Validates and stores community contributions, reactions, and ticket/going intent
 - **Source of truth:** `lib/community.ts`
 - **Access:** internal
 - **Ownership:** hybrid
+- **Implementation notes:**
+  - _Runtime gotcha:_ Count rollups use `count(*) filter (where ...)::int`; a legacy fallback synthesizes the going/fire/source columns when the newer source column is absent.
+  - _Note:_ Reactions/intents upsert `on conflict (event_id, identity_key) do update`; user_id is nullable so anonymous participation works.
 - **Flows to / depends on:**
   - → contributions (flowsTo) — songs/notes/voices
   - → reactions (flowsTo) — fire
@@ -181,6 +212,8 @@ Reads and writes a signed-in listener's configurable discovery weights and custo
 - **Source of truth:** `lib/listener-preferences.ts`
 - **Access:** internal
 - **Ownership:** manual
+- **Implementation notes:**
+  - _Note:_ Pure preference model — nine weighted 0–200 controls (weight 0 fully cancels a dimension) plus ad-hoc custom boost/lower signals; persisted as weights jsonb / custom_signals jsonb.
 - **Flows to / depends on:**
   - → listener_discovery_preferences (flowsTo) — saved weights
 - **Fed by / required by:**
@@ -194,6 +227,8 @@ In-code source of truth for genre understanding: canonical genres, alias/synonym
 - **Source of truth:** `lib/genre-taxonomy.ts`
 - **Access:** public
 - **Ownership:** manual
+- **Implementation notes:**
+  - _Note:_ Pure and client-safe (no server-only import): 20 canonical genres + an alias/synonym map that resolves alias tags (rnb→soul, singer-songwriter→folk) and symmetric parent/child links.
 - **Flows to / depends on:**
   - → Discovery Scoring (flowsTo) — genre matching
 
@@ -205,6 +240,10 @@ Reads and writes a signed-in listener's private Saved/Favorites (events, venues,
 - **Source of truth:** `lib/saved-items.ts`
 - **Access:** internal
 - **Ownership:** manual
+- **Implementation notes:**
+  - _Param mapping:_ For venues/artists (no entity table) item_key = normalizeText(name) — the same normalization discovery scoring uses — so a saved venue/artist matches scoring identity.
+  - _SQL fallback:_ Reads are 42P01-tolerant and degrade to empty.
+  - _Note:_ saveItem is idempotent via `on conflict (user_id, item_type, item_key) do nothing`.
 - **Flows to / depends on:**
   - → saved_items (flowsTo) — persist saves
   - → Saved Space (flowsTo) — grouped saved lists
@@ -219,6 +258,9 @@ Reads and writes a signed-in listener's private, one-way follow edges (PRD 23). 
 - **Source of truth:** `lib/social-graph.ts`
 - **Access:** internal
 - **Ownership:** manual
+- **Implementation notes:**
+  - _SQL fallback:_ Reads tolerate both 42P01 (missing table) and 42703 (missing column) and degrade to empty/false.
+  - _Note:_ Follow writes upsert `on conflict (follower_user_id, followee_user_id) do nothing`; activity visibility is gated by coalesce(share_activity, false).
 - **Flows to / depends on:**
   - → listener_follows (flowsTo) — persist follow edges
   - → listener_discovery_preferences (dependsOn) — activity-sharing opt-in gate
@@ -233,6 +275,9 @@ Inner-circle attribution (PRD 24): a live READ layer that joins the C1 follow gr
 - **Source of truth:** `lib/social-activity.ts`
 - **Access:** internal
 - **Ownership:** manual
+- **Implementation notes:**
+  - _Note:_ going/firing are derived in the SQL join (planning_at/fire_at present and not superseded by removed_at), gated by the active edge AND the followee's share_activity — so unfollowing or turning sharing off removes visibility instantly (no new table).
+  - _Runtime gotcha:_ Reads tolerate 42P01/42703; seeded_by_user_id is resolved to a name server-side and never shipped raw.
 - **Flows to / depends on:**
   - → listener_follows (dependsOn) — follow edges (gate)
   - → event_person_event_state (dependsOn) — going/firing source
@@ -251,6 +296,10 @@ Admin-promoted curator personas + per-show picks (PRD 25). Public reads expose o
 - **Source of truth:** `lib/curators.ts`
 - **Access:** public
 - **Ownership:** hybrid
+- **Implementation notes:**
+  - _Note:_ curator_picks carry NO FK to events (daily re-ingest would cascade-delete them): event_title is snapshotted and live metadata is resolved via `left join public.events`.
+  - _Param mapping:_ The board signal binds $1::text[] event ids and filters status='visible'; promote upserts `on conflict (user_id) do update`.
+  - _SQL fallback:_ Reads tolerate 42P01 and degrade to empty.
 - **Flows to / depends on:**
   - → curators (flowsTo) — persona persistence
   - → curator_picks (flowsTo) — per-show picks
@@ -297,6 +346,8 @@ Append-only record of scheduled job outcomes (start, finish, success/failure, it
 - **Access:** admin
 - **Ownership:** automated
 - **Live count:** `system_job_runs` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ Append-only; written by the sync routes via recordJobRun (a start row, then a finish/failure row) and read by the cron health probes.
 - **Fed by / required by:**
   - ← AVLgo Sync (cron) (flowsTo) — records outcome
   - ← Image Cleanup (cron) (flowsTo) — records outcome
@@ -310,6 +361,8 @@ Curated partner/resource directory — sources, playlists, venue partners, spons
 - **Access:** admin
 - **Ownership:** manual
 - **Live count:** `admin_resources` (resolved in portal/API)
+- **Implementation notes:**
+  - _Param mapping:_ The live count excludes archived rows (`where status <> 'archived'`); admin-managed via the Stewardship tab.
 - **Flows to / depends on:**
   - → Ryan's Playlist (flowsTo) — catalogs
 - **Fed by / required by:**
@@ -324,6 +377,8 @@ Community songs, notes, and voice memos attached to events; carries moderation s
 - **Access:** internal
 - **Ownership:** hybrid
 - **Live count:** `contributions` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ Nullable user_id (anonymous-first); voice rows exist in the schema but are excluded from the launch surface. Public reads never expose session_id/user_id.
 - **Fed by / required by:**
   - ← Community Service (flowsTo) — songs/notes/voices
   - ← Admin Data Loader (dependsOn) — reads counts
@@ -337,6 +392,8 @@ Listener feedback (notes from the 404 detour + general). Anonymous-friendly capt
 - **Access:** internal
 - **Ownership:** automated
 - **Live count:** `feedback` (resolved in portal/API)
+- **Implementation notes:**
+  - _SQL fallback:_ POST /api/feedback submit is 42P01-tolerant — a not-yet-provisioned table degrades to a friendly success rather than a 500, so the 404-detour form never errors.
 - **Flows to / depends on:**
   - → users (dependsOn) — optional submitter (set null)
 - **Fed by / required by:**
@@ -351,6 +408,8 @@ Lightweight per-session reactions (fire) on events.
 - **Access:** internal
 - **Ownership:** automated
 - **Live count:** `reactions` (resolved in portal/API)
+- **Implementation notes:**
+  - _Runtime gotcha:_ A legacy read fallback synthesizes going/fire from the `type` column when the newer `source` column is absent (see lib/community.ts).
 - **Fed by / required by:**
   - ← Community Service (flowsTo) — fire
 
@@ -363,6 +422,8 @@ Going / ticket-click intents per identity, sourced from avlmc, spotify, or ticke
 - **Access:** internal
 - **Ownership:** automated
 - **Live count:** `event_intents` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ Going/ticket-click intents per identity_key, tagged by source (avlmc / spotify / ticket_click); the rollup splits each source via `count(*) filter (...)::int`.
 - **Fed by / required by:**
   - ← Community Service (flowsTo) — going/ticket
 
@@ -375,6 +436,9 @@ Append-only behavioral log (impressions, opens, clicks, fire, planning) feeding 
 - **Access:** internal
 - **Ownership:** automated
 - **Live count:** `event_interaction_events` (resolved in portal/API)
+- **Implementation notes:**
+  - _Param mapping:_ Window reads bind $1::text[] identity keys + make_interval(days => $2::int).
+  - _Note:_ Append-only, keyed by identity_key; the 90-day impression window drives implicit 'skip' cooling, so any prune job must not delete rows inside that window.
 - **Fed by / required by:**
   - ← Signal Memory (flowsTo) — append log
 
@@ -387,6 +451,8 @@ Per-identity, per-event state (fire / planning / removed) used to personalize an
 - **Access:** internal
 - **Ownership:** automated
 - **Live count:** `event_person_event_state` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ unique (event_id, identity_key); on the anonymous→account hand-off, rows are merged with GREATEST timestamps so the strongest/most-recent state wins.
 - **Fed by / required by:**
   - ← Signal Memory (flowsTo) — per-event state
   - ← Social Activity (Inner-Circle) (dependsOn) — going/firing source
@@ -400,6 +466,8 @@ Auth.js user records for signed-in listeners.
 - **Access:** internal
 - **Ownership:** automated
 - **Live count:** `users` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ Auth.js user record; users.email is demoted to primary/display — multi-email resolution lives in user_emails (PRD 35).
 - **Fed by / required by:**
   - ← Auth.js (flowsTo) — user records
   - ← user_emails (dependsOn) — emails per account (cascade)
@@ -418,6 +486,8 @@ Auth.js OAuth account links (provider tokens live here; never exposed to the adm
 - **Access:** internal
 - **Ownership:** automated
 - **Live count:** `accounts` (resolved in portal/API)
+- **Implementation notes:**
+  - _Runtime gotcha:_ Provider OAuth access/refresh tokens live here and are read server-side only; never surfaced to the admin portal, the API, or this registry.
 - **Fed by / required by:**
   - ← Auth.js (flowsTo) — oauth links
 
@@ -430,6 +500,9 @@ Multiple verified emails per account (PRD 35): the magic-link email plus the ema
 - **Access:** internal
 - **Ownership:** automated
 - **Live count:** `user_emails` (resolved in portal/API)
+- **Implementation notes:**
+  - _Param mapping:_ Global unique(lower(email)); inserts guard with `where not exists (select 1 ... where lower(email)=lower($2))`, and resolution matches `lower(email)=lower($1)`.
+  - _SQL fallback:_ record/find are 42P01/42703-tolerant so a multi-email write never blocks sign-in.
 - **Flows to / depends on:**
   - → users (dependsOn) — emails per account (cascade)
 - **Fed by / required by:**
@@ -445,6 +518,8 @@ Spotify tester-slot access requests (PRD 36): a not-yet-approved listener's Spot
 - **Access:** internal
 - **Ownership:** automated
 - **Live count:** `spotify_access_requests` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ A partial unique index (spotify_access_requests_one_open_idx) enforces one OPEN request per user; status lifecycle is pending → slot_added → approved/rejected.
 - **Flows to / depends on:**
   - → users (dependsOn) — request per user (cascade)
 - **Fed by / required by:**
@@ -493,6 +568,8 @@ Per-listener discovery weights and custom signals that tune ranking.
 - **Access:** internal
 - **Ownership:** manual
 - **Live count:** `listener_discovery_preferences` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ weights jsonb + custom_signals jsonb; one row per signed-in listener (anonymous prefs live in localStorage).
 - **Flows to / depends on:**
   - → Discovery Scoring (flowsTo) — custom weights
 - **Fed by / required by:**
@@ -508,6 +585,8 @@ Listener corrections to Spotify artist matches (reject / replace) that refine fu
 - **Access:** internal
 - **Ownership:** hybrid
 - **Live count:** `spotify_event_match_corrections` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ Per-person reject/replace corrections consumed by discovery, so a rejected match no longer boosts and a replacement does.
 - **Flows to / depends on:**
   - → Music Taste Sync (flowsTo) — refines matching
 - **Fed by / required by:**
@@ -522,6 +601,8 @@ Private, polymorphic Saved/Favorites for signed-in listeners: events, venues, an
 - **Access:** internal
 - **Ownership:** manual
 - **Live count:** `saved_items` (resolved in portal/API)
+- **Implementation notes:**
+  - _Param mapping:_ item_key for venues/artists = normalizeText(name) (shared with discovery identity); idempotent insert `on conflict (user_id, item_type, item_key) do nothing`.
 - **Flows to / depends on:**
   - → users (dependsOn) — owned by user (cascade)
 - **Fed by / required by:**
@@ -536,6 +617,8 @@ Private, one-way follow edges (follower → followee) for the Social / Curator G
 - **Access:** internal
 - **Ownership:** manual
 - **Live count:** `listener_follows` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ One-way reversible edge; unfollowing deletes the row (on delete cascade). The live count filters status='active'.
 - **Flows to / depends on:**
   - → users (dependsOn) — follower/followee (cascade)
 - **Fed by / required by:**
@@ -551,6 +634,8 @@ Admin-promoted public curator personas layered on a user (PRD 25). One row per p
 - **Access:** public
 - **Ownership:** hybrid
 - **Live count:** `curators` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ status includes pending/rejected for Phase 13 self-serve onboarding; handle is URL-safe + unique; promote upserts `on conflict (user_id) do update`.
 - **Flows to / depends on:**
   - → users (dependsOn) — persona over a user (cascade)
 - **Fed by / required by:**
@@ -565,6 +650,8 @@ A curator's deliberate, attributed per-show picks (PRD 25). No FK to events (eve
 - **Access:** public
 - **Ownership:** hybrid
 - **Live count:** `curator_picks` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ No FK to events (daily re-ingest would cascade-delete): event_title is snapshotted and live metadata resolved via a tolerant left join; the live count filters status='visible'.
 - **Fed by / required by:**
   - ← Curators (flowsTo) — per-show picks
 
@@ -577,6 +664,9 @@ Public, deduped per-event song list seeded when a signed-in Spotify listener Goe
 - **Access:** public
 - **Ownership:** hybrid
 - **Live count:** `event_shared_songs` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ Upsert dedups per track via `on conflict (event_id, provider, provider_track_id)`; the live count filters status='visible'.
+  - _Runtime gotcha:_ seeded_by_user_id is stored server-side only (the inner-circle attribution on-ramp) and never appears in the anonymous/public payload.
 - **Flows to / depends on:**
   - → Event Detail (flowsTo) — shared listening
   - → Event Board (flowsTo) — compact affordance
@@ -596,6 +686,8 @@ The public landing page that renders the ranked event board.
 - **Source of truth:** `app/page.tsx`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Server component that resolves the anonymous session cookie and renders the ranked board; fully usable without an account.
 - **Flows to / depends on:**
   - → Event Detail (flowsTo) — navigates to
 - **Fed by / required by:**
@@ -610,6 +702,8 @@ Card grid of events with shareable URL-backed filters, custom date ranges, react
 - **Source of truth:** `components/EventBoard.tsx`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Filters are URL-backed (deep-linkable); the client re-scores instantly on a local preference/signal change via LISTENER_PREFERENCE_CHANGE_EVENT without a page reload.
 - **Flows to / depends on:**
   - → Homepage (flowsTo) — renders into
   - → Discovery Action API (flowsTo) — interaction events
@@ -631,6 +725,8 @@ Per-event page with full context, community panel, and share metadata.
 - **Source of truth:** `app/event/[id]/page.tsx`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Server-rendered per-event page that also generates OG/share metadata; resilient if community / shared-song data can't load.
 - **Flows to / depends on:**
   - → Community Panel (flowsTo) — embeds
   - → Saved Items API (flowsTo) — save from detail
@@ -649,6 +745,8 @@ Public curator directory + per-handle profile (PRD 25). Active curators + visibl
 - **Source of truth:** `app/api/curators/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Public read; returns active curators + visible picks only (never private going/firing, never a non-curator listener, never tokens/PII).
 - **Flows to / depends on:**
   - → Curators (dependsOn) — directory + profile
 
@@ -660,6 +758,8 @@ Public curator profile page (/curator/[handle]) — persona, top-list, per-show 
 - **Source of truth:** `app/curator/[handle]/page.tsx`
 - **Access:** public
 - **Ownership:** manual
+- **Implementation notes:**
+  - _Note:_ Resolves the curator by URL-safe handle; renders persona + top-list + visible picks + a Follow button (C1 edge). Regular listeners never get a public profile.
 - **Flows to / depends on:**
   - → Follows API (flowsTo) — follow a curator (C1 edge)
 - **Fed by / required by:**
@@ -677,6 +777,8 @@ Lets listeners add songs, notes, and voices to an event.
 - **Source of truth:** `components/CommunityPanel.tsx`
 - **Access:** public
 - **Ownership:** manual
+- **Implementation notes:**
+  - _Runtime gotcha:_ Snyk flags a DOM-based XSS dataflow here (a useState value flowing into a rendered sink, ~line 567) — a tracked, pre-existing finding to harden.
 - **Flows to / depends on:**
   - → Community API (flowsTo) — writes
 - **Fed by / required by:**
@@ -690,6 +792,8 @@ Write endpoints for contributions, reactions, and ticket intents.
 - **Source of truth:** `app/api/community/contributions/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Param mapping:_ Body parsed as Record<string, unknown> and validated in lib/community.ts; identity_key comes from the session or the anonymous session cookie, never raw client input.
 - **Flows to / depends on:**
   - → Community Service (dependsOn)
 - **Fed by / required by:**
@@ -703,6 +807,9 @@ Public (anonymous-friendly) feedback write, used by the 404 detour and general f
 - **Source of truth:** `app/api/feedback/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Param mapping:_ Body parsed with `.catch(() => null)`; the user id is taken from the session when signed in, never from the body.
+  - _SQL fallback:_ Tolerates a not-yet-provisioned table (returns a friendly success); only an unexpected error returns 500.
 - **Flows to / depends on:**
   - → feedback (flowsTo) — stores listener feedback
 
@@ -714,6 +821,8 @@ Logs event interactions and Spotify match corrections that train discovery.
 - **Source of truth:** `app/api/discovery/event-action/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Runtime gotcha:_ Body parsed with `.catch(() => null)`; DB failures strictly return 500 (no silent success) so a corrupt learning signal can't be written.
 - **Flows to / depends on:**
   - → Signal Memory (flowsTo) — logs actions
   - → spotify_event_match_corrections (flowsTo) — match corrections
@@ -735,6 +844,9 @@ Optional sign-in backed by the Postgres adapter: email magic link (Resend, brand
 - **Ownership:** automated
 - **Env vars (names only):** `NEXT_PUBLIC_AUTH_ENABLED`, `AUTH_SECRET`
 - **Health probe:** `auth-provider` (PRD 07)
+- **Implementation notes:**
+  - _Note:_ Postgres adapter + database session strategy; the events.signIn callback runs migrateSessionSignalsToUser (best-effort, never blocks sign-in) and records each provider's email into user_emails.
+  - _Runtime gotcha:_ getUserByEmail is wrapped (lib/auth-adapter.ts) for multi-email resolution; a different-account email collision routes to the PRD 37 recovery, not a blind auto-merge.
 - **Flows to / depends on:**
   - → users (flowsTo) — user records
   - → accounts (flowsTo) — oauth links
@@ -750,6 +862,8 @@ Auth.js route handler for sign-in, callback, and session.
 - **Source of truth:** `app/api/auth/[...nextauth]/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Auth.js catch-all route handler ([...nextauth]) for sign-in / callback / session; no custom logic beyond the auth.ts config.
 - **Flows to / depends on:**
   - → Auth.js (dependsOn)
 
@@ -761,6 +875,8 @@ Sign-in, connected accounts, and the taste/discovery settings a listener control
 - **Source of truth:** `components/ListenerProfileButton.tsx`
 - **Access:** public
 - **Ownership:** manual
+- **Implementation notes:**
+  - _Note:_ Broadcasts preference changes via LISTENER_PREFERENCE_CHANGE_EVENT for instant re-ranking; the Spotify beta wall becomes Request-access → pending → retry (PRD 36).
 - **Flows to / depends on:**
   - → Listener (me) API (flowsTo) — reads/writes
 - **Fed by / required by:**
@@ -774,6 +890,8 @@ Authenticated endpoints for the current listener: connections, profile, preferen
 - **Source of truth:** `app/api/me/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Param mapping:_ Signed-out returns authenticated:false plus enabled feature flags (never tokens); signed-in returns identity + connection metadata with token values stripped.
 - **Flows to / depends on:**
   - → Music Taste Sync (dependsOn) — sync taste
   - → Listener Preferences (dependsOn) — save settings
@@ -788,6 +906,8 @@ Signed-in-only endpoints to list, save, and un-save events, venues, and artists.
 - **Source of truth:** `app/api/me/saved-items/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Param mapping:_ Gated by requireUserId() (401 when anonymous); the acting user id comes from the session, never the body; body parsed with `.catch(() => null)`.
 - **Flows to / depends on:**
   - → Saved Items (dependsOn) — save/list/remove
 - **Fed by / required by:**
@@ -803,6 +923,8 @@ Signed-in-only endpoints to follow, unfollow, and list who the caller follows (+
 - **Source of truth:** `app/api/me/follows/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Param mapping:_ Gated by requireUserId() (401 when anonymous); the follower id is the session user, never the body; body parsed with `.catch(() => null)`.
 - **Flows to / depends on:**
   - → Social Graph (dependsOn) — follow/unfollow/list
 - **Fed by / required by:**
@@ -816,6 +938,8 @@ Signed-in-only endpoint returning the viewer's followed-and-opted-in people goin
 - **Source of truth:** `app/api/me/circle-activity/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Param mapping:_ Gated by requireUserId() (401/empty when anonymous); event ids bound as $2::text[], visibility resolved from the session user's circle — never anyone outside it.
 - **Flows to / depends on:**
   - → Social Activity (Inner-Circle) (dependsOn) — your-people going/firing
 
@@ -827,6 +951,8 @@ Signed-in-only, idempotent, best-effort endpoint to share a show/song-list with 
 - **Source of truth:** `app/api/me/circle-share/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Gated by requireUserId(); idempotent + best-effort, reuses existing going state (upsert with coalesce so an existing planning_at is kept), no Spotify write and no ranking change.
 - **Flows to / depends on:**
   - → Social Activity (Inner-Circle) (dependsOn) — share with circle
 
@@ -838,6 +964,8 @@ Signed-in-only, self-scoped (PRD 35): returns the caller's linked sign-in provid
 - **Source of truth:** `app/api/me/account-links/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Param mapping:_ Gated by requireUserId() (401 when anonymous); resolves the id from the session, never the body; returns linked providers with tokens stripped + the account's emails.
 - **Flows to / depends on:**
   - → user_emails (dependsOn) — linked providers + emails
 
@@ -849,6 +977,8 @@ Signed-in-only listener plane (PRD 36): submit/refresh your OWN Spotify tester-s
 - **Source of truth:** `app/api/me/spotify-access-request/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Param mapping:_ Gated by requireUserId(); the acting id is the session user, never the body. One open request per user (partial unique); the Spotify email is private to the listener + admin.
 - **Flows to / depends on:**
   - → spotify_access_requests (dependsOn) — submit + my status
 
@@ -860,6 +990,8 @@ Signed-in-only listener plane (PRD 29): submit a self-authored curator applicati
 - **Source of truth:** `app/api/me/curator-application/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Gated by requireUserId(); promoted instantly under the isSelfServeOpen gate (CURATOR_SELF_SERVE_GATE = 25 curators / 250 users), else `pending`. The acting id is the session user, never the body.
 - **Flows to / depends on:**
   - → Curators (dependsOn) — apply + my status (self-serve)
 
@@ -871,6 +1003,8 @@ Signed-in-only, self-scoped curator self-management (PRD 31): edit your OWN pers
 - **Source of truth:** `app/api/me/curator/route.ts`
 - **Access:** public
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Gated by requireUserId(); curator + pick ids are resolved from the session and re-checked in SQL ownership clauses, so a caller can never read or modify another curator. Admin moderation overrides.
 - **Flows to / depends on:**
   - → Curators (dependsOn) — self-manage persona + picks
 
@@ -882,6 +1016,8 @@ Signed-in-only /saved view with three private lists (events, venues, artists), i
 - **Source of truth:** `app/saved/page.tsx`
 - **Access:** public
 - **Ownership:** manual
+- **Implementation notes:**
+  - _Note:_ Signed-in-only; anonymous visitors are redirected to sign-in with a return path. Renders three private lists (events/venues/artists) with inline un-save.
 - **Flows to / depends on:**
   - → Saved Items API (flowsTo) — inline un-save
 - **Fed by / required by:**
@@ -899,6 +1035,8 @@ Admin-cookie-gated Spotify tester-slot review (PRD 36): list the open request qu
 - **Source of truth:** `app/api/admin/spotify-access/route.ts`
 - **Access:** internal
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Admin-cookie-gated (ADMIN_SESSION_TOKEN); the actual ≤25-slot add is an external Spotify Dashboard action this only tracks (status → slot_added/approved/rejected). No self-serve.
 - **Flows to / depends on:**
   - → spotify_access_requests (dependsOn) — review queue + slot-added
 
@@ -910,6 +1048,8 @@ Admin-cookie-gated curator management (PRD 25): promote/demote/hide curators, ad
 - **Source of truth:** `app/api/admin/curators/route.ts`
 - **Access:** internal
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Admin-cookie-gated (ADMIN_SESSION_TOKEN); promote/demote/hide + pick management. No self-serve, no pay-to-play.
 - **Flows to / depends on:**
   - → Curators (dependsOn) — promote/hide + picks + review queue
 
@@ -922,6 +1062,8 @@ Daily scheduled refresh of events from the AVLgo feed (10:00 UTC).
 - **Access:** internal
 - **Ownership:** automated
 - **Health probe:** `cron-avlgo-sync` (PRD 07)
+- **Implementation notes:**
+  - _Note:_ Scheduled 10:00 UTC; records a start + finish/failure row via recordJobRun. Supports an `?audit` query mode (searchParams) for a dry-run duplicate audit without persisting.
 - **Flows to / depends on:**
   - → Event Ingestion (dependsOn) — scheduled trigger
   - → system_job_runs (flowsTo) — records outcome
@@ -935,6 +1077,8 @@ Daily scheduled cleanup of stale cached event images from blob storage (11:00 UT
 - **Access:** internal
 - **Ownership:** automated
 - **Health probe:** `cron-cleanup` (PRD 07)
+- **Implementation notes:**
+  - _Note:_ Scheduled 11:00 UTC; records the run via recordJobRun. A failure returns 500 with success:false rather than throwing.
 - **Flows to / depends on:**
   - → Vercel Blob (flowsTo) — delete stale images
   - → system_job_runs (flowsTo) — records outcome
@@ -949,6 +1093,8 @@ Stores cached event images so cards stay fast and the upstream feed isn't hammer
 - **Ownership:** automated
 - **Env vars (names only):** `BLOB_READ_WRITE_TOKEN`
 - **Health probe:** `blob-storage` (PRD 07)
+- **Implementation notes:**
+  - _SQL fallback:_ Blob calls are wrapped in try/catch and degrade gracefully — a failed cache write or cleanup never breaks event rendering.
 - **Fed by / required by:**
   - ← Event Ingestion (flowsTo) — cache images
   - ← Image Cleanup (cron) (flowsTo) — delete stale images
@@ -964,6 +1110,8 @@ Privacy-friendly web analytics. The tracking script runs on public pages; traffi
 - **Env vars (names only):** `NEXT_PUBLIC_UMAMI_WEBSITE_ID`
 - **Health probe:** `umami` (PRD 07)
 - **Reference:** https://umami.is
+- **Implementation notes:**
+  - _Runtime gotcha:_ The tracking script renders only when NEXT_PUBLIC_UMAMI_WEBSITE_ID is set; the admin read-back uses the server-only UMAMI_API_KEY (never client-exposed) and degrades to 'not configured' when absent.
 - **Flows to / depends on:**
   - → Admin Portal (flowsTo) — stats read back
   - → Homepage (dependsOn) — tracks usage
@@ -976,6 +1124,8 @@ Aggregates counts, completeness, gaps, and stats for the admin portal (read-only
 - **Source of truth:** `lib/admin-data.ts`
 - **Access:** admin
 - **Ownership:** automated
+- **Implementation notes:**
+  - _Runtime gotcha:_ Stewardship rollups bind window dates as $1::date and derive completeness via `count(*) filter (where ...)::int` (missing image/time, weak url, empty tags).
 - **Flows to / depends on:**
   - → events (dependsOn) — reads counts
   - → contributions (dependsOn) — reads counts
@@ -991,6 +1141,8 @@ This model. The hand-authored source of truth for the architecture graph, agent 
 - **Source of truth:** `lib/system-registry.ts`
 - **Access:** admin
 - **Ownership:** manual
+- **Implementation notes:**
+  - _Note:_ Pure — no DB or server-only import — so the markdown generator and drift-guard test can run it without the app; each node's sourceOfTruth is drift-checked by test:registry.
 - **Fed by / required by:**
   - ← Admin Portal (dependsOn) — renders graph
 
@@ -1003,6 +1155,8 @@ Password-gated operating console: health, architecture, knowledge graph, steward
 - **Access:** admin
 - **Ownership:** manual
 - **Env vars (names only):** `ADMIN_PASSWORD`, `ADMIN_SESSION_TOKEN`
+- **Implementation notes:**
+  - _Note:_ Gated by ADMIN_PASSWORD → an ADMIN_SESSION_TOKEN cookie; renders all admin tabs including this architecture graph.
 - **Flows to / depends on:**
   - → Admin Data Loader (dependsOn)
   - → System Registry (dependsOn) — renders graph
@@ -1023,6 +1177,8 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 - **Access:** public
 - **Ownership:** manual
 - **Reference:** https://open.spotify.com/playlist/4fcdaCe97lEeEMe8rOhuSM
+- **Implementation notes:**
+  - _Note:_ A static external link rendered in the EventBoard nav (no data flow); the first ecosystem-partner slot.
 - **Fed by / required by:**
   - ← Event Board (flowsTo) — features
   - ← admin_resources (flowsTo) — catalogs

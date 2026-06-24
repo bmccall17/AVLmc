@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { SystemMap, SystemMapNode } from "@/lib/admin/registry";
 import type { HealthProbe, HealthSeverity, SystemHealth } from "@/lib/admin/health";
 import {
@@ -198,6 +198,31 @@ function GraphView({
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
+  // Hover-intent delay: only pop the tooltip after the pointer rests on a node for a beat, so it
+  // doesn't flicker while the user is just sweeping across the graph. Keyboard focus is treated as
+  // deliberate and shows immediately. Tunable.
+  const HOVER_INTENT_MS = 1100;
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearHoverTimer = () => {
+    if (hoverTimer.current) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+  };
+
+  const scheduleHover = (id: string) => {
+    clearHoverTimer();
+    hoverTimer.current = setTimeout(() => setHoveredId(id), HOVER_INTENT_MS);
+  };
+
+  const cancelHover = (id: string) => {
+    clearHoverTimer();
+    setHoveredId((prev) => (prev === id ? null : prev));
+  };
+
+  useEffect(() => clearHoverTimer, []);
+
   const posById = useMemo(() => {
     const map = new Map<string, Positioned>();
     for (const p of positions) map.set(p.node.id, p);
@@ -267,10 +292,10 @@ function GraphView({
                 className={`admin-arch-node${isSelected ? " selected" : ""}${isNeighbor ? " neighbor" : ""}${dimmed ? " dimmed" : ""}`}
                 transform={`translate(${x}, ${y})`}
                 onClick={() => onSelect(node.id)}
-                onMouseEnter={hasNotes ? () => setHoveredId(node.id) : undefined}
-                onMouseLeave={hasNotes ? () => setHoveredId((prev) => (prev === node.id ? null : prev)) : undefined}
+                onMouseEnter={hasNotes ? () => scheduleHover(node.id) : undefined}
+                onMouseLeave={hasNotes ? () => cancelHover(node.id) : undefined}
                 onFocus={hasNotes ? () => setHoveredId(node.id) : undefined}
-                onBlur={hasNotes ? () => setHoveredId((prev) => (prev === node.id ? null : prev)) : undefined}
+                onBlur={hasNotes ? () => cancelHover(node.id) : undefined}
                 tabIndex={hasNotes ? 0 : undefined}
                 style={{ cursor: "pointer" }}
               >

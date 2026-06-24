@@ -210,6 +210,18 @@ const NODES: RegistryNode[] = [
     external: true,
     healthProbeId: "avlgo-feed",
     docHref: "https://www.avlgo.com",
+    implementationNotes: [
+      {
+        kind: "sql_fallback",
+        detail:
+          "On a non-OK response or any fetch/parse error the loader returns hardcoded seed events with shouldPersist=false, so the board never renders empty and a bad fetch never overwrites stored rows.",
+      },
+      {
+        kind: "note",
+        detail:
+          "Tolerates three payload shapes — a top-level array, { events: [] }, or { data: [] }.",
+      },
+    ],
   },
   {
     id: "src-seed",
@@ -221,6 +233,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/events.ts",
     access: "public",
     ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Hardcoded in lib/events.ts; used only when the live feed is unreachable and never persisted (shouldPersist=false).",
+      },
+    ],
   },
   {
     id: "int-spotify",
@@ -236,6 +255,18 @@ const NODES: RegistryNode[] = [
     external: true,
     healthProbeId: "spotify-api",
     docHref: "https://developer.spotify.com/documentation/web-api",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "Requests only read scopes (user-read-private, user-read-email, user-top-read); no write/library scope is requested.",
+      },
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "OAuth tokens stay server-side in the Auth.js accounts row and are never read by discovery scoring or exposed in any response.",
+      },
+    ],
   },
 
   /* ---- Processing ------------------------------------------------ */
@@ -250,6 +281,18 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     envVars: ["AVLGO_API_URL"],
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Only a successful, non-empty fetch triggers upsertEvents; a failed fetch returns seed events without persisting.",
+      },
+      {
+        kind: "sql_fallback",
+        detail:
+          "upsertEvents writes in batches (EVENT_UPSERT_BATCH_SIZE) with `on conflict (id) do update`, so the daily re-ingest updates rows in place rather than duplicating.",
+      },
+    ],
   },
   {
     id: "svc-event-dedupe",
@@ -261,6 +304,18 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/event-dedupe.ts",
     access: "internal",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "The grouping key is normalizeVenueKey(venue) + normalizeTitleCore(title) — article/plural-stripped word tokens — not the raw strings, so 'The Orange Peel' and 'Orange Peel' collapse.",
+      },
+      {
+        kind: "note",
+        detail:
+          "getCanonicalEvents picks one winner per normalized (venue, title-core, date) signature and hides the rest; the audit feeds the admin Gaps tab.",
+      },
+    ],
   },
   {
     id: "svc-music",
@@ -272,6 +327,18 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/music.ts",
     access: "internal",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "sql_fallback",
+        detail:
+          "listMusicConnections / listMusicProfileItems retry a legacy query when the optional taste_opt_out_at / genres columns are absent (runWithMissingColumnFallback).",
+      },
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "The legacy fallbacks substitute explicitly-typed placeholders (null::timestamptz, '{}'::text[]) because Postgres can't infer a bare null/array's type in the select list.",
+      },
+    ],
   },
   {
     id: "svc-shared-songs",
@@ -283,6 +350,23 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/shared-songs.ts",
     access: "internal",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "sql_fallback",
+        detail:
+          "Every read is 42P01 (undefined_table) tolerant and degrades to empty, so the public board survives a not-yet-migrated DB.",
+      },
+      {
+        kind: "param_mapping",
+        detail:
+          "Batch reads bind $1::text[] of event ids; the single-event filter uses `$1::text is null or event_id = $1`.",
+      },
+      {
+        kind: "note",
+        detail:
+          "Seeding upserts `on conflict (event_id, provider, provider_track_id) do update` (dedup per track) and is best-effort, so a Spotify failure never breaks the reaction.",
+      },
+    ],
   },
   {
     id: "svc-discovery",
@@ -294,6 +378,18 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/discovery.ts",
     access: "internal",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Pure (no DB); SCORER_VERSION ('12.4') versions ranking output for the Insight baseline. Best partial match wins across the artist/venue/genre taste maps.",
+      },
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "Anonymous (and dial-0) callers get socialCircle = 0, keeping the anonymous board byte-for-byte unchanged.",
+      },
+    ],
   },
   {
     id: "svc-discovery-memory",
@@ -305,6 +401,23 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/discovery-memory.ts",
     access: "internal",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "Signal reads bind $1::text[] identity keys and a window via make_interval(days => $2::int); the implicit-signal window is 90 days.",
+      },
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "Per-dimension unions use explicit casts ('artist'::text as dimension) and tags are unnested via unnest(coalesce(tags, '{}'::text[])) to avoid null-array errors.",
+      },
+      {
+        kind: "note",
+        detail:
+          "migrateSessionSignalsToUser re-keys a browser's anonymous rows to the user inside a transaction; per-event state (unique (event_id, identity_key)) merges with GREATEST timestamps; a second run is a no-op.",
+      },
+    ],
   },
   {
     id: "svc-community",
@@ -316,6 +429,18 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/community.ts",
     access: "internal",
     ownership: "hybrid",
+    implementationNotes: [
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "Count rollups use `count(*) filter (where ...)::int`; a legacy fallback synthesizes the going/fire/source columns when the newer source column is absent.",
+      },
+      {
+        kind: "note",
+        detail:
+          "Reactions/intents upsert `on conflict (event_id, identity_key) do update`; user_id is nullable so anonymous participation works.",
+      },
+    ],
   },
   {
     id: "svc-listener-prefs",
@@ -327,6 +452,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/listener-preferences.ts",
     access: "internal",
     ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Pure preference model — nine weighted 0–200 controls (weight 0 fully cancels a dimension) plus ad-hoc custom boost/lower signals; persisted as weights jsonb / custom_signals jsonb.",
+      },
+    ],
   },
   {
     id: "svc-genre-taxonomy",
@@ -338,6 +470,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/genre-taxonomy.ts",
     access: "public",
     ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Pure and client-safe (no server-only import): 20 canonical genres + an alias/synonym map that resolves alias tags (rnb→soul, singer-songwriter→folk) and symmetric parent/child links.",
+      },
+    ],
   },
   {
     id: "svc-saved-items",
@@ -349,6 +488,23 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/saved-items.ts",
     access: "internal",
     ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "For venues/artists (no entity table) item_key = normalizeText(name) — the same normalization discovery scoring uses — so a saved venue/artist matches scoring identity.",
+      },
+      {
+        kind: "sql_fallback",
+        detail:
+          "Reads are 42P01-tolerant and degrade to empty.",
+      },
+      {
+        kind: "note",
+        detail:
+          "saveItem is idempotent via `on conflict (user_id, item_type, item_key) do nothing`.",
+      },
+    ],
   },
   {
     id: "svc-social-graph",
@@ -360,6 +516,18 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/social-graph.ts",
     access: "internal",
     ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "sql_fallback",
+        detail:
+          "Reads tolerate both 42P01 (missing table) and 42703 (missing column) and degrade to empty/false.",
+      },
+      {
+        kind: "note",
+        detail:
+          "Follow writes upsert `on conflict (follower_user_id, followee_user_id) do nothing`; activity visibility is gated by coalesce(share_activity, false).",
+      },
+    ],
   },
   {
     id: "svc-social-activity",
@@ -371,6 +539,18 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/social-activity.ts",
     access: "internal",
     ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "going/firing are derived in the SQL join (planning_at/fire_at present and not superseded by removed_at), gated by the active edge AND the followee's share_activity — so unfollowing or turning sharing off removes visibility instantly (no new table).",
+      },
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "Reads tolerate 42P01/42703; seeded_by_user_id is resolved to a name server-side and never shipped raw.",
+      },
+    ],
   },
   {
     id: "svc-curators",
@@ -382,6 +562,23 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/curators.ts",
     access: "public",
     ownership: "hybrid",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "curator_picks carry NO FK to events (daily re-ingest would cascade-delete them): event_title is snapshotted and live metadata is resolved via `left join public.events`.",
+      },
+      {
+        kind: "param_mapping",
+        detail:
+          "The board signal binds $1::text[] event ids and filters status='visible'; promote upserts `on conflict (user_id) do update`.",
+      },
+      {
+        kind: "sql_fallback",
+        detail:
+          "Reads tolerate 42P01 and degrade to empty.",
+      },
+    ],
   },
 
   /* ---- Data stores ----------------------------------------------- */
@@ -419,6 +616,13 @@ const NODES: RegistryNode[] = [
     access: "admin",
     ownership: "automated",
     countKey: "system_job_runs",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Append-only; written by the sync routes via recordJobRun (a start row, then a finish/failure row) and read by the cron health probes.",
+      },
+    ],
   },
   {
     id: "db-admin-resources",
@@ -430,6 +634,13 @@ const NODES: RegistryNode[] = [
     access: "admin",
     ownership: "manual",
     countKey: "admin_resources",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "The live count excludes archived rows (`where status <> 'archived'`); admin-managed via the Stewardship tab.",
+      },
+    ],
   },
   {
     id: "db-contributions",
@@ -441,6 +652,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "hybrid",
     countKey: "contributions",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Nullable user_id (anonymous-first); voice rows exist in the schema but are excluded from the launch surface. Public reads never expose session_id/user_id.",
+      },
+    ],
   },
   {
     id: "db-feedback",
@@ -453,6 +671,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     countKey: "feedback",
+    implementationNotes: [
+      {
+        kind: "sql_fallback",
+        detail:
+          "POST /api/feedback submit is 42P01-tolerant — a not-yet-provisioned table degrades to a friendly success rather than a 500, so the 404-detour form never errors.",
+      },
+    ],
   },
   {
     id: "db-reactions",
@@ -464,6 +689,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     countKey: "reactions",
+    implementationNotes: [
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "A legacy read fallback synthesizes going/fire from the `type` column when the newer `source` column is absent (see lib/community.ts).",
+      },
+    ],
   },
   {
     id: "db-event-intents",
@@ -475,6 +707,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     countKey: "event_intents",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Going/ticket-click intents per identity_key, tagged by source (avlmc / spotify / ticket_click); the rollup splits each source via `count(*) filter (...)::int`.",
+      },
+    ],
   },
   {
     id: "db-interaction-events",
@@ -486,6 +725,18 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     countKey: "event_interaction_events",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "Window reads bind $1::text[] identity keys + make_interval(days => $2::int).",
+      },
+      {
+        kind: "note",
+        detail:
+          "Append-only, keyed by identity_key; the 90-day impression window drives implicit 'skip' cooling, so any prune job must not delete rows inside that window.",
+      },
+    ],
   },
   {
     id: "db-person-event-state",
@@ -497,6 +748,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     countKey: "event_person_event_state",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "unique (event_id, identity_key); on the anonymous→account hand-off, rows are merged with GREATEST timestamps so the strongest/most-recent state wins.",
+      },
+    ],
   },
   {
     id: "db-users",
@@ -508,6 +766,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     countKey: "users",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Auth.js user record; users.email is demoted to primary/display — multi-email resolution lives in user_emails (PRD 35).",
+      },
+    ],
   },
   {
     id: "db-accounts",
@@ -519,6 +784,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     countKey: "accounts",
+    implementationNotes: [
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "Provider OAuth access/refresh tokens live here and are read server-side only; never surfaced to the admin portal, the API, or this registry.",
+      },
+    ],
   },
   {
     id: "db-user-emails",
@@ -531,6 +803,18 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     countKey: "user_emails",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "Global unique(lower(email)); inserts guard with `where not exists (select 1 ... where lower(email)=lower($2))`, and resolution matches `lower(email)=lower($1)`.",
+      },
+      {
+        kind: "sql_fallback",
+        detail:
+          "record/find are 42P01/42703-tolerant so a multi-email write never blocks sign-in.",
+      },
+    ],
   },
   {
     id: "db-spotify-access-requests",
@@ -543,6 +827,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     countKey: "spotify_access_requests",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "A partial unique index (spotify_access_requests_one_open_idx) enforces one OPEN request per user; status lifecycle is pending → slot_added → approved/rejected.",
+      },
+    ],
   },
   {
     id: "db-music-connections",
@@ -600,6 +891,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "manual",
     countKey: "listener_discovery_preferences",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "weights jsonb + custom_signals jsonb; one row per signed-in listener (anonymous prefs live in localStorage).",
+      },
+    ],
   },
   {
     id: "db-spotify-corrections",
@@ -611,6 +909,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "hybrid",
     countKey: "spotify_event_match_corrections",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Per-person reject/replace corrections consumed by discovery, so a rejected match no longer boosts and a replacement does.",
+      },
+    ],
   },
   {
     id: "db-saved-items",
@@ -622,6 +927,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "manual",
     countKey: "saved_items",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "item_key for venues/artists = normalizeText(name) (shared with discovery identity); idempotent insert `on conflict (user_id, item_type, item_key) do nothing`.",
+      },
+    ],
   },
   {
     id: "db-listener-follows",
@@ -633,6 +945,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "manual",
     countKey: "listener_follows",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "One-way reversible edge; unfollowing deletes the row (on delete cascade). The live count filters status='active'.",
+      },
+    ],
   },
   {
     id: "db-curators",
@@ -644,6 +963,13 @@ const NODES: RegistryNode[] = [
     access: "public",
     ownership: "hybrid",
     countKey: "curators",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "status includes pending/rejected for Phase 13 self-serve onboarding; handle is URL-safe + unique; promote upserts `on conflict (user_id) do update`.",
+      },
+    ],
   },
   {
     id: "db-curator-picks",
@@ -655,6 +981,13 @@ const NODES: RegistryNode[] = [
     access: "public",
     ownership: "hybrid",
     countKey: "curator_picks",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "No FK to events (daily re-ingest would cascade-delete): event_title is snapshotted and live metadata resolved via a tolerant left join; the live count filters status='visible'.",
+      },
+    ],
   },
   {
     id: "db-shared-songs",
@@ -666,6 +999,18 @@ const NODES: RegistryNode[] = [
     access: "public",
     ownership: "hybrid",
     countKey: "event_shared_songs",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Upsert dedups per track via `on conflict (event_id, provider, provider_track_id)`; the live count filters status='visible'.",
+      },
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "seeded_by_user_id is stored server-side only (the inner-circle attribution on-ramp) and never appears in the anonymous/public payload.",
+      },
+    ],
   },
 
   /* ---- Public experience ----------------------------------------- */
@@ -678,6 +1023,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/page.tsx",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Server component that resolves the anonymous session cookie and renders the ranked board; fully usable without an account.",
+      },
+    ],
   },
   {
     id: "ui-eventboard",
@@ -688,6 +1040,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "components/EventBoard.tsx",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Filters are URL-backed (deep-linkable); the client re-scores instantly on a local preference/signal change via LISTENER_PREFERENCE_CHANGE_EVENT without a page reload.",
+      },
+    ],
   },
   {
     id: "ui-event-detail",
@@ -698,6 +1057,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/event/[id]/page.tsx",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Server-rendered per-event page that also generates OG/share metadata; resilient if community / shared-song data can't load.",
+      },
+    ],
   },
 
   /* ---- Community ------------------------------------------------- */
@@ -710,6 +1076,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "components/CommunityPanel.tsx",
     access: "public",
     ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "Snyk flags a DOM-based XSS dataflow here (a useState value flowing into a rendered sink, ~line 567) — a tracked, pre-existing finding to harden.",
+      },
+    ],
   },
   {
     id: "api-community",
@@ -720,6 +1093,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/community/contributions/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "Body parsed as Record<string, unknown> and validated in lib/community.ts; identity_key comes from the session or the anonymous session cookie, never raw client input.",
+      },
+    ],
   },
   {
     id: "api-feedback",
@@ -731,6 +1111,18 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/feedback/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "Body parsed with `.catch(() => null)`; the user id is taken from the session when signed in, never from the body.",
+      },
+      {
+        kind: "sql_fallback",
+        detail:
+          "Tolerates a not-yet-provisioned table (returns a friendly success); only an unexpected error returns 500.",
+      },
+    ],
   },
   {
     id: "api-discovery",
@@ -741,6 +1133,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/discovery/event-action/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "Body parsed with `.catch(() => null)`; DB failures strictly return 500 (no silent success) so a corrupt learning signal can't be written.",
+      },
+    ],
   },
 
   /* ---- Identity & taste ------------------------------------------ */
@@ -756,6 +1155,18 @@ const NODES: RegistryNode[] = [
     ownership: "automated",
     envVars: ["NEXT_PUBLIC_AUTH_ENABLED", "AUTH_SECRET"],
     healthProbeId: "auth-provider",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Postgres adapter + database session strategy; the events.signIn callback runs migrateSessionSignalsToUser (best-effort, never blocks sign-in) and records each provider's email into user_emails.",
+      },
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "getUserByEmail is wrapped (lib/auth-adapter.ts) for multi-email resolution; a different-account email collision routes to the PRD 37 recovery, not a blind auto-merge.",
+      },
+    ],
   },
   {
     id: "api-auth",
@@ -766,6 +1177,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/auth/[...nextauth]/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Auth.js catch-all route handler ([...nextauth]) for sign-in / callback / session; no custom logic beyond the auth.ts config.",
+      },
+    ],
   },
   {
     id: "ui-listener-profile",
@@ -776,6 +1194,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "components/ListenerProfileButton.tsx",
     access: "public",
     ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Broadcasts preference changes via LISTENER_PREFERENCE_CHANGE_EVENT for instant re-ranking; the Spotify beta wall becomes Request-access → pending → retry (PRD 36).",
+      },
+    ],
   },
   {
     id: "api-me",
@@ -786,6 +1211,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/me/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "Signed-out returns authenticated:false plus enabled feature flags (never tokens); signed-in returns identity + connection metadata with token values stripped.",
+      },
+    ],
   },
   {
     id: "api-saved-items",
@@ -796,6 +1228,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/me/saved-items/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "Gated by requireUserId() (401 when anonymous); the acting user id comes from the session, never the body; body parsed with `.catch(() => null)`.",
+      },
+    ],
   },
   {
     id: "api-follows",
@@ -806,6 +1245,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/me/follows/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "Gated by requireUserId() (401 when anonymous); the follower id is the session user, never the body; body parsed with `.catch(() => null)`.",
+      },
+    ],
   },
   {
     id: "api-circle-activity",
@@ -816,6 +1262,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/me/circle-activity/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "Gated by requireUserId() (401/empty when anonymous); event ids bound as $2::text[], visibility resolved from the session user's circle — never anyone outside it.",
+      },
+    ],
   },
   {
     id: "api-circle-share",
@@ -826,6 +1279,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/me/circle-share/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Gated by requireUserId(); idempotent + best-effort, reuses existing going state (upsert with coalesce so an existing planning_at is kept), no Spotify write and no ranking change.",
+      },
+    ],
   },
   {
     id: "api-me-account-links",
@@ -837,6 +1297,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/me/account-links/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "Gated by requireUserId() (401 when anonymous); resolves the id from the session, never the body; returns linked providers with tokens stripped + the account's emails.",
+      },
+    ],
   },
   {
     id: "api-me-spotify-access-request",
@@ -848,6 +1315,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/me/spotify-access-request/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "Gated by requireUserId(); the acting id is the session user, never the body. One open request per user (partial unique); the Spotify email is private to the listener + admin.",
+      },
+    ],
   },
   {
     id: "api-admin-spotify-access",
@@ -859,6 +1333,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/admin/spotify-access/route.ts",
     access: "internal",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Admin-cookie-gated (ADMIN_SESSION_TOKEN); the actual ≤25-slot add is an external Spotify Dashboard action this only tracks (status → slot_added/approved/rejected). No self-serve.",
+      },
+    ],
   },
   {
     id: "api-me-curator-application",
@@ -870,6 +1351,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/me/curator-application/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Gated by requireUserId(); promoted instantly under the isSelfServeOpen gate (CURATOR_SELF_SERVE_GATE = 25 curators / 250 users), else `pending`. The acting id is the session user, never the body.",
+      },
+    ],
   },
   {
     id: "api-me-curator",
@@ -881,6 +1369,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/me/curator/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Gated by requireUserId(); curator + pick ids are resolved from the session and re-checked in SQL ownership clauses, so a caller can never read or modify another curator. Admin moderation overrides.",
+      },
+    ],
   },
   {
     id: "api-curators",
@@ -891,6 +1386,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/curators/route.ts",
     access: "public",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Public read; returns active curators + visible picks only (never private going/firing, never a non-curator listener, never tokens/PII).",
+      },
+    ],
   },
   {
     id: "api-admin-curators",
@@ -901,6 +1403,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/admin/curators/route.ts",
     access: "internal",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Admin-cookie-gated (ADMIN_SESSION_TOKEN); promote/demote/hide + pick management. No self-serve, no pay-to-play.",
+      },
+    ],
   },
   {
     id: "ui-curator-profile",
@@ -911,6 +1420,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/curator/[handle]/page.tsx",
     access: "public",
     ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Resolves the curator by URL-safe handle; renders persona + top-list + visible picks + a Follow button (C1 edge). Regular listeners never get a public profile.",
+      },
+    ],
   },
   {
     id: "ui-saved-space",
@@ -921,6 +1437,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/saved/page.tsx",
     access: "public",
     ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Signed-in-only; anonymous visitors are redirected to sign-in with a return path. Renders three private lists (events/venues/artists) with inline un-save.",
+      },
+    ],
   },
 
   /* ---- Operations ------------------------------------------------ */
@@ -934,6 +1457,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     healthProbeId: "cron-avlgo-sync",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Scheduled 10:00 UTC; records a start + finish/failure row via recordJobRun. Supports an `?audit` query mode (searchParams) for a dry-run duplicate audit without persisting.",
+      },
+    ],
   },
   {
     id: "job-cleanup",
@@ -945,6 +1475,13 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     healthProbeId: "cron-cleanup",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Scheduled 11:00 UTC; records the run via recordJobRun. A failure returns 500 with success:false rather than throwing.",
+      },
+    ],
   },
   {
     id: "int-blob",
@@ -958,6 +1495,13 @@ const NODES: RegistryNode[] = [
     envVars: ["BLOB_READ_WRITE_TOKEN"],
     external: true,
     healthProbeId: "blob-storage",
+    implementationNotes: [
+      {
+        kind: "sql_fallback",
+        detail:
+          "Blob calls are wrapped in try/catch and degrade gracefully — a failed cache write or cleanup never breaks event rendering.",
+      },
+    ],
   },
   {
     id: "int-umami",
@@ -972,6 +1516,13 @@ const NODES: RegistryNode[] = [
     external: true,
     healthProbeId: "umami",
     docHref: "https://umami.is",
+    implementationNotes: [
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "The tracking script renders only when NEXT_PUBLIC_UMAMI_WEBSITE_ID is set; the admin read-back uses the server-only UMAMI_API_KEY (never client-exposed) and degrades to 'not configured' when absent.",
+      },
+    ],
   },
   {
     id: "svc-admin-data",
@@ -982,6 +1533,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/admin-data.ts",
     access: "admin",
     ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "Stewardship rollups bind window dates as $1::date and derive completeness via `count(*) filter (where ...)::int` (missing image/time, weak url, empty tags).",
+      },
+    ],
   },
   {
     id: "svc-registry",
@@ -992,6 +1550,13 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "lib/system-registry.ts",
     access: "admin",
     ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Pure — no DB or server-only import — so the markdown generator and drift-guard test can run it without the app; each node's sourceOfTruth is drift-checked by test:registry.",
+      },
+    ],
   },
   {
     id: "ui-admin",
@@ -1003,6 +1568,13 @@ const NODES: RegistryNode[] = [
     access: "admin",
     ownership: "manual",
     envVars: ["ADMIN_PASSWORD", "ADMIN_SESSION_TOKEN"],
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Gated by ADMIN_PASSWORD → an ADMIN_SESSION_TOKEN cookie; renders all admin tabs including this architecture graph.",
+      },
+    ],
   },
 
   /* ---- Partners -------------------------------------------------- */
@@ -1017,6 +1589,13 @@ const NODES: RegistryNode[] = [
     ownership: "manual",
     external: true,
     docHref: "https://open.spotify.com/playlist/4fcdaCe97lEeEMe8rOhuSM",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "A static external link rendered in the EventBoard nav (no data flow); the first ecosystem-partner slot.",
+      },
+    ],
   },
 ];
 

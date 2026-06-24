@@ -1,6 +1,6 @@
 # AVL Music Companion Backlog
 
-Updated: June 18, 2026
+Updated: June 24, 2026
 
 ## Urgent
 
@@ -45,7 +45,6 @@ Updated: June 18, 2026
 
 ## Planned Next / Up Next
 
-- **Admin/Architecture Hover Tooltips**: Add onhover tooltips to the Admin/Architecture map that display lower-level implementation details (SQL fallback logic, query parameter mappings, and runtime driver errors).
 - **Nested Comments on Contributions**: Allow users to comment specifically on a listed song or note.
 - **Permanent Curator Fixtures**: Songs added by a curator should become permanent fixtures on their profile, so they never roll off even if the event is in the past.
 
@@ -92,9 +91,29 @@ Updated: June 18, 2026
 
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
-* **Admin Architecture Graph — Implementation Tooltips.** Improve the Admin|Architecture page (which renders from `lib/system-registry.ts`) with on-hover tooltips that expose lower-level implementation details to developers/agents. This includes SQL fallback logic (like missing column fallbacks), query parameter mappings, and runtime driver errors (e.g., Postgres uninferable types on nulls). Currently, the map provides a macro-view (services to tables), making micro-level parameter mapping breakages invisible on the graph.
-
 ## Done
+
+* **Admin │ Architecture — implementation-detail hover tooltips** — Shipped (June 24, 2026).
+  Enhancement to the PRD 06 / C1 architecture surface (which had only a macro service→table view):
+  the graph now exposes per-node micro-detail on hover. An additive, optional `implementationNotes`
+  field on `RegistryNode` (`lib/system-registry.ts`) — typed by `ImplementationNoteKind`
+  (`sql_fallback` / `param_mapping` / `runtime_gotcha` / `note`, with `IMPLEMENTATION_NOTE_KIND_LABELS`)
+  — drives a styled HTML tooltip overlay (`ImplementationTooltip` in
+  `components/admin/ArchitectureSection.tsx`, design-spec zinc/glass in `app/globals.css`) anchored to
+  the hovered/focused node (flips below when it would overflow), after a **1.1s hover-intent delay**
+  (`HOVER_INTENT_MS`, tunable) so it doesn't flicker while sweeping the graph (keyboard focus shows
+  immediately), with a `ⓘ` affordance on nodes that carry notes; the same notes also render in the click
+  `NodeDetail` (covers List view, touch, keyboard). Because the field lives on the one drift-guarded
+  registry, the notes flow automatically into the JSON export (`GET /api/admin/system-map`) and the
+  generated markdown (`docs/product/system-map.generated.md`, regenerated) agents read — one source of
+  truth. **All 70 registry nodes** now carry **code-verified** notes (harvested from the backing files —
+  e.g. `db-events` window-read param mapping; `db-music-connections` `null::timestamptz` / `db-music-profile-items`
+  `'{}'::text[]` missing-column fallbacks; `svc-discovery-memory` `make_interval(days => $2::int)` + GREATEST
+  hand-off; `svc-curators` no-FK snapshot; the `42P01/42703` brownfield-tolerance pattern across services;
+  `ui-community-panel` flags the tracked Snyk DOM-XSS). Drift guard extended with a note-kind invariant (`test:registry`, 7).
+  `typecheck` / `test:registry` / `lint` green; new code Snyk-clean; `$0`; no change to the public product.
+  *(This consolidates the duplicate "Admin/Architecture Hover Tooltips" (Planned Next) and "Admin
+  Architecture Graph — Implementation Tooltips" (Parked) entries.)*
 
 * **404 "detour" page + listener feedback capture** — Shipped (June 18, 2026). A broken link is treated as
   a missed connection, not a dead end: `app/not-found.tsx` apologizes, shows three shows happening soon
