@@ -4715,18 +4715,6 @@ button.primary-action {
   position: relative;
 }
 
-/* "ⓘ" affordance marking nodes that carry implementation notes (hover/focus to reveal). */
-.admin-arch-node-notes-glyph {
-  fill: #a1a1aa;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.admin-arch-node:hover .admin-arch-node-notes-glyph,
-.admin-arch-node:focus .admin-arch-node-notes-glyph {
-  fill: #fafafa;
-}
-
 /* Styled implementation-detail tooltip anchored to a hovered/focused node. */
 .admin-arch-tooltip {
   background: rgba(9, 9, 11, 0.96);

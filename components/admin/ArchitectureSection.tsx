@@ -308,16 +308,6 @@ function GraphView({
                   {NODE_KIND_LABELS[node.kind]}
                   {typeof node.count === "number" ? ` · ${formatCount(node.count)}` : ""}
                 </text>
-                {hasNotes && (
-                  <text
-                    x={NODE_W - (probe ? 30 : 14)}
-                    y={NODE_H - 9}
-                    className="admin-arch-node-notes-glyph"
-                    aria-hidden="true"
-                  >
-                    ⓘ
-                  </text>
-                )}
                 {probe && (
                   <circle
                     cx={NODE_W - 13}

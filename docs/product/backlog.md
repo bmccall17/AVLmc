@@ -45,6 +45,32 @@ Updated: June 24, 2026
 
 ## Planned Next / Up Next
 
+- **Freshness & drift-awareness for Architecture implementation notes.** The per-node
+  `implementationNotes` (and the registry's `description`s) are **hand-authored free-text**: they
+  ride the `/ship` regen + drift guard so the generated map / JSON export / admin graph never fall
+  out of sync with `lib/system-registry.ts`, **but nothing validates the note *content* against the
+  code it describes.** When the backing SQL / param mapping / runtime behavior changes, a note can
+  silently go stale and there's no signal in the admin panel that it's outdated.
+  **Why it matters:** these notes are read by both developers *and* AI agents as ground-truth for
+  low-level behavior (SQL fallbacks, `$n` param mappings, driver gotchas) — a *stale* note is worse
+  than none, because it actively misleads debugging and agent reasoning. As the codebase evolves,
+  drift is inevitable without a freshness mechanism. Desired outcomes:
+  1. **Per-note authored/reviewed date.** Add an optional `reviewedAt` (date) to `ImplementationNote`
+     in `lib/system-registry.ts` so each note carries when it was last verified against the code.
+  2. **Staleness indicators in the admin Architecture panel.** Surface "reviewed N days/months ago"
+     on the tooltip + `NodeDetail`, and flag a note **amber/stale** when the backing file changed
+     after the note's `reviewedAt` — compute via the backing file's last commit date
+     (`git log -1 --format=%cs <sourceOfTruth>`, build-time/server-side; tables compare against
+     `db/schema.sql`) vs. `reviewedAt`. A node-level "⚠ may be outdated" badge on the graph.
+  3. **An exact "what to ask for" refresh prompt.** A per-node copyable prompt/checklist (e.g.
+     *"Re-verify the implementation notes for node `svc-discovery-memory` against
+     `lib/discovery-memory.ts`; confirm the window param, GREATEST hand-off, and 42P01 tolerance are
+     still accurate, then update `reviewedAt`."*) so the user can hand a precise ask to an agent — plus
+     an admin "stale notes" roll-up listing every node whose notes need re-review, newest-drift first.
+  4. *(Stretch)* tie a note to a **code anchor** (function name / symbol) so true content-drift can be
+     guarded by a test, not just inferred from file mtime.
+  Reuses the existing registry/graph machinery; `$0`, no new deps, security-at-inception. *(Reported
+  Jun 24, 2026, as the deliberate follow-up to the free-text trade-off in the implementation-notes ship.)*
 - **Nested Comments on Contributions**: Allow users to comment specifically on a listed song or note.
 - **Permanent Curator Fixtures**: Songs added by a curator should become permanent fixtures on their profile, so they never roll off even if the event is in the past.
 
