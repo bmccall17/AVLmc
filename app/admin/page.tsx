@@ -62,7 +62,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     loadAdminDashboardData(),
     loadSystemMap(),
     loadSystemHealth(),
-    listContributions(status === "all" ? undefined : status),
+    // Load the full set; the Moderation tab filters by status client-side (no reload, free counts).
+    listContributions(),
   ]);
 
   return (

@@ -3172,6 +3172,145 @@ button.primary-action {
   color: #8a4f00;
 }
 
+/* ---- Moderation tab: dense, scannable contribution rows --------------------- */
+
+.status-tabs button.status-tab {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 900;
+  gap: 6px;
+  padding: 7px 10px;
+}
+
+.status-tabs button.status-tab[aria-current="page"] {
+  background: var(--ink);
+  color: white;
+}
+
+.status-tab-count {
+  background: rgba(127, 127, 127, 0.18);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  min-width: 1.4em;
+  padding: 1px 6px;
+  text-align: center;
+}
+
+.status-tabs button.status-tab[aria-current="page"] .status-tab-count {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* Override the tall default .admin-item padding/gap for a compact row. */
+.admin-list .admin-item {
+  align-items: start;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.admin-item-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-item-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-item-type {
+  color: var(--muted, #6b7280);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-item-event {
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.admin-item-event:hover {
+  text-decoration: underline;
+}
+
+.admin-item-by {
+  color: var(--muted, #6b7280);
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.admin-curator-badge {
+  background: rgba(127, 95, 0, 0.14);
+  border-radius: 999px;
+  color: #8a4f00;
+  font-size: 0.72rem;
+  font-weight: 800;
+  margin-left: 6px;
+  padding: 1px 7px;
+}
+
+.admin-item-content {
+  font-size: 0.9rem;
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-item-content.muted {
+  color: var(--muted, #6b7280);
+  font-style: italic;
+}
+
+.admin-item-content.clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.admin-item-expand {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  margin-left: 6px;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.admin-actions .admin-action-primary,
+.admin-actions .admin-action-secondary {
+  min-height: 34px;
+}
+
+.admin-actions .admin-action-secondary {
+  background: transparent;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.admin-actions .danger {
+  border-color: #d8694f;
+  color: #9d2c12;
+}
+
+.admin-actions button:disabled {
+  cursor: progress;
+  opacity: 0.5;
+}
+
 @media (max-width: 680px) {
   html {
     background:
