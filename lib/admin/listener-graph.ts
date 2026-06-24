@@ -416,6 +416,7 @@ function parseIdentity(identityKey: string): { userId?: string; sessionId?: stri
 
 function defaultPrefs(): ListenerDiscoveryPreferences {
   return {
+    contributionVisibility: "anonymous",
     customSignals: [],
     shareActivity: false,
     updatedAt: null,
