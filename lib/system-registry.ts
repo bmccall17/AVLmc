@@ -114,6 +114,29 @@ export type RegistryNode = {
   external?: boolean;
   /** Optional outbound link shown in the node detail (docs, dashboard, external site). */
   docHref?: string;
+  /**
+   * Optional micro-level implementation details surfaced in the Admin Architecture hover tooltip
+   * (and the generated map / JSON export). For SQL fallbacks, query parameter mappings, and driver
+   * quirks a maintainer/agent would otherwise have to read the backing code to discover. Free-text
+   * and descriptive — NOT drift-validated against code, so keep notes accurate by convention.
+   */
+  implementationNotes?: ImplementationNote[];
+};
+
+/**
+ * Category of a low-level implementation note shown in the Admin Architecture hover tooltip.
+ * Mirrors the kinds of micro-detail a maintainer/agent would otherwise have to read code to find.
+ */
+export type ImplementationNoteKind =
+  | "sql_fallback" // a degrade-gracefully query path (e.g. a missing-column fallback)
+  | "param_mapping" // what the query parameters / bound values actually map to
+  | "runtime_gotcha" // a driver/runtime quirk (e.g. Postgres uninferable type on a null)
+  | "note"; // any other implementation detail worth surfacing
+
+export type ImplementationNote = {
+  kind: ImplementationNoteKind;
+  /** One concrete, plain-language detail. Keep to a single sentence. */
+  detail: string;
 };
 
 export type EdgeKind = "flowsTo" | "dependsOn";
@@ -158,6 +181,13 @@ export const NODE_KIND_LABELS: Record<NodeKind, string> = {
   job: "Scheduled job",
   external_source: "External source",
   partner: "Partner",
+};
+
+export const IMPLEMENTATION_NOTE_KIND_LABELS: Record<ImplementationNoteKind, string> = {
+  sql_fallback: "SQL fallback",
+  param_mapping: "Param mapping",
+  runtime_gotcha: "Runtime gotcha",
+  note: "Note",
 };
 
 /* ------------------------------------------------------------------ */
@@ -366,6 +396,18 @@ const NODES: RegistryNode[] = [
     ownership: "automated",
     countKey: "events",
     healthProbeId: "event-data",
+    implementationNotes: [
+      {
+        kind: "param_mapping",
+        detail:
+          "The window read (listUpcomingEventsFromDatabase) binds $1/$2 = rolling-window start/end as YYYY-MM-DD and $3 = now as ISO.",
+      },
+      {
+        kind: "note",
+        detail:
+          "Rows order by coalesce(starts_at, event_date::timestamp + 23:59) so date-only events sort to the end of their day.",
+      },
+    ],
   },
   {
     id: "db-job-runs",
@@ -512,6 +554,18 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     countKey: "music_connections",
+    implementationNotes: [
+      {
+        kind: "sql_fallback",
+        detail:
+          "listMusicConnections retries with a legacy query when the taste_opt_out_at column is absent, selecting null::timestamptz as taste_opt_out_at instead.",
+      },
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "The fallback casts the bare null (null::timestamptz) because Postgres cannot infer a column type from an untyped null in the select list.",
+      },
+    ],
   },
   {
     id: "db-music-profile-items",
@@ -523,6 +577,18 @@ const NODES: RegistryNode[] = [
     access: "internal",
     ownership: "automated",
     countKey: "music_profile_items",
+    implementationNotes: [
+      {
+        kind: "sql_fallback",
+        detail:
+          "listMusicProfileItems (runWithMissingColumnFallback) selects the genres column, then retries substituting '{}'::text[] as genres when the additive PRD-16 column has not been applied yet.",
+      },
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "The empty-array fallback is explicitly typed ('{}'::text[]) so the driver maps it to string[] exactly like the real column.",
+      },
+    ],
   },
   {
     id: "db-listener-prefs",

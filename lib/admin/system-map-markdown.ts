@@ -1,5 +1,6 @@
 import {
   getNodesByLayer,
+  IMPLEMENTATION_NOTE_KIND_LABELS,
   NODE_KIND_LABELS,
   type RegistryEdge,
   type RegistryNode,
@@ -54,6 +55,13 @@ function renderNode(node: RegistryNode, edges: RegistryEdge[], labels: Map<strin
   }
   for (const [key, value] of meta) {
     lines.push(`- **${key}:** ${value}`);
+  }
+
+  if (node.implementationNotes?.length) {
+    lines.push("- **Implementation notes:**");
+    for (const note of node.implementationNotes) {
+      lines.push(`  - _${IMPLEMENTATION_NOTE_KIND_LABELS[note.kind]}:_ ${note.detail}`);
+    }
   }
 
   const outbound = edges.filter((edge) => edge.from === node.id);

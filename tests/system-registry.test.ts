@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getSystemRegistry } from "@/lib/system-registry";
+import { getSystemRegistry, IMPLEMENTATION_NOTE_KIND_LABELS } from "@/lib/system-registry";
 import { renderSystemMapMarkdown } from "@/lib/admin/system-map-markdown";
 
 /**
@@ -64,6 +64,21 @@ test("nodes declaring a countKey are datastores (counts resolve to a table)", ()
         node.kind,
         "datastore",
         `Node "${node.id}" declares countKey but is not a datastore`
+      );
+    }
+  }
+});
+
+test("implementation notes use a known kind", () => {
+  for (const node of nodes) {
+    for (const note of node.implementationNotes ?? []) {
+      assert.ok(
+        note.kind in IMPLEMENTATION_NOTE_KIND_LABELS,
+        `Node "${node.id}" has an implementation note with an unknown kind: ${note.kind}`
+      );
+      assert.ok(
+        note.detail.trim().length > 0,
+        `Node "${node.id}" has an empty implementation-note detail`
       );
     }
   }

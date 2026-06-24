@@ -277,6 +277,9 @@ Canonical normalized music events shown on the board and detail pages.
 - **Ownership:** automated
 - **Health probe:** `event-data` (PRD 07)
 - **Live count:** `events` (resolved in portal/API)
+- **Implementation notes:**
+  - _Param mapping:_ The window read (listUpcomingEventsFromDatabase) binds $1/$2 = rolling-window start/end as YYYY-MM-DD and $3 = now as ISO.
+  - _Note:_ Rows order by coalesce(starts_at, event_date::timestamp + 23:59) so date-only events sort to the end of their day.
 - **Flows to / depends on:**
   - → Discovery Scoring (flowsTo) — candidate events
   - → Event Board (flowsTo) — event rows
@@ -457,6 +460,9 @@ A listener's connected music providers, scopes, sync state, and taste opt-out.
 - **Access:** internal
 - **Ownership:** automated
 - **Live count:** `music_connections` (resolved in portal/API)
+- **Implementation notes:**
+  - _SQL fallback:_ listMusicConnections retries with a legacy query when the taste_opt_out_at column is absent, selecting null::timestamptz as taste_opt_out_at instead.
+  - _Runtime gotcha:_ The fallback casts the bare null (null::timestamptz) because Postgres cannot infer a column type from an untyped null in the select list.
 - **Fed by / required by:**
   - ← Music Taste Sync (flowsTo) — connection state
   - ← Admin Data Loader (dependsOn) — reads counts
@@ -470,6 +476,9 @@ A listener's top artists/tracks pulled from their provider (incl. per-artist gen
 - **Access:** internal
 - **Ownership:** automated
 - **Live count:** `music_profile_items` (resolved in portal/API)
+- **Implementation notes:**
+  - _SQL fallback:_ listMusicProfileItems (runWithMissingColumnFallback) selects the genres column, then retries substituting '{}'::text[] as genres when the additive PRD-16 column has not been applied yet.
+  - _Runtime gotcha:_ The empty-array fallback is explicitly typed ('{}'::text[]) so the driver maps it to string[] exactly like the real column.
 - **Flows to / depends on:**
   - → Discovery Scoring (flowsTo) — taste weights
 - **Fed by / required by:**

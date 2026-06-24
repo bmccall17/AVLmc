@@ -4712,6 +4712,107 @@ button.primary-action {
   max-height: 640px;
   overflow: auto;
   padding: 8px;
+  position: relative;
+}
+
+/* "ⓘ" affordance marking nodes that carry implementation notes (hover/focus to reveal). */
+.admin-arch-node-notes-glyph {
+  fill: #a1a1aa;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-arch-node:hover .admin-arch-node-notes-glyph,
+.admin-arch-node:focus .admin-arch-node-notes-glyph {
+  fill: #fafafa;
+}
+
+/* Styled implementation-detail tooltip anchored to a hovered/focused node. */
+.admin-arch-tooltip {
+  background: rgba(9, 9, 11, 0.96);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  padding: 10px 12px;
+  pointer-events: none;
+  position: absolute;
+  z-index: 40;
+}
+
+.admin-arch-tooltip-title {
+  color: #fafafa;
+  font-size: 12.5px;
+  font-weight: 800;
+  margin: 0 0 8px;
+}
+
+.admin-arch-tooltip-notes {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-arch-tooltip-note {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-arch-tooltip-kind {
+  color: #d4d4d8;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-arch-tooltip-kind.sql_fallback {
+  color: #5eead4;
+}
+
+.admin-arch-tooltip-kind.param_mapping {
+  color: #93c5fd;
+}
+
+.admin-arch-tooltip-kind.runtime_gotcha {
+  color: #fca5a5;
+}
+
+.admin-arch-tooltip-detail {
+  color: #d4d4d8;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/* Same notes, shown in the click-to-open node detail (covers List view, touch, keyboard). */
+.admin-node-detail-notes {
+  border-top: 1px solid rgba(63, 63, 70, 0.4);
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.admin-node-detail-notes h4 {
+  color: #e4e4e7;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.admin-node-detail-notes ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-node-detail-notes li {
+  display: grid;
+  gap: 3px;
 }
 
 .admin-arch-graph {

@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import type { SystemMap, SystemMapNode } from "@/lib/admin/registry";
 import type { HealthProbe, HealthSeverity, SystemHealth } from "@/lib/admin/health";
 import {
+  IMPLEMENTATION_NOTE_KIND_LABELS,
   NODE_KIND_LABELS,
   SYSTEM_LAYERS,
+  type ImplementationNote,
   type NodeKind,
   type RegistryEdge,
   type SystemLayer,
@@ -194,11 +196,16 @@ function GraphView({
   probeForNode: (node: SystemMapNode) => HealthProbe | undefined;
   onSelect: (id: string) => void;
 }) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
   const posById = useMemo(() => {
     const map = new Map<string, Positioned>();
     for (const p of positions) map.set(p.node.id, p);
     return map;
   }, [positions]);
+
+  const hovered = hoveredId ? posById.get(hoveredId) ?? null : null;
+  const hoveredNotes = hovered?.node.implementationNotes ?? [];
 
   return (
     <div className="admin-arch-graph-scroll">
@@ -253,12 +260,18 @@ function GraphView({
               );
             const dimmed = selectedId !== null && !isSelected && !isNeighbor;
             const probe = probeForNode(node);
+            const hasNotes = (node.implementationNotes?.length ?? 0) > 0;
             return (
               <g
                 key={node.id}
                 className={`admin-arch-node${isSelected ? " selected" : ""}${isNeighbor ? " neighbor" : ""}${dimmed ? " dimmed" : ""}`}
                 transform={`translate(${x}, ${y})`}
                 onClick={() => onSelect(node.id)}
+                onMouseEnter={hasNotes ? () => setHoveredId(node.id) : undefined}
+                onMouseLeave={hasNotes ? () => setHoveredId((prev) => (prev === node.id ? null : prev)) : undefined}
+                onFocus={hasNotes ? () => setHoveredId(node.id) : undefined}
+                onBlur={hasNotes ? () => setHoveredId((prev) => (prev === node.id ? null : prev)) : undefined}
+                tabIndex={hasNotes ? 0 : undefined}
                 style={{ cursor: "pointer" }}
               >
                 <rect width={NODE_W} height={NODE_H} rx={10} className="admin-arch-node-rect" stroke={color} />
@@ -270,6 +283,16 @@ function GraphView({
                   {NODE_KIND_LABELS[node.kind]}
                   {typeof node.count === "number" ? ` · ${formatCount(node.count)}` : ""}
                 </text>
+                {hasNotes && (
+                  <text
+                    x={NODE_W - (probe ? 30 : 14)}
+                    y={NODE_H - 9}
+                    className="admin-arch-node-notes-glyph"
+                    aria-hidden="true"
+                  >
+                    ⓘ
+                  </text>
+                )}
                 {probe && (
                   <circle
                     cx={NODE_W - 13}
@@ -287,6 +310,66 @@ function GraphView({
           })}
         </g>
       </svg>
+
+      {hovered && hoveredNotes.length > 0 && (
+        <ImplementationTooltip
+          label={hovered.node.label}
+          notes={hoveredNotes}
+          x={hovered.x}
+          y={hovered.y}
+          graphWidth={width}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Styled HTML overlay (not an SVG <title>) anchored to a hovered node, exposing its low-level
+ * implementation notes — SQL fallbacks, query-parameter mappings, and runtime/driver gotchas that
+ * are invisible in the macro graph. Positioned to the right of the node, flipping below when it
+ * would overflow the graph's right edge. Non-interactive (pointer-events: none) so it never steals
+ * the hover.
+ */
+function ImplementationTooltip({
+  label,
+  notes,
+  x,
+  y,
+  graphWidth,
+}: {
+  label: string;
+  notes: ImplementationNote[];
+  x: number;
+  y: number;
+  graphWidth: number;
+}) {
+  // The SVG sits inside the scroll container's 8px padding, but an absolutely-positioned overlay
+  // is offset from the padding edge — add the padding back so the tooltip aligns with the node.
+  const SCROLL_PAD = 8;
+  const TOOLTIP_W = 280;
+  const overflowsRight = x + NODE_W + 12 + TOOLTIP_W > graphWidth;
+  const style: CSSProperties = overflowsRight
+    ? {
+        left: SCROLL_PAD + Math.max(0, x + NODE_W - TOOLTIP_W),
+        top: SCROLL_PAD + y + NODE_H + 8,
+        width: TOOLTIP_W,
+      }
+    : { left: SCROLL_PAD + x + NODE_W + 12, top: SCROLL_PAD + y, width: TOOLTIP_W };
+
+  return (
+    <div className="admin-arch-tooltip" role="tooltip" style={style}>
+      <p className="admin-arch-tooltip-title">{label}</p>
+      <ul className="admin-arch-tooltip-notes">
+        {notes.map((note, index) => (
+          <li key={index} className="admin-arch-tooltip-note">
+            <span className={`admin-arch-tooltip-kind ${note.kind}`}>
+              {IMPLEMENTATION_NOTE_KIND_LABELS[note.kind]}
+            </span>
+            <span className="admin-arch-tooltip-detail">{note.detail}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -453,6 +536,22 @@ export function NodeDetail({
           </div>
         )}
       </div>
+
+      {node.implementationNotes && node.implementationNotes.length > 0 && (
+        <div className="admin-node-detail-notes">
+          <h4>Implementation details</h4>
+          <ul>
+            {node.implementationNotes.map((note, index) => (
+              <li key={index}>
+                <span className={`admin-arch-tooltip-kind ${note.kind}`}>
+                  {IMPLEMENTATION_NOTE_KIND_LABELS[note.kind]}
+                </span>
+                <span className="admin-arch-tooltip-detail">{note.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="admin-node-detail-edges">
         <div>
