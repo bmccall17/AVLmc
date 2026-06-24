@@ -45,6 +45,33 @@ Updated: June 24, 2026
 
 ## Planned Next / Up Next
 
+- **Moderation tab UX overhaul — _(semi-urgent)_.** The admin Moderation tab
+  (`components/AdminModeration.tsx`, backed by `POST /api/admin/contributions` + `lib/community.ts`)
+  is hard to operate today and slows real moderation. Four concrete problems:
+  1. **Confusing status model.** Each row carries one of `visible` / `hidden` / `pending` (plus an
+     `all` filter), shown as a bare `status-pill` with no explanation of what each state means or the
+     intended workflow — e.g. is `pending` "awaiting review" and the default for new items? what is an
+     operator actually supposed to do about it? Define and label the vocabulary
+     (`ContributionStatus` in `lib/community.ts`).
+  2. **Buttons don't map to a clear action.** Every row shows a conditional three-way toggle —
+     **Hide / Unhide / Pending** — where the primary moderator action isn't obvious, "Unhide"
+     (→ `visible`) reads oddly next to a `visible` pill, and "Pending" as a *button* is unclear.
+     Reframe around the real decision a moderator makes (approve / hide, with an explicit
+     "needs review") — one obvious primary action + a secondary, not three equal toggles.
+  3. **Not enough information per row.** A row shows status pill, event title, `type by name ·
+     datetime`, and a one-line summary — but no link to the event or the live contribution, raw
+     overlong song URLs, no provenance beyond `displayName` (anonymous vs signed-in / session), and
+     no full-content view when the body is long. A moderator can't quickly judge a borderline item.
+  4. **Rows take up too much space.** The large `<h2>` event title + two-column `article` layout
+     makes each entry tall, so very few items fit on screen. Make rows dense and scannable (compact
+     line, status as a colored chip, inline actions), and add per-status counts on the filter tabs.
+  **Desired outcome:** a moderator can scan many contributions at a glance, read each item's state
+  instantly, and act with one clear primary action — without oversized rows or guessing what a button
+  does. Scope: `components/AdminModeration.tsx` + its styles in `app/globals.css`
+  (`.admin-item` / `.status-pill` / `.admin-actions` / `.status-tabs`); clarify the status vocabulary
+  in `lib/community.ts` and the `POST /api/admin/contributions` contract; keep moderation behavior
+  correct (hide must remove a contribution from the public board). `$0`, security-at-inception, no
+  schema change expected. *(Reported Jun 24, 2026.)*
 - **Freshness & drift-awareness for Architecture implementation notes.** The per-node
   `implementationNotes` (and the registry's `description`s) are **hand-authored free-text**: they
   ride the `/ship` regen + drift guard so the generated map / JSON export / admin graph never fall
