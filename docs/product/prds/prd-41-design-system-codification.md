@@ -22,7 +22,7 @@ can't silently reintroduce light-on-dark text.
 
 ## Implementation Status
 
-**In progress — June 26, 2026.** Delivered so far:
+**In progress — June 25, 2026.** Delivered so far:
 
 - **Design Spec rewritten to match the implementation.** `docs/design/AVLmc-Design-Spec.md` now states the
   stack honestly (plain CSS + custom properties in `app/globals.css`; no Tailwind, no framer-motion), adds a

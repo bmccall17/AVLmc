@@ -106,7 +106,9 @@ export function SpotifyAccessSection() {
             </span>
           </li>
         ))}
-        {requests.length === 0 ? <li className="empty-copy">No open access requests.</li> : null}
+        {requests.length === 0 && !loadError ? (
+          <li className="empty-copy">No open access requests.</li>
+        ) : null}
       </ul>
     </section>
   );

@@ -22,7 +22,7 @@ near-black text on the dark gradient. This cycle adds a single grouped rule that
 
 ## Implementation Status
 
-**Shipped — June 26, 2026.** Delivered:
+**Shipped — June 25, 2026.** Delivered:
 
 - **Canonical dark route-shell context** (`app/globals.css`, immediately after `.shell`): one grouped rule for
   `.curators-directory-shell, .admin-curators-shell, .auth-recovery-shell, .not-found-shell, .error-shell`
@@ -37,6 +37,20 @@ near-black text on the dark gradient. This cycle adds a single grouped rule that
 - **No JSX change for the curator/admin/auth/404 surfaces** — those `<main>` elements already carried the
   shell classes; the CSS now gives them a color context. (The error boundary gains its class in C2/PRD 40.)
 - **Quality.** `typecheck` / `lint` / `test:registry` (7) green; no new dependency; `$0`.
+
+**Post-ship re-audit follow-up — June 25, 2026.** A Playwright re-audit after the first fix found three
+residual readability gaps, now fixed:
+
+- **Full-document dark background.** The fixed `::before` backdrop only covers the viewport, so tall pages
+  (404 detour, mobile admin curators) leaked the global gradient's light band below `26rem` (and in full-page
+  screenshots). Added `html:has(.curators-directory-shell, …, .error-shell) { background: #0a0a0a }` so the
+  whole document is dark whenever a dark route shell is present, regardless of page height.
+- **`.ghost-control` CTAs.** The pale `#edf5f2` `.ghost-control` background rendered white-on-pale (~1:1) under
+  the dark shells (404 "tune it"/"skip"/"recommend curators" links, feedback Skip). Re-skinned `.ghost-control`
+  within the dark shells as a dark panel button (`rgba(24,24,27,.9)` + `var(--line)` + `var(--ink)`).
+- **Eyebrow contrast.** The teal `.eyebrow`/`.card-kicker` accent (`#087f8c`) missed AA on dark (404 `4.17:1`,
+  auth `3.73:1`); switched to teal-400 `#2dd4bf` inside dark shells. Also brightened the admin-login back link
+  (`.admin-login-back` `#71717a` → `#a1a1aa`, `3.67:1` → AA).
 
 ## Goals
 

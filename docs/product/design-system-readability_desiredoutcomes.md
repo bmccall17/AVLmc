@@ -1,6 +1,6 @@
 ## Design-System Readability & Integrity Repair — Desired Outcomes
 
-Updated: June 26, 2026
+Updated: June 25, 2026
 
 ### Purpose & Posture
 

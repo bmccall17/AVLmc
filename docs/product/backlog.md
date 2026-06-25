@@ -1,6 +1,6 @@
 # AVL Music Companion Backlog
 
-Updated: June 26, 2026
+Updated: June 25, 2026
 
 ## Urgent
 
@@ -101,7 +101,7 @@ Updated: June 26, 2026
 
 ## Done
 
-* **Dark-shell readability + functional blockers from the June 25 design audit** — Shipped (June 26, 2026) as
+* **Dark-shell readability + functional blockers from the June 25 design audit** — Shipped (June 25, 2026) as
   **Phase 16 C1–C2** ([Design-System Readability & Integrity Repair Epic](design-system-readability-prd.md),
   [PRD 39](prds/prd-39-dark-route-shell-readability.md) + [PRD 40](prds/prd-40-legible-failure-states-and-integrity.md)).
   Root cause: a split design system — light-era `:root` tokens (`--ink`/`--muted`/`--panel`) drove the generic
@@ -116,8 +116,13 @@ Updated: June 26, 2026
   added `metadata.icons` in `app/layout.tsx`); `CuratorAdminPanel`/`SpotifyAccessSection` now surface non-OK /
   network failures as a retryable `.admin-curators-error` banner instead of silently-empty queues; the four
   promote-curator inputs gained `aria-label`s. `typecheck` / `lint` / `test:registry` (7) green; changed admin
-  components Snyk-clean; `$0`, no new deps. **Remainder (Phase 16 C3, Planned Next):** the local-`DATABASE_URL`
-  degradation decision + a Playwright readability smoke test (the Design Spec rewrite is already shipped).
+  components Snyk-clean; `$0`, no new deps. **Re-audit follow-up (June 25, 2026)** closed the residual gaps a
+  Playwright re-audit found: tall dark pages no longer leak the light gradient band (`html:has(<dark shell>)`
+  paints the full document `#0a0a0a`); `.ghost-control` CTAs are re-skinned dark (were white-on-pale ~1:1);
+  the admin error banner + admin buttons now clear AA and match the dark system; the teal eyebrow + admin-login
+  back link were brightened to AA; and the future-dated `June 26` doc stamps were corrected to `June 25`.
+  **Remainder (Phase 16 C3, Planned Next):** the local-`DATABASE_URL` degradation decision + a Playwright
+  readability smoke test (the Design Spec rewrite is already shipped).
 
 * **"Recommend a curator" — replaced the `mailto:` with an in-app intake** — Shipped (June 24, 2026), as
   part of a five-item curator-surface polish sprint. **Decisions:** signed-in only (`requireUserId()`-gated)

@@ -20,7 +20,7 @@ accessible labels to the four promote-curator inputs.
 
 ## Implementation Status
 
-**Shipped — June 26, 2026.** Delivered:
+**Shipped — June 25, 2026.** Delivered:
 
 - **Legible route error boundary.** `app/error.tsx` `<main>` is now `className="shell error-shell"`; with
   C1's `.error-shell` token context, the previously dark-on-dark retry screen reads clearly. (Verify by
@@ -41,6 +41,20 @@ accessible labels to the four promote-curator inputs.
   `aria-label`s (User id / Handle / Display name / Bio (optional)); placeholders remain as examples.
 - **Quality.** `typecheck` / `lint` / `test:registry` (7) green; changed admin components Snyk-clean (0
   issues); no new dependency; `$0`.
+
+**Post-ship re-audit follow-up — June 25, 2026.** The Playwright re-audit found the admin failure surface
+improved but still imperfect; now fixed:
+
+- **No more contradictory empty states.** When a queue fetch fails, the panels showed the error banner *and*
+  still rendered reassuring empty copy ("No pending applications", "No recommendations", "All curators have
+  picks", "No curators yet", "No open access requests"). Each empty-state line is now gated on `!loadError`
+  in `CuratorAdminPanel`/`SpotifyAccessSection`, so a failed load shows only the error + Retry.
+- **Admin error banner contrast → AA.** `.admin-curators-error` text measured `2.54:1` and its retry button
+  `1.91:1`; darkened the banner/button backgrounds (`rgba(127,29,29,.4)` / `rgba(248,113,113,.28)`) and
+  brightened the text to near-white (`#fee2e2` / `#fef2f2`) to clear AA.
+- **Styled the admin buttons.** The promote/approve/reject/hide buttons inherited light default browser
+  styling on the dark page; added a dark `.admin-curators-form/-list/-actions button` treatment, with the
+  primary **Promote** action carrying the teal accent.
 
 ## Goals
 

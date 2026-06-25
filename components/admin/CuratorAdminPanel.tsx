@@ -185,7 +185,9 @@ export function CuratorAdminPanel() {
             </span>
           </li>
         ))}
-        {applications.length === 0 ? <li className="empty-copy">No pending applications.</li> : null}
+        {applications.length === 0 && !loadError ? (
+          <li className="empty-copy">No pending applications.</li>
+        ) : null}
       </ul>
 
       <h3>Recommendations ({recommendations.length})</h3>
@@ -219,7 +221,9 @@ export function CuratorAdminPanel() {
             </span>
           </li>
         ))}
-        {recommendations.length === 0 ? <li className="empty-copy">No recommendations.</li> : null}
+        {recommendations.length === 0 && !loadError ? (
+          <li className="empty-copy">No recommendations.</li>
+        ) : null}
       </ul>
 
       <h3>Not activated ({notActivated.length})</h3>
@@ -235,7 +239,9 @@ export function CuratorAdminPanel() {
             </button>
           </li>
         ))}
-        {notActivated.length === 0 ? <li className="empty-copy">All curators have picks.</li> : null}
+        {notActivated.length === 0 && !loadError ? (
+          <li className="empty-copy">All curators have picks.</li>
+        ) : null}
       </ul>
 
       <h3>All curators</h3>
@@ -252,7 +258,9 @@ export function CuratorAdminPanel() {
             ) : null}
           </li>
         ))}
-        {curators.length === 0 ? <li className="empty-copy">No curators yet.</li> : null}
+        {curators.length === 0 && !loadError ? (
+          <li className="empty-copy">No curators yet.</li>
+        ) : null}
       </ul>
     </section>
   );

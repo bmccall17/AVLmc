@@ -76,6 +76,42 @@ a {
   z-index: -1;
 }
 
+/* `.ghost-control` (and `.music-actions button`) ships a pale `#edf5f2` background for light
+   pages; inside a dark shell the foreground is now white, so its default would be white-on-pale
+   (~1:1). Re-skin it as a dark panel button so the 404 / feedback CTAs are readable. */
+.curators-directory-shell .ghost-control,
+.admin-curators-shell .ghost-control,
+.auth-recovery-shell .ghost-control,
+.not-found-shell .ghost-control,
+.error-shell .ghost-control {
+  background: rgba(24, 24, 27, 0.9);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.curators-directory-shell .ghost-control:hover,
+.admin-curators-shell .ghost-control:hover,
+.auth-recovery-shell .ghost-control:hover,
+.not-found-shell .ghost-control:hover,
+.error-shell .ghost-control:hover {
+  background: rgba(39, 39, 42, 0.95);
+}
+
+/* The teal `.eyebrow` / `.card-kicker` accent (`#087f8c`) misses AA on the dark background
+   (~3.7–4.2:1 for these small uppercase labels). Use the brighter teal-400 inside dark shells. */
+.curators-directory-shell .eyebrow,
+.admin-curators-shell .eyebrow,
+.auth-recovery-shell .eyebrow,
+.not-found-shell .eyebrow,
+.error-shell .eyebrow,
+.curators-directory-shell .card-kicker,
+.admin-curators-shell .card-kicker,
+.auth-recovery-shell .card-kicker,
+.not-found-shell .card-kicker,
+.error-shell .card-kicker {
+  color: #2dd4bf;
+}
+
 .site-header {
   align-items: flex-start;
   display: flex;
@@ -435,6 +471,19 @@ html {
   background:
     radial-gradient(circle at 20% 0%, rgba(8, 127, 140, 0.26), transparent 34rem),
     linear-gradient(180deg, #07131c 0%, #0b1c27 26rem, #f4f8f6 26rem, #f8faf9 100%);
+}
+
+/* The dark route-shell `::before` is `position: fixed`, so it only covers the viewport — on a
+   page taller than the first dark viewport (the 404 detour, mobile admin curators) the global
+   gradient's light band below 26rem would leak through below the fold (and in full-page
+   screenshots). When any dark route shell is present, repaint the whole document dark so it can
+   never drift to the light band, regardless of page height. */
+html:has(.curators-directory-shell),
+html:has(.admin-curators-shell),
+html:has(.auth-recovery-shell),
+html:has(.not-found-shell),
+html:has(.error-shell) {
+  background: #0a0a0a;
 }
 
 body {
@@ -3697,7 +3746,7 @@ button.primary-action {
 }
 
 .admin-login-back {
-  color: #71717a;
+  color: #a1a1aa;
   font-size: 0.84rem;
   font-weight: 800;
   text-align: center;
@@ -3705,7 +3754,7 @@ button.primary-action {
 }
 
 .admin-login-back:hover {
-  color: #a1a1aa;
+  color: #e4e4e7;
 }
 
 /* ---- Header ---- */
@@ -6911,6 +6960,38 @@ button.primary-action {
   gap: 8px;
 }
 
+/* Buttons on the admin curator/access surfaces had no styling and rendered as light default
+   browser buttons on the dark page. Give them the dark design-system treatment; the form's
+   primary "Promote" action carries the teal accent. */
+.admin-curators-form button,
+.admin-curators-list button,
+.admin-curators-actions button {
+  background: rgba(39, 39, 42, 0.9);
+  border: 1px solid rgba(82, 82, 91, 0.8);
+  border-radius: 6px;
+  color: #fafafa;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 6px 12px;
+}
+
+.admin-curators-form button:hover,
+.admin-curators-list button:hover,
+.admin-curators-actions button:hover {
+  background: rgba(63, 63, 70, 0.95);
+}
+
+.admin-curators-form button {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
+.admin-curators-form button:hover {
+  background: var(--teal-dark);
+}
+
 .admin-curators-note {
   color: #d4d4d8;
   display: block;
@@ -6926,10 +7007,10 @@ button.primary-action {
    the admin API returns a non-OK status). */
 .admin-curators-error {
   align-items: center;
-  background: rgba(220, 38, 38, 0.12);
-  border: 1px solid rgba(248, 113, 113, 0.5);
+  background: rgba(127, 29, 29, 0.4);
+  border: 1px solid rgba(248, 113, 113, 0.6);
   border-radius: 8px;
-  color: #fca5a5;
+  color: #fee2e2;
   display: flex;
   flex-wrap: wrap;
   font-size: 0.86rem;
@@ -6941,10 +7022,10 @@ button.primary-action {
 }
 
 .admin-curators-error button {
-  background: rgba(248, 113, 113, 0.16);
-  border: 1px solid rgba(248, 113, 113, 0.5);
+  background: rgba(248, 113, 113, 0.28);
+  border: 1px solid rgba(252, 165, 165, 0.8);
   border-radius: 6px;
-  color: #fecaca;
+  color: #fef2f2;
   cursor: pointer;
   font: inherit;
   font-weight: 700;

@@ -1,8 +1,8 @@
 # Design-System Readability & Integrity Repair — Master PRD (Epic)
 
-Updated: June 26, 2026
+Updated: June 25, 2026
 
-**Status: In progress (June 26, 2026).** C1 + C2 shipped — the dark route-shell repair, token
+**Status: In progress (June 25, 2026).** C1 + C2 shipped — the dark route-shell repair, token
 consolidation, legible failure states, the `/icon.png` fix, honest admin failure states, and the curator
 form labels are live. C3 is partially shipped: the Design Spec is rewritten to match the implementation; the
 local-DB degradation decision and the automated readability smoke test remain open. This is **Phase 16** in
