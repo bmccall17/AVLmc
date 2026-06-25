@@ -1,8 +1,19 @@
 # AVL Music Companion Backlog
 
-Updated: June 24, 2026
+Updated: June 25, 2026
 
 ## Urgent
+
+* **Dark-shell readability and functional blockers from the June 25 design audit.** The audit in
+  [`design-functional-audit-2026-06-25.md`](design-functional-audit-2026-06-25.md) found that newer
+  generic `.shell` pages are inheriting light-era `--ink` / `--muted` tokens while the global first
+  viewport is dark, making route errors, 404, curator apply/recommend/manage, and focused admin
+  subpages hard or impossible to read. Fix the dark route-shell context first (`app/error.tsx`,
+  `app/not-found.tsx`, `.curators-directory-shell`, `.admin-curators-shell`, `.auth-recovery-shell`);
+  then clear the functional blockers the audit surfaced: missing-local-`DATABASE_URL` behavior, the
+  `/icon.png` app/public conflict, silent admin API fetch failures, placeholder-only admin curator
+  form inputs, and auth-recovery mobile CTA overflow. Re-run the Playwright desktop/mobile audit
+  with a valid DB/auth test state before closing.
 
 * **Run the PRD 38 live cross-browser proof (Phase 15 — the only non-autonomous step).** The account loop
   is wired and live in code: signed-in OAuth linking is native Auth.js v5 behavior (verified in
@@ -20,7 +31,9 @@ Updated: June 24, 2026
   session-bound signed-token + confirm route (the email-provider path doesn't auto-link to the session like
   OAuth does), plus hardening `findUserIdByEmail` to `verified`-only — security-sensitive, lower urgency.
 
-* _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. Active focus is the Phase 15 follow-up above and the Personalized Discovery follow-ups tracked in [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
+* _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. Active focus is the design
+  audit cleanup, the Phase 15 follow-up above, and the Personalized Discovery follow-ups tracked in
+  [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
 
 ## Planned Next / Up Next
 
@@ -78,15 +91,6 @@ Updated: June 24, 2026
   / `.listener-spotify-optional` styling and the recovery page's inline border colors into line with the spec.
   `$0`, no behavior change. *(Reported Jun 18, 2026.)*
 
-* **"Recommend a curator" — replace the `mailto:` with a minimal in-app form.** Today the recommend-a-curator
-  action opens a manual email (`mailto:`), which is high-friction. Replace it with a short form (minimal
-  required fields — e.g. who they're recommending + an optional why/link) that submits without the user
-  composing an email. Reuse the Phase 13 request-queue pattern: a `requireUserId()`-gated (or anonymous-OK?)
-  `app/api/me/*` submit feeding an admin review surface (`app/api/admin/*` + a `*Section.tsx` panel), like
-  the curator-application and Spotify-access queues. Decide auth requirement (allow anonymous recommendations
-  vs. signed-in only) and whether to notify the admin in-panel only or also via Resend. Private to
-  submitter + admin; `$0`; Snyk-clean. *(Reported Jun 18, 2026.)*
-
 * **Admin viewer for listener feedback.** The 404 detour (`app/not-found.tsx`) + `POST /api/feedback`
   now persist feedback to the `feedback` table (additive; `db-feedback` node), but there's **no admin
   surface to read it yet**. Add a simple admin-cookie-gated read (`app/api/admin/feedback` + a
@@ -97,6 +101,25 @@ Updated: June 24, 2026
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
 ## Done
+
+* **"Recommend a curator" — replaced the `mailto:` with an in-app intake** — Shipped (June 24, 2026), as
+  part of a five-item curator-surface polish sprint. **Decisions:** signed-in only (`requireUserId()`-gated)
+  and admin notified **in-panel queue + Resend**. **Delivered:** a private `curator_recommendations` table
+  (`db/schema.sql`, idempotent, applied to prod Neon); pure validation `lib/curator-recommendations-core.ts`
+  (+ `tests/curator-recommendations.test.ts`) and the `server-only` service `lib/curator-recommendations.ts`
+  (submit / admin-list / set-status, 42P01-tolerant); `POST /api/me/curator-recommendation` (mirrors the
+  curator-application route; best-effort `sendAdminNotificationEmail` via Resend, wrapped so it can never
+  fail the submit); the `/curators/recommend` page + `components/CuratorRecommendForm.tsx`; and a
+  Reviewed/Dismiss queue in `components/admin/CuratorAdminPanel.tsx` (extended `app/api/admin/curators`).
+  Registered in the System Registry (`db-curator-recommendations`, `api-me-curator-recommendation` + edges,
+  pending-count). **Shipped alongside (same sprint, enhancing PRDs 25/30/34):** the homepage curator CTA
+  now links `/curators/apply` + `/curators/recommend` (no more `mailto:`, no external-link icon on an in-app
+  route); curator signup is **email-first** (shared `components/EmailSignInPanel.tsx`, Spotify optional);
+  directory cards now carry a **taste signature** (top genres/venues + next/latest pick); and a signed-in
+  active curator's **Fire/Going auto-adds a visible pick** (toast "Added to your curator picks"; un-react
+  hides it). `typecheck` / `lint` / `test:registry` (7) / `test:curators` (12) / `test:curator-recommendations`
+  (5) / `next build` green; new code Snyk-clean (one stored-XSS in the admin nominee link caught + fixed by
+  rendering it inert); `$0`. *(Reported Jun 18, 2026.)*
 
 * **`db/schema.sql` apply runbook (prevent schema drift)** — Shipped (June 24, 2026). The systemic fix
   for the Jun 18 incidents (prod silently missing tables → "unavailable" 500s; two manual applies in one

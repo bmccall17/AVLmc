@@ -26,6 +26,14 @@ Admin-promoted curator profiles are live; following a curator reuses the C1 edge
 - **Architecture & quality.** `svc-curators`, `db-curators` + `db-curator-picks` (+ counts), `api-curators`, `api-admin-curators`, `ui-curator-profile` registered (+ edges, incl. `ui-curator-profile → api-follows`); admin count queries added; system map regenerated; `test:registry`, `test:curators`, typecheck, lint, `next build`, and Snyk all green; $0.
 - **Privacy verified.** `lib/curators.ts` is `server-only` and not imported by any client component (the board imports the `CuratedBy` type from the pure core); no curator data in `app/api/community/*` or OG responses; public curator responses carry no tokens and no non-curator listener; ranking is unchanged this cycle (curator signal enters in C4).
 
+**Post-ship enhancements — June 24, 2026 (curator-surface polish sprint).**
+
+- **Directory taste signature.** `listCurators` now derives, per active curator, a taste signature — top genres + favorite venues (via the existing `buildCuratorTopList`) plus the latest and next-upcoming pick — in one extra batched picks query (no N+1). `app/curators/page.tsx` cards render genre/venue chips and a Next/Latest line; the profile-page top-list signal is now promoted into the directory.
+- **Fire/Going auto-picks.** A signed-in **active curator**'s Fire or Going now surfaces as a visible curator pick: `app/api/discovery/event-action` calls the new non-throwing `addPickIfActiveCurator` / `hidePickIfActiveCurator` (`lib/curators.ts`) — upsert on toggle-on (the unique `(curator_id, event_id)`), hide on toggle-off — and returns `curatorPickAdded`, which the board (`EventBoard`) and detail view (`CommunityPanel`) surface as an "Added to your curator picks" toast. No-op for non-curators; fully failure-safe (a pick write never breaks the reaction).
+- **Recommend-a-curator intake.** New `/curators/recommend` flow (signed-in only, admin queue + Resend) replacing the old `mailto:` — see the `curator_recommendations` table / `api-me-curator-recommendation` node and the backlog Done entry (June 24, 2026).
+- **Email-first curator signup.** The apply flow's anonymous CTA now uses the shared `components/EmailSignInPanel.tsx` (email magic-link primary, Spotify optional) instead of Spotify-only, matching the listener profile (PRD 34). The homepage curator callout links `/curators/apply` + `/curators/recommend` directly.
+- **Quality.** `typecheck` / `lint` / `test:registry` / `test:curators` / `test:curator-recommendations` / `next build` green; new code Snyk-clean (an admin nominee-link stored-XSS was caught and fixed by rendering it inert); system map regenerated; `$0`.
+
 ## Goals
 
 - An admin can **promote** a listener to curator and **demote/hide** one, via the existing admin-moderation pattern (controlled, $0, spam-resistant).

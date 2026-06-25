@@ -80,6 +80,7 @@ export type DerivedCountKey =
   | "listener_follows"
   | "curators"
   | "curator_picks"
+  | "curator_recommendations"
   | "feedback";
 
 export type RegistryNode = {
@@ -990,6 +991,25 @@ const NODES: RegistryNode[] = [
     ],
   },
   {
+    id: "db-curator-recommendations",
+    kind: "datastore",
+    layer: "data",
+    label: "curator_recommendations",
+    description:
+      "Listener nominations of someone who should curate ('I know someone') — distinct from a self-serve application where the user applies as themselves. The nominee is free text (no FK; they may not be a user yet); only the submitter is a real user. Private to submitter + admin (never public, no pay-to-play); the admin works the pending → reviewed/dismissed queue.",
+    sourceOfTruth: "curator_recommendations",
+    access: "internal",
+    ownership: "automated",
+    countKey: "curator_recommendations",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Signed-in-only submit (the user id comes from the session, never the body); 42P01/42703-tolerant reads. Lifecycle pending → reviewed/dismissed (both stamp resolved_at).",
+      },
+    ],
+  },
+  {
     id: "db-shared-songs",
     kind: "datastore",
     layer: "data",
@@ -1360,6 +1380,24 @@ const NODES: RegistryNode[] = [
     ],
   },
   {
+    id: "api-me-curator-recommendation",
+    kind: "surface",
+    layer: "identity",
+    label: "Curator Recommendation API",
+    description:
+      "Signed-in-only listener plane: nominate someone who should curate (free-text nominee + optional link/why). Distinct from the application API — here a listener recommends someone ELSE. The submitter id comes from the session, never the body; recommendations are private to submitter + admin (never public, no pay-to-play). Best-effort Resend admin notification on submit (never blocks the write). Returns 401 when anonymous.",
+    sourceOfTruth: "app/api/me/curator-recommendation/route.ts",
+    access: "public",
+    ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Gated by requireUserId(); the submitter id is the session user, never the body. Pure validation in lib/curator-recommendations-core.ts; the admin email (ADMIN_NOTIFY_EMAIL, falls back to AUTH_EMAIL_FROM) is fired best-effort and wrapped so a Resend failure can't fail the submit.",
+      },
+    ],
+  },
+  {
     id: "api-me-curator",
     kind: "surface",
     layer: "identity",
@@ -1688,6 +1726,9 @@ const EDGES: RegistryEdge[] = [
   { from: "api-me-curator-application", to: "svc-curators", kind: "dependsOn", label: "apply + my status (self-serve)" },
   { from: "api-me-curator", to: "svc-curators", kind: "dependsOn", label: "self-manage persona + picks" },
   { from: "api-admin-curators", to: "svc-curators", kind: "dependsOn", label: "promote/hide + picks + review queue" },
+  { from: "api-me-curator-recommendation", to: "db-curator-recommendations", kind: "flowsTo", label: "stores recommendation" },
+  { from: "api-admin-curators", to: "db-curator-recommendations", kind: "dependsOn", label: "recommendation review queue" },
+  { from: "db-curator-recommendations", to: "db-users", kind: "dependsOn", label: "submitter (cascade)" },
   { from: "api-feedback", to: "db-feedback", kind: "flowsTo", label: "stores listener feedback" },
   { from: "db-feedback", to: "db-users", kind: "dependsOn", label: "optional submitter (set null)" },
   { from: "svc-curators", to: "db-curators", kind: "flowsTo", label: "persona persistence" },

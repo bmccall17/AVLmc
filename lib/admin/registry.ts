@@ -94,6 +94,10 @@ const COUNT_QUERIES: Array<{ key: DerivedCountKey; text: string }> = [
     key: "curator_picks",
     text: "select count(*)::int as count from public.curator_picks where status = 'visible'",
   },
+  {
+    key: "curator_recommendations",
+    text: "select count(*)::int as count from public.curator_recommendations where status = 'pending'",
+  },
   { key: "feedback", text: "select count(*)::int as count from public.feedback" },
 ];
 

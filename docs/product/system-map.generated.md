@@ -474,6 +474,7 @@ Auth.js user records for signed-in listeners.
   - ← spotify_access_requests (dependsOn) — request per user (cascade)
   - ← saved_items (dependsOn) — owned by user (cascade)
   - ← listener_follows (dependsOn) — follower/followee (cascade)
+  - ← curator_recommendations (dependsOn) — submitter (cascade)
   - ← feedback (dependsOn) — optional submitter (set null)
   - ← curators (dependsOn) — persona over a user (cascade)
 
@@ -654,6 +655,23 @@ A curator's deliberate, attributed per-show picks (PRD 25). No FK to events (eve
   - _Note:_ No FK to events (daily re-ingest would cascade-delete): event_title is snapshotted and live metadata resolved via a tolerant left join; the live count filters status='visible'.
 - **Fed by / required by:**
   - ← Curators (flowsTo) — per-show picks
+
+#### curator_recommendations  `db-curator-recommendations`
+
+Listener nominations of someone who should curate ('I know someone') — distinct from a self-serve application where the user applies as themselves. The nominee is free text (no FK; they may not be a user yet); only the submitter is a real user. Private to submitter + admin (never public, no pay-to-play); the admin works the pending → reviewed/dismissed queue.
+
+- **Kind:** Data store
+- **Source of truth:** `curator_recommendations`
+- **Access:** internal
+- **Ownership:** automated
+- **Live count:** `curator_recommendations` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ Signed-in-only submit (the user id comes from the session, never the body); 42P01/42703-tolerant reads. Lifecycle pending → reviewed/dismissed (both stamp resolved_at).
+- **Flows to / depends on:**
+  - → users (dependsOn) — submitter (cascade)
+- **Fed by / required by:**
+  - ← Curator Recommendation API (flowsTo) — stores recommendation
+  - ← Admin Curators API (dependsOn) — recommendation review queue
 
 #### event_shared_songs  `db-shared-songs`
 
@@ -995,6 +1013,19 @@ Signed-in-only listener plane (PRD 29): submit a self-authored curator applicati
 - **Flows to / depends on:**
   - → Curators (dependsOn) — apply + my status (self-serve)
 
+#### Curator Recommendation API  `api-me-curator-recommendation`
+
+Signed-in-only listener plane: nominate someone who should curate (free-text nominee + optional link/why). Distinct from the application API — here a listener recommends someone ELSE. The submitter id comes from the session, never the body; recommendations are private to submitter + admin (never public, no pay-to-play). Best-effort Resend admin notification on submit (never blocks the write). Returns 401 when anonymous.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/me/curator-recommendation/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Gated by requireUserId(); the submitter id is the session user, never the body. Pure validation in lib/curator-recommendations-core.ts; the admin email (ADMIN_NOTIFY_EMAIL, falls back to AUTH_EMAIL_FROM) is fired best-effort and wrapped so a Resend failure can't fail the submit.
+- **Flows to / depends on:**
+  - → curator_recommendations (flowsTo) — stores recommendation
+
 #### Curator Self-Management API  `api-me-curator`
 
 Signed-in-only, self-scoped curator self-management (PRD 31): edit your OWN persona and add / show-hide / remove your OWN picks. The curator + pick ids are resolved from the session and checked in SQL, so a caller can never read or modify another curator. Admin moderation overrides — a non-active row is read-only here. Returns 401 when anonymous.
@@ -1052,6 +1083,7 @@ Admin-cookie-gated curator management (PRD 25): promote/demote/hide curators, ad
   - _Note:_ Admin-cookie-gated (ADMIN_SESSION_TOKEN); promote/demote/hide + pick management. No self-serve, no pay-to-play.
 - **Flows to / depends on:**
   - → Curators (dependsOn) — promote/hide + picks + review queue
+  - → curator_recommendations (dependsOn) — recommendation review queue
 
 #### AVLgo Sync (cron)  `job-avlgo-sync`
 
@@ -1258,6 +1290,9 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | Curator Application API | → | Curators | dependsOn | apply + my status (self-serve) |
 | Curator Self-Management API | → | Curators | dependsOn | self-manage persona + picks |
 | Admin Curators API | → | Curators | dependsOn | promote/hide + picks + review queue |
+| Curator Recommendation API | → | curator_recommendations | flowsTo | stores recommendation |
+| Admin Curators API | → | curator_recommendations | dependsOn | recommendation review queue |
+| curator_recommendations | → | users | dependsOn | submitter (cascade) |
 | Feedback API | → | feedback | flowsTo | stores listener feedback |
 | feedback | → | users | dependsOn | optional submitter (set null) |
 | Curators | → | curators | flowsTo | persona persistence |
@@ -1284,4 +1319,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_70 nodes, 94 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_72 nodes, 97 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
