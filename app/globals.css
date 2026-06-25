@@ -52,6 +52,7 @@ a {
 .admin-curators-shell,
 .auth-recovery-shell,
 .not-found-shell,
+.curator-shell,
 .error-shell {
   --ink: #fafafa;
   --muted: #a1a1aa;
@@ -68,6 +69,7 @@ a {
 .admin-curators-shell::before,
 .auth-recovery-shell::before,
 .not-found-shell::before,
+.curator-shell::before,
 .error-shell::before {
   background: #0a0a0a;
   content: "";
@@ -83,6 +85,7 @@ a {
 .admin-curators-shell .ghost-control,
 .auth-recovery-shell .ghost-control,
 .not-found-shell .ghost-control,
+.curator-shell .ghost-control,
 .error-shell .ghost-control {
   background: rgba(24, 24, 27, 0.9);
   border-color: var(--line);
@@ -93,6 +96,7 @@ a {
 .admin-curators-shell .ghost-control:hover,
 .auth-recovery-shell .ghost-control:hover,
 .not-found-shell .ghost-control:hover,
+.curator-shell .ghost-control:hover,
 .error-shell .ghost-control:hover {
   background: rgba(39, 39, 42, 0.95);
 }
@@ -103,11 +107,13 @@ a {
 .admin-curators-shell .eyebrow,
 .auth-recovery-shell .eyebrow,
 .not-found-shell .eyebrow,
+.curator-shell .eyebrow,
 .error-shell .eyebrow,
 .curators-directory-shell .card-kicker,
 .admin-curators-shell .card-kicker,
 .auth-recovery-shell .card-kicker,
 .not-found-shell .card-kicker,
+.curator-shell .card-kicker,
 .error-shell .card-kicker {
   color: #2dd4bf;
 }
@@ -482,6 +488,7 @@ html:has(.curators-directory-shell),
 html:has(.admin-curators-shell),
 html:has(.auth-recovery-shell),
 html:has(.not-found-shell),
+html:has(.curator-shell),
 html:has(.error-shell) {
   background: #0a0a0a;
 }
@@ -6368,6 +6375,18 @@ button.primary-action {
   background: rgba(99, 102, 241, 0.28);
   border-color: rgba(129, 140, 248, 0.7);
   color: #eef2ff;
+}
+
+/* The chip's light indigo-200 text is tuned for dark surfaces; the event detail page (`.detail-shell`)
+   is light, where that text drops to ~1.5:1 on the near-white chip. Use a dark indigo there. */
+.detail-shell .save-button--chip {
+  border-color: rgba(99, 102, 241, 0.5);
+  color: #3730a3;
+}
+
+.detail-shell .save-button--chip.is-saved {
+  background: rgba(99, 102, 241, 0.18);
+  color: #312e81;
 }
 
 .detail-venue-line,

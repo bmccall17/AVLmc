@@ -29,8 +29,24 @@ can't silently reintroduce light-on-dark text.
   **Design Tokens & Theming** section documenting the light `:root` tokens, the canonical **dark route-shell
   token context** from PRD 39, and the **opt-in-by-class** contract, and marks the Tailwind/framer-motion class
   names as illustrative of the *target visual language* rather than the current implementation.
+- **First DB-backed audit pass (June 25, 2026).** With a real `DATABASE_URL` wired locally (via
+  `neonctl connection-string`, prod main branch), a one-off Playwright sweep finally reached the DB-backed
+  surfaces the earlier audits couldn't. All 13 routes × {desktop 1440, mobile 390} rendered with **zero
+  horizontal overflow** and **no DB 500s**; the C1/C2-repaired surfaces showed **0 contrast failures**. The
+  sweep ran read-only (all non-GET requests blocked) and authed admin via the dev-fallback cookie. Two
+  newly-reachable surfaces had real failures, **now fixed**: the **curator profile** (`/curator/[handle]`,
+  `.curator-shell`) was a plain `.shell` page inheriting light `--ink` (h1/h2/back-link ≈1.18:1 + gradient
+  leak) — added `.curator-shell` to the dark route-shell group; and the **event-detail Save chip**
+  (`.save-button--chip`, indigo-200 text) dropped to ~1.5:1 on the intentionally-light `.detail-shell` —
+  scoped a dark-indigo variant there. Re-audit confirmed both → 0 fails.
 
 Remaining (open):
+
+- **Admin Portal contrast polish (operator-only, new from the DB-backed pass).** The signed-in `/admin`
+  overview has ~15 dim secondary labels: zinc-600 stat captions on zinc-900 panels (`2.29:1`) and zinc-500
+  tertiary text/chips on black (`4.1:1`, just under AA). Broadly readable, operator-only, but a focused
+  contrast pass over the AdminPortal `#52525b`/`#71717a` text sites would clear AA. (Also a borderline `4.1:1`
+  brand `<small>` on home/sandbox.)
 
 - **Local missing-`DATABASE_URL` behavior (audit P0).** Decide and implement: either require `DATABASE_URL`
   before `npm run dev` with a clear setup message, or degrade local/dev DB reads to seed/empty data where the

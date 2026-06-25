@@ -47,8 +47,10 @@ improved but still imperfect; now fixed:
 
 - **No more contradictory empty states.** When a queue fetch fails, the panels showed the error banner *and*
   still rendered reassuring empty copy ("No pending applications", "No recommendations", "All curators have
-  picks", "No curators yet", "No open access requests"). Each empty-state line is now gated on `!loadError`
-  in `CuratorAdminPanel`/`SpotifyAccessSection`, so a failed load shows only the error + Retry.
+  picks", "No curators yet", "No open access requests") plus `(0)` counts in the section headings. Each
+  empty-state line **and** each heading count is now gated on `!loadError` in
+  `CuratorAdminPanel`/`SpotifyAccessSection`, so a failed load shows only the error + Retry — no "(0)" or
+  "none" copy that reads as a true-empty queue. *(The heading-count suppression was a third-audit follow-up.)*
 - **Admin error banner contrast → AA.** `.admin-curators-error` text measured `2.54:1` and its retry button
   `1.91:1`; darkened the banner/button backgrounds (`rgba(127,29,29,.4)` / `rgba(248,113,113,.28)`) and
   brightened the text to near-white (`#fee2e2` / `#fef2f2`) to clear AA.

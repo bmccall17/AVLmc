@@ -167,7 +167,7 @@ export function CuratorAdminPanel() {
       </div>
       {message ? <p className="admin-curators-message">{message}</p> : null}
 
-      <h3>Pending applications ({applications.length})</h3>
+      <h3>Pending applications{loadError ? "" : ` (${applications.length})`}</h3>
       <ul className="admin-curators-list">
         {applications.map((application) => (
           <li key={application.id}>
@@ -190,7 +190,7 @@ export function CuratorAdminPanel() {
         ) : null}
       </ul>
 
-      <h3>Recommendations ({recommendations.length})</h3>
+      <h3>Recommendations{loadError ? "" : ` (${recommendations.length})`}</h3>
       <p className="admin-curators-subtle">
         Listeners nominating someone who should curate. Mark reviewed once you&apos;ve looked, or dismiss.
       </p>
@@ -226,7 +226,7 @@ export function CuratorAdminPanel() {
         ) : null}
       </ul>
 
-      <h3>Not activated ({notActivated.length})</h3>
+      <h3>Not activated{loadError ? "" : ` (${notActivated.length})`}</h3>
       <p className="admin-curators-subtle">Active curators with no visible picks yet — weak directory entries.</p>
       <ul className="admin-curators-list">
         {notActivated.map((curator) => (

@@ -80,7 +80,7 @@ export function SpotifyAccessSection() {
         </p>
       ) : null}
 
-      <h3>Open requests ({requests.length})</h3>
+      <h3>Open requests{loadError ? "" : ` (${requests.length})`}</h3>
       <ul className="admin-curators-list">
         {requests.map((request) => (
           <li key={request.id}>

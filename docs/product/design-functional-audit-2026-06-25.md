@@ -118,6 +118,52 @@ production access without that cookie redirects `/admin/curators` to `/admin`, a
 - `npm run test:auth-failures` — passed.
 - `npm run test:registry` — passed.
 
+## Environment Rerun — June 25, 2026, after `.env.local` update
+
+I reran the audit after `.env.local` was updated. The new file does not yet provide a usable app
+runtime database configuration:
+
+- `DATABASE_URL` is present but empty (`DATABASE_URL=""`), so Next/Auth still treat it as missing.
+- `AUTH_SECRET`, `ADMIN_PASSWORD`, and `ADMIN_SESSION_TOKEN` are also empty. Local admin therefore
+  still uses the code fallback password, and Auth.js routes report a missing secret.
+- `AIVEN_URL` is nonempty, but it is not a parseable Postgres URL. Temporarily mapping it to
+  `DATABASE_URL` for the audit produced `pg` connection timeouts, not successful DB reads.
+
+Evidence generated in this rerun:
+
+- `output/playwright/design-db-audit-2026-06-25/` — first rerun against the literal `.env.local`
+  state; pages still reported `DATABASE_URL is not set`.
+- `output/playwright/design-db-audit-2026-06-25-valid-db/` — partial rerun with `DATABASE_URL`
+  temporarily mapped from `AIVEN_URL`; DB-backed pages timed out while connecting.
+- `output/playwright/design-env-audit-2026-06-25/` — focused screenshots from the same env attempt,
+  including admin queue error states and the updated 404/auth surfaces.
+
+### What This Rerun Confirms
+
+- The previous "missing `DATABASE_URL`" blocker is still effectively open. A value-looking env file
+  exists, but the runtime value required by `lib/db.ts` is empty.
+- A DB-backed audit of `/`, `/curators`, `/curator/[handle]`, `/sandbox/discovery-actions`, the full
+  admin overview, and real event/detail cards is still blocked until `DATABASE_URL` is a real
+  Postgres connection string reachable from the local WSL environment.
+- Auth-backed audit coverage is also blocked until `AUTH_SECRET` is set.
+- The visual repairs continue to hold on non-DB surfaces: curator apply/recommend/manage are
+  readable; `app/error.tsx` is readable; the 404 desktop CTAs are no longer white text on pale
+  buttons; admin queue pages now render in a coherent dark shell with styled action buttons.
+- Focused admin queue pages still show `0` counts while the queue API has failed. The error banner is
+  explicit, but the count still risks implying a true empty queue.
+- Chrome inspection is still unavailable: the Chrome-control bridge failed before it could attach to
+  the signed-in production tab.
+
+### Required Before Closing The Audit
+
+1. Put the actual Postgres app runtime connection string in `DATABASE_URL` and verify with a local
+   `select 1` probe before rerunning the page audit.
+2. Set `AUTH_SECRET` locally so Auth.js routes and signed-in states can be audited without
+   configuration errors.
+3. Prefer `vercel env pull .env.local` once the Vercel CLI is available, because this repo already
+   documents `DATABASE_URL` as the expected runtime variable and `.env.local` should remain
+   uncommitted.
+
 ## Executive Summary
 
 The readability failure is real and systemic on newer surfaces. The main cause is a split design system: global tokens and the generic `.shell` still assume a light page (`--ink: #11201c`, `--muted: #5b6b66`, `--panel: #ffffff`), while the global `html` background now paints a dark first viewport. Routes that use the generic `.shell` without establishing their own dark color context render near-black headings, body copy, and links on a dark teal/black background.
