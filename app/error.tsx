@@ -18,7 +18,7 @@ export default function Error({
   }, [error]);
 
   return (
-    <main className="shell" style={{ textAlign: "center", paddingTop: 80 }}>
+    <main className="shell error-shell" style={{ textAlign: "center", paddingTop: 80 }}>
       <h1>We&apos;re catching our breath</h1>
       <p style={{ maxWidth: 460, margin: "12px auto 24px", lineHeight: 1.5 }}>
         AVL Music Companion hit a brief hiccup loading this page — usually a momentary spike.

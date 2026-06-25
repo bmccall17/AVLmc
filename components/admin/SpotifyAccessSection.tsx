@@ -19,12 +19,22 @@ type AdminSpotifyAccessRequest = {
 export function SpotifyAccessSection() {
   const [requests, setRequests] = useState<AdminSpotifyAccessRequest[]>([]);
   const [message, setMessage] = useState<string>("");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Surface a non-OK response or network error as an explicit, retryable banner instead of
+  // silently rendering "No open access requests" (which reads as truth).
   async function refresh() {
-    const response = await fetch("/api/admin/spotify-access", { cache: "no-store" });
-    if (response.ok) {
+    try {
+      const response = await fetch("/api/admin/spotify-access", { cache: "no-store" });
+      if (!response.ok) {
+        setLoadError(`Couldn't load access requests (HTTP ${response.status}). The queue may be incomplete.`);
+        return;
+      }
       const data = (await response.json()) as { requests?: AdminSpotifyAccessRequest[] };
       setRequests(data.requests ?? []);
+      setLoadError(null);
+    } catch {
+      setLoadError("Couldn't reach the access-requests API. Check your connection and retry.");
     }
   }
 
@@ -61,6 +71,14 @@ export function SpotifyAccessSection() {
         slot-added so the listener knows to retry.
       </p>
       {message ? <p className="admin-curators-message">{message}</p> : null}
+      {loadError ? (
+        <p className="admin-curators-error">
+          {loadError}
+          <button onClick={() => void refresh()} type="button">
+            Retry
+          </button>
+        </p>
+      ) : null}
 
       <h3>Open requests ({requests.length})</h3>
       <ul className="admin-curators-list">

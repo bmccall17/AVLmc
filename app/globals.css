@@ -36,6 +36,46 @@ a {
   padding: 28px 20px 48px;
 }
 
+/* ── Dark route-shell theme ───────────────────────────────────────────────
+   Canonical dark token context for non-home surfaces. The light-era :root
+   tokens (--ink/--muted/--panel/--line) below assume a light page, but the
+   global first viewport paints dark (see "Concept direction refresh"), so
+   pages that render inside the generic `.shell` without their own color
+   context produced near-black text on a dark background (June 25 design
+   audit). These shells re-declare the tokens as dark *on the wrapper itself*,
+   so every descendant that reads var(--ink/--muted/--panel/--line/--border/
+   --surface) flips to dark automatically — no per-element overrides needed.
+   A fixed full-bleed backdrop covers the dark→light gradient so the surface
+   never drifts mid-page. Add a class here to opt any future route into the
+   dark language; never rely on bare `.shell`. */
+.curators-directory-shell,
+.admin-curators-shell,
+.auth-recovery-shell,
+.not-found-shell,
+.error-shell {
+  --ink: #fafafa;
+  --muted: #a1a1aa;
+  --line: rgba(63, 63, 70, 0.7);
+  --panel: rgba(24, 24, 27, 0.9);
+  --border: rgba(63, 63, 70, 0.7);
+  --surface: rgba(24, 24, 27, 0.9);
+  color: var(--ink);
+  min-height: 100vh;
+  position: relative;
+}
+
+.curators-directory-shell::before,
+.admin-curators-shell::before,
+.auth-recovery-shell::before,
+.not-found-shell::before,
+.error-shell::before {
+  background: #0a0a0a;
+  content: "";
+  inset: 0;
+  position: fixed;
+  z-index: -1;
+}
+
 .site-header {
   align-items: flex-start;
   display: flex;
@@ -6882,6 +6922,35 @@ button.primary-action {
   font-size: 0.8rem;
 }
 
+/* Honest failure state for the admin queues (replaces silently-empty lists when
+   the admin API returns a non-OK status). */
+.admin-curators-error {
+  align-items: center;
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  border-radius: 8px;
+  color: #fca5a5;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+  font-weight: 600;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 12px 0;
+  padding: 10px 14px;
+}
+
+.admin-curators-error button {
+  background: rgba(248, 113, 113, 0.16);
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  border-radius: 6px;
+  color: #fecaca;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 4px 12px;
+}
+
 /* Saved space (PRD 13 / C2) */
 .saved-shell {
   display: flex;
@@ -7170,6 +7239,22 @@ button.primary-action {
 
 .auth-recovery-error {
   border-left: 4px solid #dc2626;
+}
+
+/* Narrow viewports: the primary CTA could overflow a 390px screen because
+   `.primary-action` is `white-space: nowrap`. Stack the actions full-width and
+   let the labels wrap instead of running off-canvas. */
+@media (max-width: 460px) {
+  .auth-recovery-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .auth-recovery-actions .primary-action,
+  .auth-recovery-actions .ghost-control {
+    white-space: normal;
+    width: 100%;
+  }
 }
 
 /* 404 detour (app/not-found.tsx) — the detour is here to serve you. */

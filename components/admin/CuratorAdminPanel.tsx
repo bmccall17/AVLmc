@@ -57,14 +57,21 @@ export function CuratorAdminPanel() {
   const [recommendations, setRecommendations] = useState<CuratorRecommendation[]>([]);
   const [gate, setGate] = useState<Gate | null>(null);
   const [message, setMessage] = useState<string>("");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [userId, setUserId] = useState("");
   const [handle, setHandle] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
 
+  // An API failure must read as a failure, not as empty queues — a non-OK response or a network
+  // error surfaces an explicit, retryable banner instead of silently leaving the lists empty.
   async function refresh() {
-    const response = await fetch("/api/admin/curators", { cache: "no-store" });
-    if (response.ok) {
+    try {
+      const response = await fetch("/api/admin/curators", { cache: "no-store" });
+      if (!response.ok) {
+        setLoadError(`Couldn't load the curator queues (HTTP ${response.status}). These lists may be incomplete.`);
+        return;
+      }
       const data = (await response.json()) as {
         curators?: AdminCurator[];
         applications?: CuratorApplication[];
@@ -77,6 +84,9 @@ export function CuratorAdminPanel() {
       setNotActivated(data.notActivated ?? []);
       setRecommendations(data.recommendations ?? []);
       setGate(data.gate ?? null);
+      setLoadError(null);
+    } catch {
+      setLoadError("Couldn't reach the curator API. Check your connection and retry.");
     }
   }
 
@@ -131,6 +141,15 @@ export function CuratorAdminPanel() {
       <h2>Curators</h2>
       <p>Promote a listener to a public curator persona. No pay-to-play.</p>
 
+      {loadError ? (
+        <p className="admin-curators-error">
+          {loadError}
+          <button onClick={() => void refresh()} type="button">
+            Retry
+          </button>
+        </p>
+      ) : null}
+
       {gate ? (
         <p className="admin-curators-gate">
           Self-serve is <strong>{gate.open ? "instant" : "admin-reviewed"}</strong> — {gate.activeCurators}/
@@ -140,10 +159,10 @@ export function CuratorAdminPanel() {
       ) : null}
 
       <div className="admin-curators-form">
-        <input onChange={(e) => setUserId(e.target.value)} placeholder="User id" value={userId} />
-        <input onChange={(e) => setHandle(e.target.value)} placeholder="handle (a-z0-9-_)" value={handle} />
-        <input onChange={(e) => setDisplayName(e.target.value)} placeholder="Display name" value={displayName} />
-        <input onChange={(e) => setBio(e.target.value)} placeholder="Bio (optional)" value={bio} />
+        <input aria-label="User id" onChange={(e) => setUserId(e.target.value)} placeholder="User id" value={userId} />
+        <input aria-label="Handle" onChange={(e) => setHandle(e.target.value)} placeholder="handle (a-z0-9-_)" value={handle} />
+        <input aria-label="Display name" onChange={(e) => setDisplayName(e.target.value)} placeholder="Display name" value={displayName} />
+        <input aria-label="Bio (optional)" onChange={(e) => setBio(e.target.value)} placeholder="Bio (optional)" value={bio} />
         <button onClick={() => void promote()} type="button">Promote</button>
       </div>
       {message ? <p className="admin-curators-message">{message}</p> : null}

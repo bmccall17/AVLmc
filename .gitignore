@@ -13,3 +13,4 @@ tsconfig.tsbuildinfo
 # Playwright (PRD 38 cross-browser harness) — generated output, not source
 /test-results/
 /playwright-report/
+output/

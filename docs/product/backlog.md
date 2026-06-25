@@ -1,19 +1,8 @@
 # AVL Music Companion Backlog
 
-Updated: June 25, 2026
+Updated: June 26, 2026
 
 ## Urgent
-
-* **Dark-shell readability and functional blockers from the June 25 design audit.** The audit in
-  [`design-functional-audit-2026-06-25.md`](design-functional-audit-2026-06-25.md) found that newer
-  generic `.shell` pages are inheriting light-era `--ink` / `--muted` tokens while the global first
-  viewport is dark, making route errors, 404, curator apply/recommend/manage, and focused admin
-  subpages hard or impossible to read. Fix the dark route-shell context first (`app/error.tsx`,
-  `app/not-found.tsx`, `.curators-directory-shell`, `.admin-curators-shell`, `.auth-recovery-shell`);
-  then clear the functional blockers the audit surfaced: missing-local-`DATABASE_URL` behavior, the
-  `/icon.png` app/public conflict, silent admin API fetch failures, placeholder-only admin curator
-  form inputs, and auth-recovery mobile CTA overflow. Re-run the Playwright desktop/mobile audit
-  with a valid DB/auth test state before closing.
 
 * **Run the PRD 38 live cross-browser proof (Phase 15 — the only non-autonomous step).** The account loop
   is wired and live in code: signed-in OAuth linking is native Auth.js v5 behavior (verified in
@@ -36,6 +25,16 @@ Updated: June 25, 2026
   [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
 
 ## Planned Next / Up Next
+
+- **Phase 16 C3 remainder — local-DB degradation + readability smoke test.** The June 25 audit's readability
+  and integrity blockers shipped (Phase 16 C1–C2, see Done); two follow-ups remain, tracked by
+  [PRD 41](prds/prd-41-design-system-codification.md): (1) **decide the missing-local-`DATABASE_URL`
+  behavior** — either require it before `npm run dev` with a clear message, or degrade DB reads to seed/empty
+  where the product already claims resilience (`lib/events.ts` already seeds, but the read throws before the
+  fallback; extend the same pattern to `listCurators` / `listContributions`); and (2) **add a Playwright
+  readability smoke test** over the audit route table (render checks, no horizontal overflow, error/404/auth
+  legibility, a dark-shell-aware DOM contrast pass). Do (1) first so the audited routes render deterministically
+  under the test. The Design Spec rewrite (the third C3 piece) is already shipped. `$0`, no new deps.
 
 - **Freshness & drift-awareness for Architecture implementation notes.** The per-node
   `implementationNotes` (and the registry's `description`s) are **hand-authored free-text**: they
@@ -101,6 +100,24 @@ Updated: June 25, 2026
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
 ## Done
+
+* **Dark-shell readability + functional blockers from the June 25 design audit** — Shipped (June 26, 2026) as
+  **Phase 16 C1–C2** ([Design-System Readability & Integrity Repair Epic](design-system-readability-prd.md),
+  [PRD 39](prds/prd-39-dark-route-shell-readability.md) + [PRD 40](prds/prd-40-legible-failure-states-and-integrity.md)).
+  Root cause: a split design system — light-era `:root` tokens (`--ink`/`--muted`/`--panel`) drove the generic
+  `.shell` while the global first viewport paints dark, so newer pages rendered near-black text on dark.
+  **Token-first fix:** one canonical dark route-shell context in `app/globals.css` re-declares the tokens as
+  dark **on the wrapper** for `.curators-directory-shell` / `.admin-curators-shell` / `.auth-recovery-shell` /
+  `.not-found-shell` / `.error-shell` (+ a fixed full-bleed `#0A0A0A` `::before`), so every descendant reading
+  `var(--ink/--muted/--panel/--line/--border/--surface)` — including the existing `var(--surface,#fff)` /
+  `var(--muted,#a1a1aa)` fallbacks — flips to dark with no per-element edits. **Functional blockers cleared:**
+  `app/error.tsx` got the `.error-shell` class; auth-recovery mobile CTA now wraps full-width under `460px`;
+  the `/icon.png` 500 was resolved (removed the duplicate `app/icon.png`, kept `public/icon.png` canonical,
+  added `metadata.icons` in `app/layout.tsx`); `CuratorAdminPanel`/`SpotifyAccessSection` now surface non-OK /
+  network failures as a retryable `.admin-curators-error` banner instead of silently-empty queues; the four
+  promote-curator inputs gained `aria-label`s. `typecheck` / `lint` / `test:registry` (7) green; changed admin
+  components Snyk-clean; `$0`, no new deps. **Remainder (Phase 16 C3, Planned Next):** the local-`DATABASE_URL`
+  degradation decision + a Playwright readability smoke test (the Design Spec rewrite is already shipped).
 
 * **"Recommend a curator" — replaced the `mailto:` with an in-app intake** — Shipped (June 24, 2026), as
   part of a five-item curator-surface polish sprint. **Decisions:** signed-in only (`requireUserId()`-gated)

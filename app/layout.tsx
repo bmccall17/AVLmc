@@ -5,7 +5,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://avlmc.vercel.app"),
   title: "AVL Music Companion",
-  description: "Upcoming Asheville shows from AVLgo, with local notes and listening signals."
+  description: "Upcoming Asheville shows from AVLgo, with local notes and listening signals.",
+  // Canonical icon lives in public/icon.png and is served at /icon.png (the same URL the UI
+  // references via next/image). Declaring it here keeps the favicon working without an
+  // app/icon.png metadata route, which collided with the public asset and 500'd /icon.png.
+  icons: { icon: "/icon.png" }
 };
 
 export default function RootLayout({

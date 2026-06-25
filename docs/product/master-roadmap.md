@@ -27,6 +27,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 13 | [Curator Onboarding & Self-Management (Epic)](curator-onboarding-prd.md) | Shipped | Self-serve curator onboarding — instant under a configurable gate, admin-reviewed above it — plus guided persona setup, first-pick activation, and curator self-management of their own picks/persona; spam-resistant, privacy-safe, no pay-to-play, admin oversight retained. Completes the curator story from Phase 12. PRDs 29–33 across five cycles — **all shipped (Jun 17, 2026)**. |
 | 14 | [Onboarding, Email Sign-in & Board Discoverability](prds/prd-34-onboarding-email-signin.md) | Shipped | Test-user-feedback fix: email magic-link accounts (persistent, no Spotify) as the primary sign-in, honest invite-only-beta gating of Spotify, anonymous tuning surfaced as the default, a legible curator empty state, and an editable date window. `$0` (Resend free tier), anonymous-first. Driven by [`onboarding-signin_desiredoutcomes.md`](onboarding-signin_desiredoutcomes.md). Shipped Jun 17, 2026. |
 | 15 | [Reliable Account Sign-In & Spotify Connection (Epic)](account-signin-linking-prd.md) | Shipped & proven by executed tests (C1–C4; live in-browser OAuth pass is the only manual remainder) | Make the two Phase 14 sign-in methods resolve to **one** identity: merge-safe account linking (magic-link ↔ Spotify, no duplicate `users` row, no lost data), a Spotify tester-slot access request while Spotify is in Development Mode, clear/recoverable auth & linking failures (no more "Beta testing"/redirect-loop/stale-session dead-ends), and a repeatable cross-browser test of the whole loop. `$0`, anonymous-first, no Spotify writes. Driven by [`account-signin-linking_desiredoutcomes.md`](account-signin-linking_desiredoutcomes.md). PRDs 35–38 across four cycles. |
+| 16 | [Design-System Readability & Integrity Repair (Epic)](design-system-readability-prd.md) | C1–C2 Shipped (Jun 26, 2026); C3 in progress | Repair the split design system the June 25 audit found (light tokens leaking into dark routes → unreadable pages) with one canonical dark route-shell token context, fix the functional blockers surfaced as design failures (`/icon.png`, silent admin failures, form labels, auth mobile CTA), and codify the result in the design spec + a readability smoke test. `$0`, no new deps, dark-mode-exclusive. PRDs 39–41 across three cycles. |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
@@ -548,6 +549,26 @@ account → no-reset integrity → collision detected, 6 steps) both ran green, 
 resolution is wired (`lib/auth-adapter.ts`) and signed-in OAuth linking is native Auth.js v5 behavior. The
 only remaining cell is the live in-browser OAuth round-trip (Spotify consent + WebKit/Safari + mobile/webview),
 which needs a human + live Spotify credentials — the documented manual pass.
+
+### Phase 16: Design-System Readability & Integrity Repair (C1–C2 shipped Jun 26, 2026; C3 in progress)
+
+A brownfield repair + codification initiative driven by the
+[June 25 design + functional audit](design-functional-audit-2026-06-25.md), tracked by the
+[Design-System Readability & Integrity Repair (Epic)](design-system-readability-prd.md), which decomposes the
+five desired outcomes in [`design-system-readability_desiredoutcomes.md`](design-system-readability_desiredoutcomes.md)
+into three dependency-sequenced cycles. The audit found a **split design system**: light-era global tokens
+(`--ink`/`--muted`/`--panel`) still drive the generic `.shell` while the global first viewport paints dark, so
+newer pages (route error, 404, curator apply/recommend/manage, focused admin subpages, auth recovery) rendered
+near-black text on a dark background. The fix is **token-first** — re-declare the tokens as dark on each route
+shell so descendants flip automatically — plus the functional blockers the audit surfaced as design failures.
+No redesign; the dark aesthetic in [`AVLmc-Design-Spec.md`](../design/AVLmc-Design-Spec.md) is correct, and the
+spec is now rewritten to match the real CSS-custom-property implementation.
+
+| Cycle | PRD | Outcome(s) | Status |
+| --- | --- | --- | --- |
+| C1 | [PRD 39: Dark Route-Shell Readability & Token Consolidation](prds/prd-39-dark-route-shell-readability.md) | Legible non-home surfaces; consolidated tokens | **Shipped** |
+| C2 | [PRD 40: Legible Failure States & Functional Integrity](prds/prd-40-legible-failure-states-and-integrity.md) | Error/404/auth legibility + mobile CTA; `/icon.png`; honest admin failures; labeled form | **Shipped** |
+| C3 | [PRD 41: Design-System Codification & Visual Guardrails](prds/prd-41-design-system-codification.md) | Spec rewrite (done); local-DB degradation + readability smoke test (open) | In progress |
 
 ## Scaling Milestones & Tracking
 
