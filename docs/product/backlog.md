@@ -1,6 +1,6 @@
 # AVL Music Companion Backlog
 
-Updated: June 25, 2026
+Updated: June 30, 2026
 
 ## Urgent
 
@@ -100,6 +100,30 @@ Updated: June 25, 2026
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
 ## Done
+
+* **Event-card FIRE effect + layout redesign — and the Card FX Lab admin tuning tool** — Shipped
+  (June 30, 2026), standalone UI (no PRD/admin cycle). Reworks how the discovery feed signals FIRE and
+  tightens the card's information layout, dialed in against a live admin prototype before going to production.
+  * **Card FX Lab** (`components/admin/CardFxLabSection.tsx`, new tab in `components/AdminPortal.tsx`): a
+    self-contained admin prototyping surface — a faithful mock of `DiscoveryEventCard` built from the real
+    `.sandbox-*` classes, with per-element visibility toggles, a **Resting/Hover** state switch, live
+    action-button pressed-states + the production hover tooltips, tunable fire controls (glow
+    intensity/color/rise-speed, SVG turbulence, cursor-drag hotspot, embers), a copy-ready CSS export, a
+    **displacement detector** that flags elements hidden behind others, and an **archived snapshot** of the
+    previous card design at the bottom for reference.
+  * **Live event card** (`components/EventBoard.tsx`): the FIRE state now reads as the whole card being on
+    fire. **Embers** rise off any card with community FIRE traction (`counts.fire > 0`, capped at 14) —
+    illuminating events getting heat *before* this user fires; the **upward-rising perimeter glow + SVG
+    turbulence + cursor-drag hotspot** ignite only once *this* user fires (`state.fire`). Layout: social
+    pulse moved to the **top-right above %match** (songs-only), **Top 30 below %match**, genre tag alone on
+    the left; the lower-signal badges (intent sources, shared songs, from-your-circle, curated-by) are hidden
+    behind a `SHOW_SECONDARY_CARD_BADGES` flag (one flip to restore). Effect CSS generalized to shared
+    `.sandbox-event-card.is-fired` / `.fire-fx-*` (used by both lab and live), one shared
+    `<filter id="cardFireTurb">`, `prefers-reduced-motion`-aware.
+  * `typecheck` / `lint` / `test:registry` (7) / `test:discovery` (38) green; new code (EventBoard,
+    CardFxLabSection, AdminPortal) Snyk-clean (the one Medium DOM-XSS is the pre-existing **tracked**
+    `CommunityPanel.tsx` finding, untouched here); `$0`, no new deps. *(Admin UI changed — a
+    `docs/product/snapshots/` refresh is the manual follow-up.)*
 
 * **Dark-shell readability + functional blockers from the June 25 design audit** — Shipped (June 25, 2026) as
   **Phase 16 C1–C2** ([Design-System Readability & Integrity Repair Epic](design-system-readability-prd.md),
