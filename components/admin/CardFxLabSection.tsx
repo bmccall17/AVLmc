@@ -188,8 +188,6 @@ export function CardFxLabSection() {
   // which elements are actually visible vs. displaced/clipped by another element
   const [seen, setSeen] = useState<Partial<Record<ElementKey, boolean>>>({});
 
-  const showFire = fired && fx.glowOn;
-
   function shows(key: ElementKey) {
     return LOCKED.has(key) || visible[key];
   }
@@ -279,9 +277,16 @@ export function CardFxLabSection() {
     [fx.color, fx.intensity, fx.pulseSpeed, fx.hotspotOn, fx.hotspotStrength, dragging],
   );
 
-  // Ember density tracks the Fire count shown on the button (note 3).
+  // Embers represent community FIRE traction and show whenever the event has fire —
+  // even if THIS user hasn't fired. The perimeter glow (+ turbulence + hotspot) only
+  // ignites once THIS user hits FIRE.
   const fireCount = MOCK.fire + (fired ? 1 : 0);
-  const emberCount = fx.embersOn ? fireCount : 0;
+  const showGlow = fired && fx.glowOn;
+  const showEmbers = fx.embersOn && fireCount > 0;
+  const showTurb = showGlow && fx.turbulenceOn;
+  const showHotspot = showGlow && fx.hotspotOn;
+  const showFx = showGlow || showEmbers;
+  const emberCount = showEmbers ? fireCount : 0;
 
   const embers = useMemo(
     () =>
@@ -334,8 +339,8 @@ export function CardFxLabSection() {
             ref={cardRef}
             className={`sandbox-event-card fresh-card card-lab-card${
               preview === "hover" ? " is-revealed" : ""
-            }${showFire ? " is-fired" : ""}${fx.turbulenceOn ? " fx-turbulence" : ""}${
-              fx.hotspotOn ? " fx-hotspot" : ""
+            }${showGlow ? " is-fired" : ""}${showTurb ? " fx-turbulence" : ""}${
+              showHotspot ? " fx-hotspot" : ""
             }`}
             style={cardStyle}
             onPointerMove={handlePointerMove}
@@ -344,12 +349,12 @@ export function CardFxLabSection() {
             onPointerLeave={() => setDragging(false)}
           >
             {/* fire effect layers (pointer-events: none) */}
-            {showFire ? (
+            {showFx ? (
               <div className="card-lab-fx" aria-hidden="true">
-                <span className="card-lab-fx-glow" />
-                {fx.turbulenceOn ? <span className="card-lab-fx-turb" /> : null}
-                {fx.hotspotOn ? <span className="card-lab-fx-hotspot" /> : null}
-                {fx.embersOn ? (
+                {showGlow ? <span className="card-lab-fx-glow" /> : null}
+                {showTurb ? <span className="card-lab-fx-turb" /> : null}
+                {showHotspot ? <span className="card-lab-fx-hotspot" /> : null}
+                {showEmbers ? (
                   <span className="card-lab-fx-embers">
                     {embers.map((em) => (
                       <i
@@ -664,8 +669,13 @@ export function CardFxLabSection() {
                 checked={fired}
                 onChange={(e) => setFired(e.target.checked)}
               />
-              <span>Fired (whole-card effect)</span>
+              <span>This user FIRE&apos;d → ignites the perimeter glow</span>
             </label>
+            <p className="card-lab-readout">
+              Embers show whenever an event has FIRE traction (even before this user
+              fires). The perimeter glow, turbulence, and hotspot only light up once this
+              user hits FIRE.
+            </p>
 
             <FxRow label="Perimeter glow (rises upward)">
               <input
@@ -772,7 +782,7 @@ export function CardFxLabSection() {
               />
             </FxRow>
             <p className="card-lab-readout">
-              Ember density tracks the Fire count — currently <em>{fireCount}</em>.
+              Ember density tracks the FIRE count — currently <em>{emberCount}</em>.
             </p>
           </div>
 
