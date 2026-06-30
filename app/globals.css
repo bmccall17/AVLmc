@@ -7785,6 +7785,18 @@ button.primary-action {
   margin: 14px 0;
 }
 
+.card-lab-readout {
+  color: #a1a1aa;
+  font-size: 0.74rem;
+  margin: 6px 0 0;
+}
+
+.card-lab-readout em {
+  color: #fafafa;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .card-lab-color {
   align-items: center;
   display: flex;

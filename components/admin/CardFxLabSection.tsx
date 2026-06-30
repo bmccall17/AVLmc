@@ -126,6 +126,15 @@ const ALL_VISIBLE: Record<ElementKey, boolean> = ELEMENTS.reduce(
   {} as Record<ElementKey, boolean>,
 );
 
+// Default hover layout (per design): everything on except the four lower-signal badges.
+const DEFAULT_VISIBLE: Record<ElementKey, boolean> = {
+  ...ALL_VISIBLE,
+  intent: false,
+  shared: false,
+  circle: false,
+  curated: false,
+};
+
 const LOCKED = new Set(ELEMENTS.filter((el) => el.locked).map((el) => el.key));
 
 // --- fire FX settings --------------------------------------------------------
@@ -141,21 +150,19 @@ type FxSettings = {
   hotspotOn: boolean;
   hotspotStrength: number; // 0..1
   embersOn: boolean;
-  emberDensity: number; // count of particles
 };
 
 const DEFAULT_FX: FxSettings = {
   glowOn: true,
-  intensity: 0.65,
+  intensity: 0.25,
   color: "#ff6a00",
-  pulseSpeed: 2.6,
+  pulseSpeed: 5.2,
   turbulenceOn: true,
-  turbulence: 14,
-  flicker: 3.2,
+  turbulence: 27,
+  flicker: 7.5,
   hotspotOn: true,
   hotspotStrength: 0.8,
   embersOn: true,
-  emberDensity: 12,
 };
 
 const EMBER_PALETTE = ["#ff3d00", "#ff6a00", "#ff9500", "#ffcf33", "#ff2d55"];
@@ -163,7 +170,7 @@ const EMBER_PALETTE = ["#ff3d00", "#ff6a00", "#ff9500", "#ffcf33", "#ff2d55"];
 const ACTION_BAR_H = 40;
 
 export function CardFxLabSection() {
-  const [visible, setVisible] = useState<Record<ElementKey, boolean>>(ALL_VISIBLE);
+  const [visible, setVisible] = useState<Record<ElementKey, boolean>>(DEFAULT_VISIBLE);
   const [fx, setFx] = useState<FxSettings>(DEFAULT_FX);
 
   // live pressed state for the action buttons
@@ -272,9 +279,13 @@ export function CardFxLabSection() {
     [fx.color, fx.intensity, fx.pulseSpeed, fx.hotspotOn, fx.hotspotStrength, dragging],
   );
 
+  // Ember density tracks the Fire count shown on the button (note 3).
+  const fireCount = MOCK.fire + (fired ? 1 : 0);
+  const emberCount = fx.embersOn ? fireCount : 0;
+
   const embers = useMemo(
     () =>
-      Array.from({ length: fx.emberDensity }, (_, i) => {
+      Array.from({ length: emberCount }, (_, i) => {
         const left = Math.round((i * 53 + 11) % 100);
         const delay = ((i * 0.37) % fx.pulseSpeed).toFixed(2);
         const dur = (3 + ((i * 0.7) % 3)).toFixed(2);
@@ -282,7 +293,7 @@ export function CardFxLabSection() {
         const color = EMBER_PALETTE[i % EMBER_PALETTE.length];
         return { left, delay, dur, size, color, key: i };
       }),
-    [fx.emberDensity, fx.pulseSpeed],
+    [emberCount, fx.pulseSpeed],
   );
 
   return (
@@ -383,17 +394,6 @@ export function CardFxLabSection() {
                 ) : null}
               </div>
               <div className="card-lab-top-right">
-                {shows("match") ? (
-                  <strong className="sandbox-match-pill" data-el="match">
-                    {MOCK.match}% match
-                  </strong>
-                ) : null}
-                {shows("top30") ? (
-                  <span className="sandbox-top30-badge" data-el="top30">
-                    <Star aria-hidden="true" size={12} strokeWidth={2.6} />
-                    Top 30
-                  </span>
-                ) : null}
                 {shows("pulse") ? (
                   <div
                     className="sandbox-pulse card-lab-pulse"
@@ -407,6 +407,17 @@ export function CardFxLabSection() {
                     </span>
                     <span>{MOCK.songs} songs</span>
                   </div>
+                ) : null}
+                {shows("match") ? (
+                  <strong className="sandbox-match-pill" data-el="match">
+                    {MOCK.match}% match
+                  </strong>
+                ) : null}
+                {shows("top30") ? (
+                  <span className="sandbox-top30-badge" data-el="top30">
+                    <Star aria-hidden="true" size={12} strokeWidth={2.6} />
+                    Top 30
+                  </span>
                 ) : null}
               </div>
             </div>
@@ -760,23 +771,16 @@ export function CardFxLabSection() {
                 onChange={(e) => setFxValue("embersOn", e.target.checked)}
               />
             </FxRow>
-            <FxSlider
-              label="Ember density"
-              min={0}
-              max={30}
-              step={1}
-              value={fx.emberDensity}
-              onChange={(v) => setFxValue("emberDensity", v)}
-              display={`${fx.emberDensity}`}
-              disabled={!fx.embersOn}
-            />
+            <p className="card-lab-readout">
+              Ember density tracks the Fire count — currently <em>{fireCount}</em>.
+            </p>
           </div>
 
           <div className="card-lab-panel">
             <div className="card-lab-panel-head">
               <h3>Export</h3>
             </div>
-            <pre className="card-lab-export">{exportCss(fx)}</pre>
+            <pre className="card-lab-export">{exportCss(fx, emberCount)}</pre>
           </div>
         </div>
       </div>
@@ -842,7 +846,7 @@ function FxSlider({
   );
 }
 
-function exportCss(fx: FxSettings) {
+function exportCss(fx: FxSettings, emberCount: number) {
   return [
     `.sandbox-event-card.is-fired {`,
     `  --fire-color: ${fx.color};`,
@@ -852,6 +856,6 @@ function exportCss(fx: FxSettings) {
     `  --fire-flicker: ${fx.flicker}s;`,
     `  --fire-hotspot: ${fx.hotspotOn ? fx.hotspotStrength : 0};`,
     `}`,
-    `/* glow:${fx.glowOn} turbulence:${fx.turbulenceOn} hotspot:${fx.hotspotOn} embers:${fx.embersOn}(${fx.emberDensity}) */`,
+    `/* glow:${fx.glowOn} turbulence:${fx.turbulenceOn} hotspot:${fx.hotspotOn} embers:${fx.embersOn}(${emberCount}) */`,
   ].join("\n");
 }
