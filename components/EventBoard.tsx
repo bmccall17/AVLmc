@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { Bell, CalendarCheck, Check, ChevronRight, ExternalLink, Flame, Headphones, Search, Share2, Star, UserPlus, X } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { SaveButton } from "@/components/SaveButton";
@@ -122,6 +122,57 @@ const actionHelp: Record<ActionKind, { body: string; impact: string; title: stri
     title: "Remove",
   },
 };
+
+// Whether the lower-signal disclosure badges (intent sources, shared songs, circle,
+// curated-by) render on the card. Hidden by the card refresh; flip to re-enable.
+const SHOW_SECONDARY_CARD_BADGES = false;
+
+// Embers visualize community FIRE traction. Their count tracks the FIRE total, capped
+// so very hot cards stay performant.
+const EMBER_CAP = 14;
+const EMBER_PALETTE = ["#ff3d00", "#ff6a00", "#ff9500", "#ffcf33", "#ff2d55"];
+
+function buildEmbers(count: number) {
+  return Array.from({ length: Math.min(count, EMBER_CAP) }, (_, i) => ({
+    key: i,
+    left: Math.round((i * 53 + 11) % 100),
+    delay: ((i * 0.37) % 5.2).toFixed(2),
+    dur: (3 + ((i * 0.7) % 3)).toFixed(2),
+    size: 3 + (i % 4),
+    color: EMBER_PALETTE[i % EMBER_PALETTE.length],
+  }));
+}
+
+// One shared SVG turbulence filter referenced by every card's flame ring + hotspot.
+function FireTurbulenceFilter() {
+  return (
+    <svg width="0" height="0" aria-hidden="true" focusable="false" style={{ position: "absolute" }}>
+      <filter id="cardFireTurb" x="-30%" y="-30%" width="160%" height="160%">
+        <feTurbulence
+          type="fractalNoise"
+          baseFrequency="0.012 0.024"
+          numOctaves={2}
+          seed={7}
+          result="noise"
+        >
+          <animate
+            attributeName="baseFrequency"
+            dur="7.5s"
+            values="0.012 0.024;0.018 0.034;0.012 0.024"
+            repeatCount="indefinite"
+          />
+        </feTurbulence>
+        <feDisplacementMap
+          in="SourceGraphic"
+          in2="noise"
+          scale={27}
+          xChannelSelector="R"
+          yChannelSelector="G"
+        />
+      </filter>
+    </svg>
+  );
+}
 
 export function EventBoard({
   circleActivityByEvent,
@@ -1054,6 +1105,8 @@ export function EventBoard({
 
       {errorMessage ? <p className="sandbox-error-message">{errorMessage}</p> : null}
 
+      <FireTurbulenceFilter />
+
       {filteredEvents.length === 0 ? (
         <section className="empty-state">
           <h2>No matching music events</h2>
@@ -1227,6 +1280,37 @@ function DiscoveryEventCard({
   const spotifySaves = counts?.goingSources.spotify ?? 0;
   const ticketClicks = counts?.goingSources.ticket_click ?? 0;
 
+  // Embers show on any card with community FIRE traction; the glow/turbulence/hotspot
+  // only ignite once THIS user has fired.
+  const userFired = state?.fire ?? false;
+  const showEmbers = fire > 0;
+  const embers = showEmbers ? buildEmbers(fire) : [];
+  const cardElRef = useRef<HTMLElement | null>(null);
+
+  function handleFirePointerMove(pointerEvent: PointerEvent<HTMLElement>) {
+    if (!userFired) {
+      return;
+    }
+    const el = cardElRef.current;
+    if (!el) {
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    const x = ((pointerEvent.clientX - rect.left) / rect.width) * 100;
+    const y = ((pointerEvent.clientY - rect.top) / rect.height) * 100;
+    const edge = 1 - Math.min(x, 100 - x, y, 100 - y) / 50;
+    el.style.setProperty("--mx", `${x}%`);
+    el.style.setProperty("--my", `${y}%`);
+    el.style.setProperty("--edge", edge.toFixed(3));
+  }
+
+  function setFireChurn(value: number) {
+    if (!userFired) {
+      return;
+    }
+    cardElRef.current?.style.setProperty("--churn", String(value));
+  }
+
   function handleCardClick(eventClick: MouseEvent<HTMLElement>) {
     if (isInteractiveTarget(eventClick.target)) {
       return;
@@ -1250,16 +1334,59 @@ function DiscoveryEventCard({
 
   return (
     <article
-      className={`sandbox-event-card fresh-card ${isRevealed ? "is-revealed" : ""}`}
+      ref={cardElRef}
+      className={`sandbox-event-card fresh-card ${isRevealed ? "is-revealed" : ""}${
+        userFired ? " is-fired fx-turbulence fx-hotspot" : ""
+      }`}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
+      onPointerMove={handleFirePointerMove}
+      onPointerDown={() => setFireChurn(1)}
+      onPointerUp={() => setFireChurn(0)}
+      onPointerLeave={() => setFireChurn(0)}
       tabIndex={0}
     >
+      {showEmbers || userFired ? (
+        <div className="fire-fx" aria-hidden="true">
+          {userFired ? <span className="fire-fx-glow" /> : null}
+          {userFired ? <span className="fire-fx-turb" /> : null}
+          {userFired ? <span className="fire-fx-hotspot" /> : null}
+          {showEmbers ? (
+            <span className="fire-fx-embers">
+              {embers.map((em) => (
+                <i
+                  key={em.key}
+                  style={{
+                    left: `${em.left}%`,
+                    width: em.size,
+                    height: em.size,
+                    background: em.color,
+                    animationDelay: `${em.delay}s`,
+                    animationDuration: `${em.dur}s`,
+                  }}
+                />
+              ))}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
       <EventPoster event={event} />
 
       <div className="sandbox-card-top">
         <div className="sandbox-card-tags">
           <span className="sandbox-card-tag">{tag}</span>
+        </div>
+        <div className="sandbox-card-top-right">
+          <div className="sandbox-pulse sandbox-pulse-chip" aria-label="Social pulse">
+            <span className="avatar-stack" aria-hidden="true">
+              <i>M</i>
+              <i>J</i>
+              <i>R</i>
+            </span>
+            <span>{songs} songs</span>
+          </div>
+          <strong className="sandbox-match-pill">{match}% match</strong>
           {isTop30 ? (
             <span className="sandbox-top30-badge">
               <Star aria-hidden="true" size={12} strokeWidth={2.6} />
@@ -1267,7 +1394,6 @@ function DiscoveryEventCard({
             </span>
           ) : null}
         </div>
-        <strong className="sandbox-match-pill">{match}% match</strong>
       </div>
 
       <div className="sandbox-card-body">
@@ -1280,16 +1406,6 @@ function DiscoveryEventCard({
         <p className="event-meta">
           {event.eventTime ?? "Time TBA"} · {event.artistName}
         </p>
-        <div className="sandbox-pulse" aria-label="Social pulse">
-          <span className="avatar-stack" aria-hidden="true">
-            <i>M</i>
-            <i>J</i>
-            <i>R</i>
-          </span>
-          <span>
-            {going} planning · {songs} songs · {fire} fire
-          </span>
-        </div>
         <div className="sandbox-card-disclosure">
           <p className="sandbox-note">{buildNote({ counts, event, isTop30, score, tag })}</p>
           {reasons.length > 0 ? (
@@ -1305,7 +1421,7 @@ function DiscoveryEventCard({
               ))}
             </div>
           ) : null}
-          {spotifySaves > 0 || ticketClicks > 0 ? (
+          {SHOW_SECONDARY_CARD_BADGES && (spotifySaves > 0 || ticketClicks > 0) ? (
             <div className="intent-mini-row card-intent-row" aria-label="Saved signal sources">
               {spotifySaves > 0 ? <span className="spotify-source">Spotify {spotifySaves}</span> : null}
               {ticketClicks > 0 ? <span>AVLgo {ticketClicks}</span> : null}
@@ -1323,8 +1439,10 @@ function DiscoveryEventCard({
               AVLgo <ExternalLink aria-hidden="true" size={13} strokeWidth={2.4} />
             </a>
           </div>
-          <SharedSongsCard eventId={event.id} initialSummary={sharedSongSummary} />
-          {circleBadgeCount(circleActivity) > 0 ? (
+          {SHOW_SECONDARY_CARD_BADGES ? (
+            <SharedSongsCard eventId={event.id} initialSummary={sharedSongSummary} />
+          ) : null}
+          {SHOW_SECONDARY_CARD_BADGES && circleBadgeCount(circleActivity) > 0 ? (
             <span
               className="circle-badge"
               title={`${circleBadgeCount(circleActivity)} from your circle`}
@@ -1332,7 +1450,7 @@ function DiscoveryEventCard({
               👥 {circleBadgeCount(circleActivity)} from your circle
             </span>
           ) : null}
-          {curatedBy && curatedBy.length > 0 ? (
+          {SHOW_SECONDARY_CARD_BADGES && curatedBy && curatedBy.length > 0 ? (
             <a
               className="curated-by-badge"
               href={`/curator/${encodeURIComponent(curatedBy[0].handle)}`}

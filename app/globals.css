@@ -2425,7 +2425,7 @@ body {
 }
 
 .sandbox-card-top {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
   gap: 10px;
   inset: 14px 14px auto;
@@ -7527,14 +7527,6 @@ button.primary-action {
 }
 
 .card-lab-card {
-  --mx: 50%;
-  --my: 50%;
-  --edge: 0;
-  --churn: 0;
-  --fire-color: #ff6a00;
-  --fire-intensity: 0.65;
-  --fire-speed: 2.6s;
-  --fire-hotspot: 0.8;
   width: 320px;
   max-width: 100%;
 }
@@ -7545,24 +7537,41 @@ button.primary-action {
   height: 0;
 }
 
-/* ---- fire effect ---- */
+/* ================================================================
+   Shared "on fire" effect — used by both the Card FX Lab mock and
+   the live event cards. Embers ride on any card with FIRE traction;
+   the glow / turbulence / hotspot only appear on `.is-fired`.
+   ================================================================ */
 
-/* steady ember halo — no pulse; the only motion is upward (note 1) */
-.card-lab-card.is-fired {
+/* tuning + cursor vars live on every card so embers (which render without
+   `.is-fired`) can read them; the lab overrides these via inline style. */
+.sandbox-event-card {
+  --mx: 50%;
+  --my: 50%;
+  --edge: 0;
+  --churn: 0;
+  --fire-color: #ff6a00;
+  --fire-intensity: 0.25;
+  --fire-speed: 5.2s;
+  --fire-hotspot: 0.8;
+}
+
+/* steady ember halo — no pulse; the only motion is upward */
+.sandbox-event-card.is-fired {
   border-color: color-mix(in srgb, var(--fire-color), transparent 40%);
   box-shadow:
     0 0 calc(46px * var(--fire-intensity)) color-mix(in srgb, var(--fire-color), transparent 32%),
     0 18px 50px rgba(0, 0, 0, 0.5);
 }
 
-.card-lab-fx {
+.fire-fx {
   inset: 0;
   pointer-events: none;
   position: absolute;
   z-index: 5;
 }
 
-.card-lab-fx > span {
+.fire-fx > span {
   border-radius: 8px;
   inset: 0;
   position: absolute;
@@ -7570,7 +7579,7 @@ button.primary-action {
 
 /* perimeter glow — a steady ember rim plus an upward-drifting flame wash that is
    masked to the edges, so the only animated motion is upward (like the embers). */
-.card-lab-fx-glow {
+.fire-fx-glow {
   animation: cardFireRise var(--fire-speed) linear infinite;
   background: repeating-linear-gradient(
     0deg,
@@ -7596,7 +7605,7 @@ button.primary-action {
 }
 
 /* flame-edged turbulent ring (driven by SVG feDisplacementMap) */
-.card-lab-fx-turb {
+.fire-fx-turb {
   border: 3px solid color-mix(in srgb, var(--fire-color), transparent 35%);
   border-radius: 10px;
   box-shadow: inset 0 0 22px color-mix(in srgb, var(--fire-color), transparent 45%);
@@ -7607,7 +7616,7 @@ button.primary-action {
 }
 
 /* cursor hotspot — flares near the perimeter, churns while dragging */
-.card-lab-fx-hotspot {
+.fire-fx-hotspot {
   background: radial-gradient(
     160px circle at var(--mx) var(--my),
     color-mix(in srgb, var(--fire-color), transparent 25%) 0%,
@@ -7619,17 +7628,17 @@ button.primary-action {
   transition: opacity 160ms ease;
 }
 
-.card-lab-card.fx-turbulence .card-lab-fx-hotspot {
+.sandbox-event-card.fx-turbulence .fire-fx-hotspot {
   filter: url(#cardFireTurb);
 }
 
 /* rising embers */
-.card-lab-fx-embers {
+.fire-fx-embers {
   inset: 0;
   overflow: hidden;
 }
 
-.card-lab-fx-embers i {
+.fire-fx-embers i {
   animation: cardEmberRise linear infinite;
   border-radius: 50%;
   bottom: -6px;
@@ -7654,8 +7663,8 @@ button.primary-action {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card-lab-fx-glow,
-  .card-lab-fx-embers i {
+  .fire-fx-glow,
+  .fire-fx-embers i {
     animation: none;
   }
 }
@@ -7845,12 +7854,8 @@ button.primary-action {
   flex: 1;
 }
 
-/* top row: genre on the left, match pill + Top 30 stacked on the right (note 3) */
-.card-lab-card .sandbox-card-top {
-  align-items: flex-start;
-}
-
-.card-lab-top-right {
+/* top row: genre on the left, social pulse + match pill + Top 30 stacked on the right */
+.sandbox-card-top-right {
   align-items: flex-end;
   display: flex;
   flex-direction: column;
@@ -7859,7 +7864,7 @@ button.primary-action {
 }
 
 /* social pulse relocated into the top-right stack, right-justified */
-.card-lab-pulse {
+.sandbox-pulse-chip {
   backdrop-filter: blur(12px);
   background: rgba(24, 24, 27, 0.48);
   border: 1px solid rgba(212, 212, 216, 0.18);
@@ -7867,6 +7872,35 @@ button.primary-action {
   font-size: 0.66rem;
   gap: 7px;
   padding: 4px 10px 4px 8px;
+}
+
+/* archived (legacy) card snapshot at the bottom of the lab */
+.card-lab-archive {
+  border-top: 1px solid rgba(63, 63, 70, 0.6);
+  margin-top: 28px;
+  padding-top: 24px;
+}
+
+.card-lab-archive-head {
+  margin-bottom: 16px;
+}
+
+.card-lab-archive-head h3 {
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+.card-lab-archive .card-lab-stage {
+  align-items: center;
+  min-height: 0;
+  position: static;
+}
+
+/* keep the legacy top row centered (its original alignment) */
+.card-lab-archive .sandbox-card-top {
+  align-items: center;
 }
 
 /* live action tooltips — present in the DOM, revealed on hover/focus (note 2) */

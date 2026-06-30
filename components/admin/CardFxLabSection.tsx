@@ -350,12 +350,12 @@ export function CardFxLabSection() {
           >
             {/* fire effect layers (pointer-events: none) */}
             {showFx ? (
-              <div className="card-lab-fx" aria-hidden="true">
-                {showGlow ? <span className="card-lab-fx-glow" /> : null}
-                {showTurb ? <span className="card-lab-fx-turb" /> : null}
-                {showHotspot ? <span className="card-lab-fx-hotspot" /> : null}
+              <div className="fire-fx" aria-hidden="true">
+                {showGlow ? <span className="fire-fx-glow" /> : null}
+                {showTurb ? <span className="fire-fx-turb" /> : null}
+                {showHotspot ? <span className="fire-fx-hotspot" /> : null}
                 {showEmbers ? (
-                  <span className="card-lab-fx-embers">
+                  <span className="fire-fx-embers">
                     {embers.map((em) => (
                       <i
                         key={em.key}
@@ -398,10 +398,10 @@ export function CardFxLabSection() {
                   </span>
                 ) : null}
               </div>
-              <div className="card-lab-top-right">
+              <div className="sandbox-card-top-right">
                 {shows("pulse") ? (
                   <div
-                    className="sandbox-pulse card-lab-pulse"
+                    className="sandbox-pulse sandbox-pulse-chip"
                     aria-label="Social pulse"
                     data-el="pulse"
                   >
@@ -794,7 +794,107 @@ export function CardFxLabSection() {
           </div>
         </div>
       </div>
+
+      <LegacyArchiveCard />
     </section>
+  );
+}
+
+/**
+ * Static, non-interactive snapshot of the ORIGINAL card design (pre fire-effect),
+ * kept for archival reference: Top 30 + genre on the left, match pill alone on the
+ * right, the old social pulse in the body, all secondary badges visible, and the old
+ * brightness-only FIRE cue (no glow / embers).
+ */
+function LegacyArchiveCard() {
+  return (
+    <div className="card-lab-archive">
+      <div className="card-lab-archive-head">
+        <h3>Archived — original card design</h3>
+        <p className="admin-meta">
+          The previous event card, before the fire effect and layout refresh. Kept for
+          reference only — not wired to any controls.
+        </p>
+      </div>
+      <div className="card-lab-stage">
+        <div className="sandbox-event-card fresh-card is-revealed card-lab-card">
+          <div className="sandbox-art has-image" aria-hidden="true">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img alt="" decoding="async" loading="lazy" src={MOCK.imageUrl} />
+            <span>HG</span>
+          </div>
+
+          <div className="sandbox-card-top">
+            <div className="sandbox-card-tags">
+              <span className="sandbox-card-tag">{MOCK.tag}</span>
+              <span className="sandbox-top30-badge">
+                <Star aria-hidden="true" size={12} strokeWidth={2.6} />
+                Top 30
+              </span>
+            </div>
+            <strong className="sandbox-match-pill">{MOCK.match}% match</strong>
+          </div>
+
+          <div className="sandbox-card-body">
+            <div className="sandbox-date">
+              <span>{MOCK.weekday}</span>
+              <strong>{MOCK.monthDay}</strong>
+            </div>
+            <p className="card-kicker">{MOCK.venueName}</p>
+            <h3>{MOCK.eventTitle}</h3>
+            <p className="event-meta">
+              {MOCK.eventTime} · {MOCK.artistName}
+            </p>
+            <div className="sandbox-pulse" aria-label="Social pulse">
+              <span className="avatar-stack" aria-hidden="true">
+                <i>M</i>
+                <i>J</i>
+                <i>R</i>
+              </span>
+              <span>
+                {MOCK.going} planning · {MOCK.songs} songs · {MOCK.fire} fire
+              </span>
+            </div>
+            <div className="sandbox-card-disclosure">
+              <p className="sandbox-note">{MOCK.note}</p>
+              <div className="reason-row card-reason-row">
+                {MOCK.reasons.map((reason) => (
+                  <span className="reason-badge" key={reason}>
+                    {reason}
+                  </span>
+                ))}
+              </div>
+              <div className="intent-mini-row card-intent-row">
+                <span className="spotify-source">Spotify {MOCK.spotifySaves}</span>
+                <span>AVLgo {MOCK.ticketClicks}</span>
+              </div>
+              <div className="card-lab-shared">🎵 4 shared songs with you</div>
+              <span className="circle-badge">👥 {MOCK.circle} from your circle</span>
+              <span className="curated-by-badge">★ curated by {MOCK.curatedBy}</span>
+            </div>
+          </div>
+
+          <div className="sandbox-action-bar" aria-label="Discovery actions">
+            <button type="button" className="is-going">
+              <CalendarCheck aria-hidden="true" size={16} strokeWidth={2.5} />
+              <span>Going</span>
+              <strong>{MOCK.going}</strong>
+            </button>
+            <button type="button" className="is-fire" aria-pressed="true">
+              <Flame aria-hidden="true" size={16} strokeWidth={2.5} />
+              <span>Fire</span>
+              <strong>{MOCK.fire + 1}</strong>
+            </button>
+            <button type="button" className="is-remove" aria-label="Remove">
+              <X aria-hidden="true" size={18} strokeWidth={2.6} />
+            </button>
+            <button type="button" className="is-save" aria-label="Save">
+              <Bookmark aria-hidden="true" size={16} strokeWidth={2.5} fill="none" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
