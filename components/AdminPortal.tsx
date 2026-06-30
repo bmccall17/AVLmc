@@ -21,6 +21,7 @@ import { StewardshipSection } from "@/components/admin/StewardshipSection";
 import { InsightSection } from "@/components/admin/InsightSection";
 import { AnalyticsSection } from "@/components/admin/AnalyticsSection";
 import { ListenerGraphSection } from "@/components/admin/ListenerGraphSection";
+import { CardFxLabSection } from "@/components/admin/CardFxLabSection";
 
 type AdminPortalProps = {
   data: AdminDashboardData;
@@ -43,6 +44,7 @@ type TabId =
   | "analytics"
   | "gaps"
   | "resources"
+  | "card-lab"
   | "moderation";
 
 const TABS: Array<{ id: TabId; label: string }> = [
@@ -56,6 +58,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: "analytics", label: "Analytics" },
   { id: "gaps", label: "Gaps" },
   { id: "resources", label: "Resources" },
+  { id: "card-lab", label: "Card FX Lab" },
   { id: "moderation", label: "Moderation" },
 ];
 
@@ -235,6 +238,7 @@ export function AdminPortal({
         )}
         {activeTab === "gaps" && <GapsSection data={data} />}
         {activeTab === "resources" && <ResourcesSection data={data} />}
+        {activeTab === "card-lab" && <CardFxLabSection />}
         {activeTab === "moderation" && (
           <AdminModeration
             contributions={contributions}

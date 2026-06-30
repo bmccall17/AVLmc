@@ -7456,3 +7456,354 @@ button.primary-action {
 .not-found-actions {
   margin-top: 22px;
 }
+
+/* ==================================================================
+   Card FX Lab (admin) — prototype surface for tuning event cards.
+   Effect styles are scoped under .is-fired so production cards are
+   never affected.
+   ================================================================== */
+
+.card-lab .card-lab-head {
+  margin-bottom: 18px;
+}
+
+.card-lab-grid {
+  display: grid;
+  gap: 22px;
+  grid-template-columns: minmax(300px, 380px) minmax(320px, 1fr);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .card-lab-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card-lab-stage {
+  align-items: center;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(63, 63, 70, 0.35), rgba(9, 9, 11, 0.95)),
+    #0a0a0a;
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  border-radius: 12px;
+  display: flex;
+  justify-content: center;
+  min-height: 520px;
+  overflow: visible;
+  padding: 56px 40px;
+  position: sticky;
+  top: 16px;
+}
+
+.card-lab-card {
+  --mx: 50%;
+  --my: 50%;
+  --edge: 0;
+  --churn: 0;
+  --fire-color: #ff6a00;
+  --fire-intensity: 0.65;
+  --fire-speed: 2.6s;
+  --fire-hotspot: 0.8;
+  width: 320px;
+  max-width: 100%;
+}
+
+.card-lab-svg {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/* ---- fire effect ---- */
+
+.card-lab-card.is-fired {
+  animation: cardFireHalo var(--fire-speed) ease-in-out infinite;
+  border-color: color-mix(in srgb, var(--fire-color), transparent 40%);
+}
+
+@keyframes cardFireHalo {
+  0%,
+  100% {
+    box-shadow:
+      0 0 calc(26px * var(--fire-intensity)) color-mix(in srgb, var(--fire-color), transparent 40%),
+      0 18px 50px rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    box-shadow:
+      0 0 calc(64px * var(--fire-intensity)) color-mix(in srgb, var(--fire-color), transparent 18%),
+      0 18px 50px rgba(0, 0, 0, 0.5);
+  }
+}
+
+.card-lab-fx {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 5;
+}
+
+.card-lab-fx > span {
+  border-radius: 8px;
+  inset: 0;
+  position: absolute;
+}
+
+/* inner edge glow */
+.card-lab-fx-glow {
+  animation: cardFireGlowPulse var(--fire-speed) ease-in-out infinite;
+  box-shadow:
+    inset 0 0 calc(34px * var(--fire-intensity))
+      color-mix(in srgb, var(--fire-color), transparent 25%),
+    inset 0 0 calc(8px * var(--fire-intensity)) color-mix(in srgb, var(--fire-color), transparent 10%);
+  mix-blend-mode: screen;
+}
+
+@keyframes cardFireGlowPulse {
+  0%,
+  100% {
+    opacity: calc(0.55 + 0.25 * var(--fire-intensity));
+  }
+  50% {
+    opacity: calc(0.8 + 0.2 * var(--fire-intensity));
+  }
+}
+
+/* flame-edged turbulent ring (driven by SVG feDisplacementMap) */
+.card-lab-fx-turb {
+  border: 3px solid color-mix(in srgb, var(--fire-color), transparent 35%);
+  border-radius: 10px;
+  box-shadow: inset 0 0 22px color-mix(in srgb, var(--fire-color), transparent 45%);
+  filter: url(#cardFireTurb);
+  inset: -2px;
+  mix-blend-mode: screen;
+  opacity: calc(0.5 + 0.5 * var(--fire-intensity));
+}
+
+/* cursor hotspot — flares near the perimeter, churns while dragging */
+.card-lab-fx-hotspot {
+  background: radial-gradient(
+    160px circle at var(--mx) var(--my),
+    color-mix(in srgb, var(--fire-color), transparent 25%) 0%,
+    color-mix(in srgb, var(--fire-color), transparent 70%) 22%,
+    transparent 48%
+  );
+  mix-blend-mode: screen;
+  opacity: calc(var(--fire-hotspot) * var(--edge) * (0.4 + 0.6 * var(--churn)));
+  transition: opacity 160ms ease;
+}
+
+.card-lab-card.fx-turbulence .card-lab-fx-hotspot {
+  filter: url(#cardFireTurb);
+}
+
+/* rising embers */
+.card-lab-fx-embers {
+  inset: 0;
+  overflow: hidden;
+}
+
+.card-lab-fx-embers i {
+  animation: cardEmberRise linear infinite;
+  border-radius: 50%;
+  bottom: -6px;
+  filter: blur(0.4px);
+  mix-blend-mode: screen;
+  opacity: 0;
+  position: absolute;
+}
+
+@keyframes cardEmberRise {
+  0% {
+    opacity: 0;
+    transform: translateY(0) translateX(0) scale(1);
+  }
+  15% {
+    opacity: calc(0.5 + 0.5 * var(--fire-intensity));
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-340px) translateX(14px) scale(0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-lab-card.is-fired,
+  .card-lab-fx-glow,
+  .card-lab-fx-embers i {
+    animation: none;
+  }
+}
+
+/* mock shared-songs widget stand-in */
+.card-lab-shared {
+  color: #d4d4d8;
+  font-size: 0.74rem;
+  font-weight: 700;
+  margin-top: 10px;
+}
+
+/* ---- controls ---- */
+
+.card-lab-controls {
+  display: grid;
+  gap: 16px;
+}
+
+.card-lab-panel {
+  background: rgba(24, 24, 27, 0.55);
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.card-lab-panel-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.card-lab-panel-head h3 {
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.card-lab-panel-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.card-lab-panel-actions button {
+  background: rgba(63, 63, 70, 0.5);
+  border: 1px solid rgba(113, 113, 122, 0.5);
+  border-radius: 6px;
+  color: #e4e4e7;
+  cursor: pointer;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 4px 9px;
+  text-transform: uppercase;
+}
+
+.card-lab-toggles {
+  display: grid;
+  gap: 6px 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.card-lab-toggle {
+  align-items: center;
+  color: #d4d4d8;
+  cursor: pointer;
+  display: flex;
+  font-size: 0.8rem;
+  gap: 8px;
+}
+
+.card-lab-toggle--lead {
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.card-lab-toggle input,
+.card-lab-fxrow input[type="checkbox"] {
+  accent-color: var(--fire-color, #f97316);
+  height: 15px;
+  width: 15px;
+}
+
+.card-lab-fxrow {
+  align-items: center;
+  color: #e4e4e7;
+  display: flex;
+  font-size: 0.82rem;
+  font-weight: 700;
+  justify-content: space-between;
+  margin: 10px 0;
+}
+
+.card-lab-slider {
+  display: block;
+  margin: 10px 0;
+}
+
+.card-lab-slider.is-disabled {
+  opacity: 0.4;
+}
+
+.card-lab-slider-label {
+  color: #a1a1aa;
+  display: flex;
+  font-size: 0.74rem;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.card-lab-slider-label em {
+  color: #fafafa;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.card-lab-slider input[type="range"] {
+  accent-color: #f97316;
+  width: 100%;
+}
+
+.card-lab-divider {
+  border: 0;
+  border-top: 1px solid rgba(63, 63, 70, 0.6);
+  margin: 14px 0;
+}
+
+.card-lab-color {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.card-lab-swatch {
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  height: 22px;
+  width: 22px;
+}
+
+.card-lab-swatch.is-active {
+  border-color: #fafafa;
+}
+
+.card-lab-color input[type="color"] {
+  background: none;
+  border: 1px solid rgba(113, 113, 122, 0.5);
+  border-radius: 6px;
+  cursor: pointer;
+  height: 26px;
+  padding: 0;
+  width: 34px;
+}
+
+.card-lab-export {
+  background: #09090b;
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  border-radius: 8px;
+  color: #d9f99d;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  margin: 0;
+  overflow-x: auto;
+  padding: 12px;
+  white-space: pre;
+}
+
+/* lab save button in the mock action bar */
+.sandbox-action-bar .is-save {
+  background: rgba(39, 39, 42, 0.96);
+  color: #fafafa;
+  flex: 1;
+}
