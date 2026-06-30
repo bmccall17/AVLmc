@@ -7488,12 +7488,42 @@ button.primary-action {
   border: 1px solid rgba(63, 63, 70, 0.6);
   border-radius: 12px;
   display: flex;
+  flex-direction: column;
+  gap: 24px;
   justify-content: center;
   min-height: 520px;
   overflow: visible;
-  padding: 56px 40px;
+  padding: 40px;
   position: sticky;
   top: 16px;
+}
+
+/* resting vs. hover state switch */
+.card-lab-statebar {
+  background: rgba(24, 24, 27, 0.7);
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+}
+
+.card-lab-statebar button {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: #a1a1aa;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 6px 16px;
+  text-transform: uppercase;
+}
+
+.card-lab-statebar button.is-active {
+  background: #f4f4f5;
+  color: #09090b;
 }
 
 .card-lab-card {
@@ -7814,6 +7844,17 @@ button.primary-action {
   flex-direction: column;
   flex: 0 0 auto;
   gap: 6px;
+}
+
+/* social pulse relocated into the top-right stack, right-justified */
+.card-lab-pulse {
+  backdrop-filter: blur(12px);
+  background: rgba(24, 24, 27, 0.48);
+  border: 1px solid rgba(212, 212, 216, 0.18);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  gap: 7px;
+  padding: 4px 10px 4px 8px;
 }
 
 /* live action tooltips — present in the DOM, revealed on hover/focus (note 2) */

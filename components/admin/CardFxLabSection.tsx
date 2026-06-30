@@ -174,6 +174,10 @@ export function CardFxLabSection() {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState(false);
 
+  // resting vs. hovered preview. In "rest" the card shows its collapsed look and still
+  // reveals live on a real mouse hover; "hover" pins it open.
+  const [preview, setPreview] = useState<"rest" | "hover">("hover");
+
   // which elements are actually visible vs. displaced/clipped by another element
   const [seen, setSeen] = useState<Partial<Record<ElementKey, boolean>>>({});
 
@@ -206,6 +210,12 @@ export function CardFxLabSection() {
   const measure = useCallback(() => {
     const card = cardRef.current;
     if (!card) return;
+    // Displacement only applies once the card is fully revealed; in the resting state
+    // the disclosure is intentionally collapsed, so don't flag those as "hidden".
+    if (preview === "rest") {
+      setSeen({});
+      return;
+    }
     const cardRect = card.getBoundingClientRect();
     const disclEl = card.querySelector<HTMLElement>("[data-disclosure]");
     const disclRect = disclEl?.getBoundingClientRect();
@@ -229,14 +239,14 @@ export function CardFxLabSection() {
       next[key] = ok;
     });
     setSeen(next);
-  }, [visible.actions]);
+  }, [visible.actions, preview]);
 
   useLayoutEffect(() => {
     measure();
     // re-measure after fonts/images settle
     const id = window.setTimeout(measure, 120);
     return () => window.clearTimeout(id);
-  }, [measure, visible, going, fired, saved]);
+  }, [measure, visible, going, fired, saved, preview]);
 
   useEffect(() => {
     const card = cardRef.current;
@@ -280,21 +290,40 @@ export function CardFxLabSection() {
       <header className="card-lab-head">
         <h2>Card FX Lab</h2>
         <p className="admin-meta">
-          Prototype the look of discovery event cards. Toggle elements, hover the action
-          buttons to see their live tooltips, press them to watch their states, and dial in
-          the “on fire” effect. Drag the cursor across the glowing edge to feel the
-          turbulence. Production cards are untouched.
+          Prototype the look of discovery event cards. Switch between the Resting and Hover
+          states (or just mouse over the card to see the live transition), toggle elements,
+          hover the action buttons to see their live tooltips, press them to watch their
+          states, and dial in the “on fire” effect. Drag the cursor across the glowing edge
+          to feel the turbulence. Production cards are untouched.
         </p>
       </header>
 
       <div className="card-lab-grid">
         {/* ---------------- preview ---------------- */}
         <div className="card-lab-stage">
+          <div className="card-lab-statebar" role="group" aria-label="Card state">
+            <button
+              type="button"
+              className={preview === "rest" ? "is-active" : ""}
+              aria-pressed={preview === "rest"}
+              onClick={() => setPreview("rest")}
+            >
+              Resting
+            </button>
+            <button
+              type="button"
+              className={preview === "hover" ? "is-active" : ""}
+              aria-pressed={preview === "hover"}
+              onClick={() => setPreview("hover")}
+            >
+              Hover
+            </button>
+          </div>
           <div
             ref={cardRef}
-            className={`sandbox-event-card fresh-card is-revealed card-lab-card${
-              showFire ? " is-fired" : ""
-            }${fx.turbulenceOn ? " fx-turbulence" : ""}${
+            className={`sandbox-event-card fresh-card card-lab-card${
+              preview === "hover" ? " is-revealed" : ""
+            }${showFire ? " is-fired" : ""}${fx.turbulenceOn ? " fx-turbulence" : ""}${
               fx.hotspotOn ? " fx-hotspot" : ""
             }`}
             style={cardStyle}
@@ -365,6 +394,20 @@ export function CardFxLabSection() {
                     Top 30
                   </span>
                 ) : null}
+                {shows("pulse") ? (
+                  <div
+                    className="sandbox-pulse card-lab-pulse"
+                    aria-label="Social pulse"
+                    data-el="pulse"
+                  >
+                    <span className="avatar-stack" aria-hidden="true">
+                      <i>M</i>
+                      <i>J</i>
+                      <i>R</i>
+                    </span>
+                    <span>{MOCK.songs} songs</span>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -383,16 +426,6 @@ export function CardFxLabSection() {
                 <p className="event-meta" data-el="meta">
                   {MOCK.eventTime} · {MOCK.artistName}
                 </p>
-              ) : null}
-              {shows("pulse") ? (
-                <div className="sandbox-pulse" aria-label="Social pulse" data-el="pulse">
-                  <span className="avatar-stack" aria-hidden="true">
-                    <i>M</i>
-                    <i>J</i>
-                    <i>R</i>
-                  </span>
-                  <span>{MOCK.songs} songs</span>
-                </div>
               ) : null}
 
               <div className="sandbox-card-disclosure" data-disclosure>
