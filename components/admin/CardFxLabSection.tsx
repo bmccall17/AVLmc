@@ -9,11 +9,15 @@ import {
   Bookmark,
 } from "lucide-react";
 import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
 
 /**
@@ -51,6 +55,28 @@ const MOCK = {
   curatedBy: "Ashe Sounds",
 };
 
+// Same copy as the live action tooltips (EventBoard.tsx `actionHelp`).
+const ACTION_HELP: Record<
+  "going" | "fire" | "remove",
+  { title: string; body: string; impact: string }
+> = {
+  going: {
+    title: "Planning to go",
+    body: "Adds this show to your intent list and teaches personal discovery to favor similar artists, venues, timing, and tags.",
+    impact: "Also raises the public planning count, so other listeners can see that the show has momentum.",
+  },
+  fire: {
+    title: "Fire",
+    body: "A stronger positive signal than Going. Use it when a show feels especially relevant, even if you are not committing.",
+    impact: "Adds heat to the community signal and can lift the show in social discovery rows.",
+  },
+  remove: {
+    title: "Remove",
+    body: "Hides this event from your list and sends a negative taste signal so similar picks show up less often for you.",
+    impact: "Aggregate dismissals can help reduce weak recommendations for everyone without exposing who dismissed it.",
+  },
+};
+
 // --- element toggles ---------------------------------------------------------
 
 type ElementKey =
@@ -73,14 +99,15 @@ type ElementKey =
   | "actions"
   | "save";
 
-const ELEMENTS: Array<{ key: ElementKey; label: string }> = [
+// `locked` elements can never be hidden (Venue / Title / Date are always shown).
+const ELEMENTS: Array<{ key: ElementKey; label: string; locked?: boolean }> = [
   { key: "image", label: "OG image" },
   { key: "tag", label: "Genre tag" },
   { key: "top30", label: "Top 30 badge" },
   { key: "match", label: "Match pill" },
-  { key: "date", label: "Date block" },
-  { key: "venue", label: "Venue (kicker)" },
-  { key: "title", label: "Title" },
+  { key: "date", label: "Date block", locked: true },
+  { key: "venue", label: "Venue (kicker)", locked: true },
+  { key: "title", label: "Title", locked: true },
   { key: "meta", label: "Time + artist (meta)" },
   { key: "pulse", label: "Social pulse" },
   { key: "note", label: "Recommendation note" },
@@ -99,13 +126,15 @@ const ALL_VISIBLE: Record<ElementKey, boolean> = ELEMENTS.reduce(
   {} as Record<ElementKey, boolean>,
 );
 
+const LOCKED = new Set(ELEMENTS.filter((el) => el.locked).map((el) => el.key));
+
 // --- fire FX settings --------------------------------------------------------
 
 type FxSettings = {
   glowOn: boolean;
   intensity: number; // 0..1
   color: string; // hex
-  pulseSpeed: number; // seconds per pulse
+  pulseSpeed: number; // seconds per rise cycle
   turbulenceOn: boolean;
   turbulence: number; // displacement scale (px)
   flicker: number; // seconds per turbulence cycle
@@ -131,6 +160,8 @@ const DEFAULT_FX: FxSettings = {
 
 const EMBER_PALETTE = ["#ff3d00", "#ff6a00", "#ff9500", "#ffcf33", "#ff2d55"];
 
+const ACTION_BAR_H = 40;
+
 export function CardFxLabSection() {
   const [visible, setVisible] = useState<Record<ElementKey, boolean>>(ALL_VISIBLE);
   const [fx, setFx] = useState<FxSettings>(DEFAULT_FX);
@@ -143,7 +174,14 @@ export function CardFxLabSection() {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState(false);
 
+  // which elements are actually visible vs. displaced/clipped by another element
+  const [seen, setSeen] = useState<Partial<Record<ElementKey, boolean>>>({});
+
   const showFire = fired && fx.glowOn;
+
+  function shows(key: ElementKey) {
+    return LOCKED.has(key) || visible[key];
+  }
 
   function setFxValue<K extends keyof FxSettings>(key: K, value: FxSettings[K]) {
     setFx((prev) => ({ ...prev, [key]: value }));
@@ -156,11 +194,61 @@ export function CardFxLabSection() {
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     // edge proximity: 1 at any border, 0 in the dead center
-    const edge = 1 - (Math.min(x, 100 - x, y, 100 - y) / 50);
+    const edge = 1 - Math.min(x, 100 - x, y, 100 - y) / 50;
     el.style.setProperty("--mx", `${x}%`);
     el.style.setProperty("--my", `${y}%`);
     el.style.setProperty("--edge", edge.toFixed(3));
   }
+
+  // Measure which checked elements are actually visible. An element is "displaced"
+  // when it's clipped out of the disclosure overflow, pushed off the card, or hidden
+  // behind the action bar — so the lab can flag it even though its toggle is on.
+  const measure = useCallback(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const cardRect = card.getBoundingClientRect();
+    const disclEl = card.querySelector<HTMLElement>("[data-disclosure]");
+    const disclRect = disclEl?.getBoundingClientRect();
+    const barShown = visible.actions;
+    const next: Partial<Record<ElementKey, boolean>> = {};
+    card.querySelectorAll<HTMLElement>("[data-el]").forEach((node) => {
+      const key = node.dataset.el as ElementKey;
+      const r = node.getBoundingClientRect();
+      let ok =
+        r.width > 1 &&
+        r.height > 1 &&
+        r.bottom > cardRect.top + 1 &&
+        r.top < cardRect.bottom - 1;
+      if (ok && node.hasAttribute("data-in-disclosure") && disclRect) {
+        if (r.top >= disclRect.bottom - 2) ok = false;
+      }
+      if (ok && barShown && key !== "actions" && key !== "save") {
+        const band = cardRect.bottom - ACTION_BAR_H;
+        if (r.top + r.height / 2 >= band) ok = false;
+      }
+      next[key] = ok;
+    });
+    setSeen(next);
+  }, [visible.actions]);
+
+  useLayoutEffect(() => {
+    measure();
+    // re-measure after fonts/images settle
+    const id = window.setTimeout(measure, 120);
+    return () => window.clearTimeout(id);
+  }, [measure, visible, going, fired, saved]);
+
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(card);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [measure]);
 
   const cardStyle = useMemo<CSSProperties>(
     () =>
@@ -192,9 +280,10 @@ export function CardFxLabSection() {
       <header className="card-lab-head">
         <h2>Card FX Lab</h2>
         <p className="admin-meta">
-          Prototype the look of discovery event cards. Toggle elements, press the action
-          buttons to watch their states, and dial in the “on fire” effect. Drag the cursor
-          across the glowing edge to feel the turbulence. Production cards are untouched.
+          Prototype the look of discovery event cards. Toggle elements, hover the action
+          buttons to see their live tooltips, press them to watch their states, and dial in
+          the “on fire” effect. Drag the cursor across the glowing edge to feel the
+          turbulence. Production cards are untouched.
         </p>
       </header>
 
@@ -244,66 +333,80 @@ export function CardFxLabSection() {
 
             {/* poster */}
             <div
-              className={`sandbox-art ${visible.image ? "has-image" : "is-fallback"}`}
+              className={`sandbox-art ${shows("image") ? "has-image" : "is-fallback"}`}
               aria-hidden="true"
+              data-el="image"
             >
-              {visible.image ? (
+              {shows("image") ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img alt="" decoding="async" loading="lazy" src={MOCK.imageUrl} />
               ) : null}
               <span>HG</span>
             </div>
 
-            {/* top row */}
+            {/* top row — genre on the left, match pill + Top 30 stacked on the right */}
             <div className="sandbox-card-top">
               <div className="sandbox-card-tags">
-                {visible.tag ? <span className="sandbox-card-tag">{MOCK.tag}</span> : null}
-                {visible.top30 ? (
-                  <span className="sandbox-top30-badge">
+                {shows("tag") ? (
+                  <span className="sandbox-card-tag" data-el="tag">
+                    {MOCK.tag}
+                  </span>
+                ) : null}
+              </div>
+              <div className="card-lab-top-right">
+                {shows("match") ? (
+                  <strong className="sandbox-match-pill" data-el="match">
+                    {MOCK.match}% match
+                  </strong>
+                ) : null}
+                {shows("top30") ? (
+                  <span className="sandbox-top30-badge" data-el="top30">
                     <Star aria-hidden="true" size={12} strokeWidth={2.6} />
                     Top 30
                   </span>
                 ) : null}
               </div>
-              {visible.match ? (
-                <strong className="sandbox-match-pill">{MOCK.match}% match</strong>
-              ) : null}
             </div>
 
             {/* body */}
             <div className="sandbox-card-body">
-              {visible.date ? (
-                <div className="sandbox-date">
-                  <span>{MOCK.weekday}</span>
-                  <strong>{MOCK.monthDay}</strong>
-                </div>
-              ) : null}
-              {visible.venue ? <p className="card-kicker">{MOCK.venueName}</p> : null}
-              {visible.title ? <h3>{MOCK.eventTitle}</h3> : null}
-              {visible.meta ? (
-                <p className="event-meta">
+              {/* date / venue / title are locked — always rendered */}
+              <div className="sandbox-date" data-el="date">
+                <span>{MOCK.weekday}</span>
+                <strong>{MOCK.monthDay}</strong>
+              </div>
+              <p className="card-kicker" data-el="venue">
+                {MOCK.venueName}
+              </p>
+              <h3 data-el="title">{MOCK.eventTitle}</h3>
+              {shows("meta") ? (
+                <p className="event-meta" data-el="meta">
                   {MOCK.eventTime} · {MOCK.artistName}
                 </p>
               ) : null}
-              {visible.pulse ? (
-                <div className="sandbox-pulse" aria-label="Social pulse">
+              {shows("pulse") ? (
+                <div className="sandbox-pulse" aria-label="Social pulse" data-el="pulse">
                   <span className="avatar-stack" aria-hidden="true">
                     <i>M</i>
                     <i>J</i>
                     <i>R</i>
                   </span>
-                  <span>
-                    {MOCK.going} planning · {MOCK.songs} songs · {MOCK.fire} fire
-                  </span>
+                  <span>{MOCK.songs} songs</span>
                 </div>
               ) : null}
 
-              <div className="sandbox-card-disclosure">
-                {visible.note ? <p className="sandbox-note">{MOCK.note}</p> : null}
-                {visible.reasons ? (
+              <div className="sandbox-card-disclosure" data-disclosure>
+                {shows("note") ? (
+                  <p className="sandbox-note" data-el="note" data-in-disclosure>
+                    {MOCK.note}
+                  </p>
+                ) : null}
+                {shows("reasons") ? (
                   <div
                     className="reason-row card-reason-row"
                     aria-label="Recommendation reasons"
+                    data-el="reasons"
+                    data-in-disclosure
                   >
                     {MOCK.reasons.map((reason) => (
                       <span className="reason-badge" key={reason}>
@@ -312,17 +415,24 @@ export function CardFxLabSection() {
                     ))}
                   </div>
                 ) : null}
-                {visible.intent ? (
+                {shows("intent") ? (
                   <div
                     className="intent-mini-row card-intent-row"
                     aria-label="Saved signal sources"
+                    data-el="intent"
+                    data-in-disclosure
                   >
                     <span className="spotify-source">Spotify {MOCK.spotifySaves}</span>
                     <span>AVLgo {MOCK.ticketClicks}</span>
                   </div>
                 ) : null}
-                {visible.links ? (
-                  <div className="sandbox-card-links" aria-label="Event links">
+                {shows("links") ? (
+                  <div
+                    className="sandbox-card-links"
+                    aria-label="Event links"
+                    data-el="links"
+                    data-in-disclosure
+                  >
                     <a href="#" onClick={(e) => e.preventDefault()}>
                       Details
                     </a>
@@ -331,19 +441,28 @@ export function CardFxLabSection() {
                     </a>
                   </div>
                 ) : null}
-                {visible.shared ? (
-                  <div className="card-lab-shared">🎵 4 shared songs with you</div>
+                {shows("shared") ? (
+                  <div className="card-lab-shared" data-el="shared" data-in-disclosure>
+                    🎵 4 shared songs with you
+                  </div>
                 ) : null}
-                {visible.circle ? (
-                  <span className="circle-badge" title={`${MOCK.circle} from your circle`}>
+                {shows("circle") ? (
+                  <span
+                    className="circle-badge"
+                    title={`${MOCK.circle} from your circle`}
+                    data-el="circle"
+                    data-in-disclosure
+                  >
                     👥 {MOCK.circle} from your circle
                   </span>
                 ) : null}
-                {visible.curated ? (
+                {shows("curated") ? (
                   <a
                     className="curated-by-badge"
                     href="#"
                     onClick={(e) => e.preventDefault()}
+                    data-el="curated"
+                    data-in-disclosure
                   >
                     ★ curated by {MOCK.curatedBy}
                   </a>
@@ -352,8 +471,8 @@ export function CardFxLabSection() {
             </div>
 
             {/* action bar */}
-            {visible.actions ? (
-              <div className="sandbox-action-bar" aria-label="Discovery actions">
+            {shows("actions") ? (
+              <div className="sandbox-action-bar" aria-label="Discovery actions" data-el="actions">
                 <button
                   type="button"
                   className="is-going"
@@ -363,6 +482,7 @@ export function CardFxLabSection() {
                   <CalendarCheck aria-hidden="true" size={16} strokeWidth={2.5} />
                   <span>Going</span>
                   <strong>{MOCK.going + (going ? 1 : 0)}</strong>
+                  <LabTooltip action="going" />
                 </button>
                 <button
                   type="button"
@@ -373,17 +493,20 @@ export function CardFxLabSection() {
                   <Flame aria-hidden="true" size={16} strokeWidth={2.5} />
                   <span>Fire</span>
                   <strong>{MOCK.fire + (fired ? 1 : 0)}</strong>
+                  <LabTooltip action="fire" />
                 </button>
                 <button type="button" className="is-remove" aria-label="Remove">
                   <X aria-hidden="true" size={18} strokeWidth={2.6} />
+                  <LabTooltip action="remove" />
                 </button>
-                {visible.save ? (
+                {shows("save") ? (
                   <button
                     type="button"
                     className="is-save"
                     aria-pressed={saved}
                     aria-label="Save"
                     onClick={() => setSaved((v) => !v)}
+                    data-el="save"
                   >
                     <Bookmark
                       aria-hidden="true"
@@ -437,10 +560,7 @@ export function CardFxLabSection() {
             <div className="card-lab-panel-head">
               <h3>Elements</h3>
               <div className="card-lab-panel-actions">
-                <button
-                  type="button"
-                  onClick={() => setVisible(ALL_VISIBLE)}
-                >
+                <button type="button" onClick={() => setVisible(ALL_VISIBLE)}>
                   All
                 </button>
                 <button
@@ -448,7 +568,7 @@ export function CardFxLabSection() {
                   onClick={() =>
                     setVisible(
                       ELEMENTS.reduce(
-                        (acc, el) => ({ ...acc, [el.key]: false }),
+                        (acc, el) => ({ ...acc, [el.key]: Boolean(el.locked) }),
                         {} as Record<ElementKey, boolean>,
                       ),
                     )
@@ -459,19 +579,34 @@ export function CardFxLabSection() {
               </div>
             </div>
             <div className="card-lab-toggles">
-              {ELEMENTS.map((el) => (
-                <label key={el.key} className="card-lab-toggle">
-                  <input
-                    type="checkbox"
-                    checked={visible[el.key]}
-                    onChange={(e) =>
-                      setVisible((prev) => ({ ...prev, [el.key]: e.target.checked }))
-                    }
-                  />
-                  <span>{el.label}</span>
-                </label>
-              ))}
+              {ELEMENTS.map((el) => {
+                const occluded = shows(el.key) && seen[el.key] === false;
+                return (
+                  <label
+                    key={el.key}
+                    className={`card-lab-toggle${el.locked ? " is-locked" : ""}${
+                      occluded ? " is-occluded" : ""
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={shows(el.key)}
+                      disabled={el.locked}
+                      onChange={(e) =>
+                        setVisible((prev) => ({ ...prev, [el.key]: e.target.checked }))
+                      }
+                    />
+                    <span>{el.label}</span>
+                    {el.locked ? <em className="card-lab-tag">locked</em> : null}
+                    {occluded ? <em className="card-lab-tag is-warn">hidden</em> : null}
+                  </label>
+                );
+              })}
             </div>
+            <p className="card-lab-hint">
+              <em className="card-lab-tag is-warn">hidden</em> means the element is on but
+              displaced behind another element (clipped, pushed off, or under the action bar).
+            </p>
           </div>
 
           <div className="card-lab-panel">
@@ -488,7 +623,7 @@ export function CardFxLabSection() {
               <span>Fired (whole-card effect)</span>
             </label>
 
-            <FxRow label="Perimeter glow">
+            <FxRow label="Perimeter glow (rises upward)">
               <input
                 type="checkbox"
                 checked={fx.glowOn}
@@ -524,7 +659,7 @@ export function CardFxLabSection() {
               </div>
             </FxRow>
             <FxSlider
-              label="Pulse speed"
+              label="Rise speed"
               min={0.6}
               max={6}
               step={0.1}
@@ -616,7 +751,18 @@ export function CardFxLabSection() {
   );
 }
 
-function FxRow({ label, children }: { label: string; children: React.ReactNode }) {
+function LabTooltip({ action }: { action: "going" | "fire" | "remove" }) {
+  const help = ACTION_HELP[action];
+  return (
+    <span className="sandbox-action-tooltip" role="tooltip">
+      <strong>{help.title}</strong>
+      <span>{help.body}</span>
+      <em>{help.impact}</em>
+    </span>
+  );
+}
+
+function FxRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="card-lab-fxrow">
       <span>{label}</span>

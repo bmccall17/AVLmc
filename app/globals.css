@@ -7517,23 +7517,12 @@ button.primary-action {
 
 /* ---- fire effect ---- */
 
+/* steady ember halo — no pulse; the only motion is upward (note 1) */
 .card-lab-card.is-fired {
-  animation: cardFireHalo var(--fire-speed) ease-in-out infinite;
   border-color: color-mix(in srgb, var(--fire-color), transparent 40%);
-}
-
-@keyframes cardFireHalo {
-  0%,
-  100% {
-    box-shadow:
-      0 0 calc(26px * var(--fire-intensity)) color-mix(in srgb, var(--fire-color), transparent 40%),
-      0 18px 50px rgba(0, 0, 0, 0.5);
-  }
-  50% {
-    box-shadow:
-      0 0 calc(64px * var(--fire-intensity)) color-mix(in srgb, var(--fire-color), transparent 18%),
-      0 18px 50px rgba(0, 0, 0, 0.5);
-  }
+  box-shadow:
+    0 0 calc(46px * var(--fire-intensity)) color-mix(in srgb, var(--fire-color), transparent 32%),
+    0 18px 50px rgba(0, 0, 0, 0.5);
 }
 
 .card-lab-fx {
@@ -7549,23 +7538,30 @@ button.primary-action {
   position: absolute;
 }
 
-/* inner edge glow */
+/* perimeter glow — a steady ember rim plus an upward-drifting flame wash that is
+   masked to the edges, so the only animated motion is upward (like the embers). */
 .card-lab-fx-glow {
-  animation: cardFireGlowPulse var(--fire-speed) ease-in-out infinite;
+  animation: cardFireRise var(--fire-speed) linear infinite;
+  background: repeating-linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--fire-color), transparent 55%) 0,
+    transparent 26px,
+    color-mix(in srgb, var(--fire-color), transparent 55%) 52px
+  );
+  background-size: 100% 52px;
   box-shadow:
     inset 0 0 calc(34px * var(--fire-intensity))
       color-mix(in srgb, var(--fire-color), transparent 25%),
     inset 0 0 calc(8px * var(--fire-intensity)) color-mix(in srgb, var(--fire-color), transparent 10%);
+  -webkit-mask: radial-gradient(125% 105% at 50% 50%, transparent 52%, #000 80%);
+  mask: radial-gradient(125% 105% at 50% 50%, transparent 52%, #000 80%);
   mix-blend-mode: screen;
+  opacity: calc(0.45 + 0.4 * var(--fire-intensity));
 }
 
-@keyframes cardFireGlowPulse {
-  0%,
-  100% {
-    opacity: calc(0.55 + 0.25 * var(--fire-intensity));
-  }
-  50% {
-    opacity: calc(0.8 + 0.2 * var(--fire-intensity));
+@keyframes cardFireRise {
+  to {
+    background-position: 0 -52px;
   }
 }
 
@@ -7628,7 +7624,6 @@ button.primary-action {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card-lab-card.is-fired,
   .card-lab-fx-glow,
   .card-lab-fx-embers i {
     animation: none;
@@ -7806,4 +7801,80 @@ button.primary-action {
   background: rgba(39, 39, 42, 0.96);
   color: #fafafa;
   flex: 1;
+}
+
+/* top row: genre on the left, match pill + Top 30 stacked on the right (note 3) */
+.card-lab-card .sandbox-card-top {
+  align-items: flex-start;
+}
+
+.card-lab-top-right {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+/* live action tooltips — present in the DOM, revealed on hover/focus (note 2) */
+.card-lab-card .sandbox-action-tooltip {
+  opacity: 0;
+  transition: opacity 130ms ease;
+  visibility: hidden;
+}
+
+.card-lab-card .sandbox-action-bar button:hover .sandbox-action-tooltip,
+.card-lab-card .sandbox-action-bar button:focus-visible .sandbox-action-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* element toggle state indicators (notes 4 & 6) */
+.card-lab-toggle.is-locked {
+  cursor: default;
+}
+
+.card-lab-toggle .card-lab-tag {
+  background: rgba(63, 63, 70, 0.6);
+  border-radius: 4px;
+  color: #a1a1aa;
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  margin-left: auto;
+  padding: 1px 5px;
+  text-transform: uppercase;
+}
+
+.card-lab-toggle .card-lab-tag.is-warn {
+  background: rgba(248, 113, 113, 0.18);
+  color: #fb7185;
+}
+
+.card-lab-toggle.is-occluded > span {
+  color: #fb7185;
+}
+
+.card-lab-hint {
+  align-items: center;
+  color: #a1a1aa;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  gap: 6px;
+  line-height: 1.4;
+  margin: 12px 0 0;
+}
+
+.card-lab-hint .card-lab-tag {
+  background: rgba(248, 113, 113, 0.18);
+  border-radius: 4px;
+  color: #fb7185;
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  text-transform: uppercase;
 }
