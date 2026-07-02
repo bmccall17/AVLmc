@@ -2,7 +2,12 @@
 
 Created: July 2, 2026
 
-**Status: Scoped — not started.**
+**Status: C1–C4 shipped (July 2, 2026).** The gate, capture loop, auto-link convergence, and
+privacy/runbook prerequisites are all in `main`; the two remaining actions are external/owner-side:
+(1) file the Extension Request in the Spotify Developer Dashboard (checklist + ready-to-paste text
+in [PRD 45](prds/prd-45-extended-quota-readiness.md)), and (2) the live in-browser OAuth pass in
+production after deploy (Phase 15 precedent). Add `SPOTIFY_OPEN_ACCESS=false` to `.env.example` /
+Vercel env docs manually — env files are permission-protected from the build session.
 
 > **Numbering note (resolved July 2, 2026):** after `git pull`, the provisional claim (Phase 13, PRDs 28–31) was indeed taken — Phase 13 by Curator Onboarding, PRDs 28–31 by the personalization benchmark and curator cycles, and Phases 14–16 by the onboarding/linking/design epics. This epic is now **Phase 17, PRDs 42–45**; the roadmap row is added. The pulled work also shipped **PRD 36** (signed-in Spotify tester-slot request, `spotify_access_requests` keyed by `user_id`) — this epic's C1/C2 complement it with the *anonymous, pre-redirect* capture path (`tester_requests` keyed by email) and the gate reads **both** stores so neither loop strands an approved tester.
 
@@ -37,12 +42,12 @@ Decided with product owner July 2, 2026:
 
 ## Definition Of Done (Outcomes)
 
-1. **No silent losses:** a Spotify-intent user who is not yet an approved tester is caught **before** the Spotify redirect, offered the tester application, and lands in `tester_requests` — never on Spotify's 403.
-2. **The owner hears about every request:** each tester request fires a Resend notification to the owner's email, and the admin surface lists requests with status against the 25-seat dev-mode budget.
-3. **The loop closes:** the owner can mark a request approved (after allowlisting in the Spotify dashboard) and the applicant receives a "you're in" email; on their next attempt the gate passes them straight to Spotify.
-4. **One person, one account, no dead ends:** email-first users who later connect Spotify (or the reverse) converge on the same `users` row automatically; `OAuthAccountNotLinked` is unreachable in the supported flows.
-5. **Every auth surface is the product's own** — no unstyled NextAuth defaults in the sign-in/error funnel.
-6. **The permanent fix is filed:** the Extended Quota request is submitted with its prerequisites (public description, privacy policy) live, and the flag flip to open access is a documented one-liner.
+1. **No silent losses** ✅ (C2/PRD 43): every Spotify entry point routes through the chooser's pre-redirect gate; misses land on the inline tester form, never on Spotify's 403.
+2. **The owner hears about every request** ✅ (C1/PRD 42): Resend notification per genuine new request (`ADMIN_NOTIFY_EMAIL`); admin queue on `/admin/spotify-access` with the cross-store seat counter (vs. 25, warning at 22+).
+3. **The loop closes** ✅ (C1/PRD 42): approve (dashboard-first order enforced by copy) sends the "you're in" invite (`approved → invited`); the gate then passes that email straight to Spotify.
+4. **One person, one account, no dead ends** ✅ (C3/PRD 44): `allowDangerousEmailAccountLinking` on Spotify; both convergence directions proven in real SQL (`test:one-identity` against a throwaway Neon branch, 9/9); `OAuthAccountNotLinked` remains only for the documented email-mismatch edge with working recovery copy.
+5. **Every auth surface is the product's own** ✅ (C2/PRD 43): custom `pages.signIn` (`/auth/signin`) + existing `pages.error`; no NextAuth default reachable in the funnel.
+6. **The permanent fix is filed** ◐ (C4/PRD 45): `/privacy` live + footer-linked, submission text + dashboard checklist + one-flag go-live runbook recorded in the PRD; the dashboard filing itself is the owner's action (external) — PRD 45 parks in "prepared — awaiting filing."
 
 ## Outcome → PRD Map
 
