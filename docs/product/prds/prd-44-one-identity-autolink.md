@@ -12,7 +12,38 @@ Enable `allowDangerousEmailAccountLinking: true` on the Spotify provider — saf
 
 ## Implementation Status
 
-**Not started.**
+**Shipped (July 2, 2026).** Delivered:
+
+- **`auth.ts`**: `allowDangerousEmailAccountLinking: true` on the Spotify provider, with the inline
+  justification (both doors prove email ownership — Spotify verifies; a Resend magic link IS inbox
+  possession) and the explicit warning that any future provider must re-justify the flag.
+  `pages.signIn` (C2) + `pages.error` confirmed in the same config — no NextAuth defaults anywhere
+  in the funnel.
+- **Copy, same commit**: `duplicate_account` in `lib/auth-failures.ts` rewritten from the blanket
+  "we never merge accounts behind your back" stance to the email-mismatch-edge handler ("uses a
+  different email … when the emails match, the two sign-in methods verify the same address and
+  safely become one account"), keeping the working recovery path (sign in with email → connect
+  from profile). `lib/auth-adapter.ts` docs reconciled. A funnel-wide audit test asserts no
+  "never merge"/"behind your back" phrasing survives in any funnel file.
+- **Convergence proven in real SQL** (`npm run test:one-identity`,
+  `tests/one-identity.integration.mts`, house throwaway-DB pattern): executed July 2, 2026 against
+  a disposable Neon branch of the production project (branch deleted after the run) — 9/9 pass:
+  email-first → fresh signed-out Spotify sign-in (same email) resolves through the PRD 35
+  multi-email adapter and links onto the existing user (one `users` row, `resend` + `spotify`
+  `accounts` rows, owned data intact via `checkAccountIntegrity`); Spotify-first → later magic
+  link lands on the same user; a mismatched email resolves to nobody (the documented edge the
+  error page now explains). The suite's stance guards (flag present in `auth.ts`, mismatch copy,
+  funnel audit) run DB-free in every normal pass.
+- **`events.signIn` on the link path**: Auth.js v5 fires the same `signIn` event with the
+  `account` present when a provider links onto an existing user, so `recordMusicConnection`,
+  `recordProviderEmail`, and the anonymous-signal migration run identically — confirmed against
+  the config (no code change needed; the integration suite drives the adapter sequence beneath it).
+- Registry: `int-authjs` node description + gotcha updated to the new stance; map regenerated.
+- The July 2 production failure (owner's email-matched fresh Spotify sign-in →
+  `OAuthAccountNotLinked`) is structurally unreachable once deployed; the **live in-browser OAuth
+  pass in production remains the one manual verification**, per the Phase 15 precedent.
+- `test:one-identity` (9), `test:auth-failures` (6), `test:spotify-gate` (5), `test:registry`,
+  typecheck, lint green.
 
 ## Background: the observed failure and the stance change
 

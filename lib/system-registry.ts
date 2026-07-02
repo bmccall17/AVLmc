@@ -1189,7 +1189,7 @@ const NODES: RegistryNode[] = [
     layer: "identity",
     label: "Auth.js",
     description:
-      "Optional sign-in backed by the Postgres adapter: email magic link (Resend, branded dark-mode email — lib/auth-email.ts) plus optional Spotify OAuth.",
+      "Optional sign-in backed by the Postgres adapter: email magic link (Resend, branded dark-mode email — lib/auth-email.ts) plus optional Spotify OAuth. One identity per person (PRD 44): the Spotify provider sets allowDangerousEmailAccountLinking — safe because BOTH doors verify email ownership — so matching emails converge on one account automatically; custom pages.signIn (/auth/signin, PRD 43) and pages.error keep every funnel state on product surfaces.",
     sourceOfTruth: "auth.ts",
     access: "internal",
     ownership: "automated",
@@ -1204,7 +1204,7 @@ const NODES: RegistryNode[] = [
       {
         kind: "runtime_gotcha",
         detail:
-          "getUserByEmail is wrapped (lib/auth-adapter.ts) for multi-email resolution; a different-account email collision routes to the PRD 37 recovery, not a blind auto-merge.",
+          "getUserByEmail is wrapped (lib/auth-adapter.ts) for multi-email resolution, and the Spotify provider auto-links on a verified email match (PRD 44 — convergence proven in tests/one-identity.integration.mts). OAuthAccountNotLinked remains only for genuine edges (email mismatch), mapped to the duplicate_account recovery copy. Any NEW provider must re-justify the auto-link flag explicitly.",
       },
     ],
   },

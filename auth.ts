@@ -52,6 +52,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
               clientId: process.env.AUTH_SPOTIFY_ID,
               clientSecret: process.env.AUTH_SPOTIFY_SECRET,
               authorization: `https://accounts.spotify.com/authorize?scope=${encodeURIComponent(SPOTIFY_SCOPES.join(" "))}`,
+              // One identity per person (PRD 44 / Phase 17): a fresh Spotify sign-in whose email
+              // matches an existing account links onto it instead of raising OAuthAccountNotLinked.
+              // Safe HERE because both doors prove email ownership — Spotify verifies its emails,
+              // and a Resend magic link IS possession of the inbox. Any future provider must
+              // re-justify this flag explicitly (do not copy it blindly).
+              allowDangerousEmailAccountLinking: true,
             }),
           ]
         : []),

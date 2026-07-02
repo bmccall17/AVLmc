@@ -85,9 +85,12 @@ export const AUTH_FAILURES: Record<AuthFailureCode, AuthFailure> = {
   duplicate_account: {
     code: "duplicate_account",
     severity: "conflict",
-    title: "That email already belongs to an account",
+    title: "Your accounts use different emails",
+    // Stance change (PRD 44 / Phase 17): matching emails now converge automatically — both sign-in
+    // methods verify the address, so they safely become one account. This page remains only for
+    // the mismatch edge, so the copy explains that edge and its working recovery path.
     message:
-      "The email from this sign-in method is already on a different AVL Music Companion account. We never merge accounts behind your back — sign into that account first, then connect this method from your profile so everything stays on one account.",
+      "This sign-in method uses a different email than your AVL Music Companion account, so we can't tell they're the same person automatically. (When the emails match, the two sign-in methods verify the same address and safely become one account.) Sign in with your account email first, then connect Spotify from your profile — everything stays on one account.",
     action: {
       kind: "sign_in_then_link",
       label: "Sign into that account, then connect",

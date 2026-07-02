@@ -872,7 +872,7 @@ _Optional sign-in & personalization._
 
 #### Auth.js  `int-authjs`
 
-Optional sign-in backed by the Postgres adapter: email magic link (Resend, branded dark-mode email — lib/auth-email.ts) plus optional Spotify OAuth.
+Optional sign-in backed by the Postgres adapter: email magic link (Resend, branded dark-mode email — lib/auth-email.ts) plus optional Spotify OAuth. One identity per person (PRD 44): the Spotify provider sets allowDangerousEmailAccountLinking — safe because BOTH doors verify email ownership — so matching emails converge on one account automatically; custom pages.signIn (/auth/signin, PRD 43) and pages.error keep every funnel state on product surfaces.
 
 - **Kind:** Integration
 - **Source of truth:** `auth.ts`
@@ -882,7 +882,7 @@ Optional sign-in backed by the Postgres adapter: email magic link (Resend, brand
 - **Health probe:** `auth-provider` (PRD 07)
 - **Implementation notes:**
   - _Note:_ Postgres adapter + database session strategy; the events.signIn callback runs migrateSessionSignalsToUser (best-effort, never blocks sign-in) and records each provider's email into user_emails.
-  - _Runtime gotcha:_ getUserByEmail is wrapped (lib/auth-adapter.ts) for multi-email resolution; a different-account email collision routes to the PRD 37 recovery, not a blind auto-merge.
+  - _Runtime gotcha:_ getUserByEmail is wrapped (lib/auth-adapter.ts) for multi-email resolution, and the Spotify provider auto-links on a verified email match (PRD 44 — convergence proven in tests/one-identity.integration.mts). OAuthAccountNotLinked remains only for genuine edges (email mismatch), mapped to the duplicate_account recovery copy. Any NEW provider must re-justify the auto-link flag explicitly.
 - **Flows to / depends on:**
   - → users (flowsTo) — user records
   - → accounts (flowsTo) — oauth links

@@ -10,10 +10,12 @@ import { findUserIdByEmail } from "@/lib/account-emails";
  * the existing account instead of minting a duplicate user.
  *
  * Deliberately **additive**: it only consults `user_emails` when the adapter's own lookup misses, so
- * it never changes an existing hit — it only resolves *more* cases. It does not enable
- * `allowDangerousEmailAccountLinking`; for an OAuth provider whose email already belongs to a
- * different account while NOT signed in, the now-found user makes Auth.js raise `OAuthAccountNotLinked`
- * (mapped to the PRD 37 `duplicate_account` recovery) rather than silently forking or merging.
+ * it never changes an existing hit — it only resolves *more* cases. What Auth.js does with the found
+ * user depends on the provider: since PRD 44 (Phase 17) the Spotify provider sets
+ * `allowDangerousEmailAccountLinking: true` (both doors verify email ownership), so a fresh Spotify
+ * sign-in whose email resolves here LINKS onto the found account — the two doors converge on one
+ * identity instead of raising `OAuthAccountNotLinked`. That error remains only for genuine edges
+ * (e.g. a provider without the flag), mapped to the `duplicate_account` recovery copy.
  */
 export function withMultiEmailResolution(adapter: Adapter): Adapter {
   const baseGetUserByEmail = adapter.getUserByEmail?.bind(adapter);
