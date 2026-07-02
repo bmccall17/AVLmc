@@ -1,18 +1,31 @@
 # AVL Music Companion Backlog
 
-Updated: June 30, 2026
+Updated: July 2, 2026
 
 ## Urgent
 
 * **Run the PRD 38 live cross-browser proof (Phase 15 — the only non-autonomous step).** The account loop
   is wired and live in code: signed-in OAuth linking is native Auth.js v5 behavior (verified in
-  `next-auth@5.0.0-beta.31` source), the `getUserByEmail` multi-email resolution is wired
-  (`lib/auth-adapter.ts` → `auth.ts`), and email collisions route to the PRD 37 recovery. What remains is
-  **proof**, which needs a human + live Spotify credentials: walk
+  `next-auth@5.0.0-beta.31` source), and the `getUserByEmail` multi-email resolution is wired
+  (`lib/auth-adapter.ts` → `auth.ts`). **Updated by Phase 17 (Jul 2, 2026):** matching-email
+  collisions now **auto-link** onto the existing account (PRD 44 `allowDangerousEmailAccountLinking`
+  — both doors verify email ownership; convergence proven adapter-level in `test:one-identity`
+  against a throwaway Neon branch); the PRD 37 recovery remains only for the email-mismatch edge,
+  and every Spotify entry point now runs through the PRD 43 chooser/gate. What remains is
+  **live-browser proof**, which needs a human + live Spotify credentials: walk
   [`account-signin-linking-reliability-checklist.md`](account-signin-linking-reliability-checklist.md)
-  across the supported browser/device matrix (all six legs), and run `checkAccountIntegrity`
-  (`lib/account-integrity.ts`) on the resulting rows after linking + reconnection. `$0`, no Spotify writes,
-  Snyk-clean.
+  across the supported browser/device matrix (all six legs — now entering via the chooser), and run
+  `checkAccountIntegrity` (`lib/account-integrity.ts`) on the resulting rows after linking +
+  reconnection. Fold in the Phase 17 additions: the tester-request → approve → invite → gated
+  sign-in loop, and the fresh signed-out Spotify sign-in on an existing email (the July 2 brick,
+  now expected to converge). `$0`, no Spotify writes, Snyk-clean.
+
+* **File the Spotify Extension Request (Phase 17 C4 — owner action, ~10 minutes).** Everything it
+  needs is live and prepared: `/privacy` is deployed and footer-linked, and
+  [PRD 45](prds/prd-45-extended-quota-readiness.md) carries the dashboard checklist, ready-to-paste
+  submission text, and the one-flag go-live runbook (`SPOTIFY_OPEN_ACCESS=true` on grant). Paste the
+  submitted text + date into PRD 45 when sent. Also add `SPOTIFY_OPEN_ACCESS=false` to
+  `.env.example` (env files were permission-protected from the build session).
 
   **Done (Jun 18, 2026):** the profile-menu "Email me a sign-in link" entry point for Spotify-first users
   (sends a magic link to an email already verified on their account → resolves back to it; no backend
@@ -100,6 +113,16 @@ Updated: June 30, 2026
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
 ## Done
+
+* **Open Spotify Access epic (Phase 17, PRDs 42–45)** — Shipped (July 2, 2026), four cycles in one
+  sprint; see [`spotify-access-prd.md`](spotify-access-prd.md) for the epic record. Closes the July 2
+  production audit's five gaps: anonymous tester capture with owner-notification + invite loop
+  (`tester_requests`, `/spotify-access`, admin queue with cross-store seat counter — PRD 42); the
+  pre-redirect chooser/gate so nobody lands on Spotify's dev-mode 403, with `signIn("spotify")`
+  confined to one guard-tested module across 9 migrated call sites and a custom `/auth/signin`
+  replacing the NextAuth default (PRD 43); one-identity auto-link with convergence proven in real SQL
+  and the "never merge" stance retired (PRD 44); `/privacy` + footer, submission text, and the
+  `SPOTIFY_OPEN_ACCESS` go-live runbook (PRD 45). Remaining owner actions tracked in Urgent above.
 
 * **Event-card FIRE effect + layout redesign — and the Card FX Lab admin tuning tool** — Shipped
   (June 30, 2026), standalone UI (no PRD/admin cycle). Reworks how the discovery feed signals FIRE and
