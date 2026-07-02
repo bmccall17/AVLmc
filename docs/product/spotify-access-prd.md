@@ -1,0 +1,94 @@
+# Open Spotify Access — Master PRD (Epic)
+
+Created: July 2, 2026
+
+**Status: Scoped — not started.**
+
+> **Numbering note (resolve after `git pull`):** the local checkout is behind `origin/main`; the deployed app already carries auth work (Resend email provider, custom `/auth/error` pages) whose PRDs may have consumed numbers 28+. This epic provisionally claims **Phase 13, PRDs 28–31**. Confirm both against the pulled roadmap before the first cycle ships, renumber if taken, and add this epic's row to `master-roadmap.md` at that time (the roadmap file is not edited here to avoid a pull conflict).
+
+## One-Sentence Goal
+
+**Any listener with an active Spotify account can sign in to AVL Music Companion, connect that account, and have their taste persistently feed personal discovery — one account per person, no dead ends: while Spotify's beta cap applies, sign-in intent is captured at the exact moment it's expressed and converted into tester approvals; once Spotify grants extended quota, the gate disappears without a redesign.**
+
+## How To Use This Document
+
+Umbrella tracker for the Open Spotify Access initiative, in the pattern of [`social-curator-prd.md`](social-curator-prd.md) (Phase 12) and [`deeper-personalization-prd.md`](deeper-personalization-prd.md) (Phase 11): the epic owns the goal, the locked posture, shared architecture, and sequencing; each cycle PRD in [`prds/`](prds/) owns one independently shippable increment.
+
+## Why Now (The Observed Failure)
+
+Audited July 2, 2026 against production (`avlmc.vercel.app`):
+
+- **Working:** the Spotify OAuth handshake end-to-end (redirect, consent, token exchange, profile fetch), token persistence with pre-expiry refresh (`lib/music.ts`), database sessions, the Resend email door, and graceful copy on `/auth/error` for callback-stage failures.
+- **Not working (Gap 1 — the core gap):** Spotify Development Mode rejects non-allowlisted users with a 403 **on Spotify's own domain**, before any callback. The user is stranded there; AVLmc never learns they tried. The deployed "Spotify import is invite-only" error page only catches users Spotify sends *back* (e.g. cancellations) — not the people we want to convert.
+- **Not working (Gap 2):** the deployed "Request Spotify access" button links to the homepage. There is no capture form, no `tester_requests` store, no notification email — expressed intent evaporates.
+- **Not working (Gap 3):** a listener with an email-created account who signs in fresh via Spotify hits `OAuthAccountNotLinked` (observed in production July 2, 2026). The strict no-auto-link posture bricks the exact convergence we want.
+- **Inconsistent (Gap 4):** some error states land on NextAuth's unstyled default sign-in page rather than the product's own surfaces.
+- **Structural (Gap 5):** the 25-user Development Mode cap itself; the permanent fix is Spotify's Extended Quota Mode review, which has external prerequisites (public app description, privacy policy URL).
+
+## Decisions (Locked — inherited by every cycle)
+
+Decided with product owner July 2, 2026:
+
+- **One identity per person.** A person = one `users` row with two doors (email magic link, Spotify OAuth). Spotify is a **capability attached to the identity**, never a competing identity. `allowDangerousEmailAccountLinking: true` on the Spotify provider — acceptable because **both** providers prove email ownership (Spotify verifies; a Resend magic link *is* email possession). Error-page copy that promises "we never merge accounts behind your back" is updated to match the new stance ("both methods verify your email, so they safely become one account").
+- **The tester offer lives at the sign-in prompt, pre-redirect.** Because the dev-mode 403 happens on Spotify's domain, any post-redirect catch loses the user. Every surface that today calls `signIn("spotify")` directly instead presents a chooser: **Continue with Spotify** / **Request Spotify access** / **Sign in with email**.
+- **Email sign-in is the universal, always-works door.** No Spotify required for an account, preferences, or persistence. Spotify enriches; it never gates membership.
+- **The gate is scaffolding, not architecture.** The chooser reads a single config flag (`SPOTIFY_OPEN_ACCESS`); when extended quota is granted the "request access" option drops out with a flag flip, no redesign.
+- **$0, no Spotify writes, read-only scopes.** Inherited from the product principles. (Optional scope addition `user-read-recently-played` for fresher taste signal is **deferred and unscoped** — it forces re-consent for existing connections; revisit after open access.)
+
+## Definition Of Done (Outcomes)
+
+1. **No silent losses:** a Spotify-intent user who is not yet an approved tester is caught **before** the Spotify redirect, offered the tester application, and lands in `tester_requests` — never on Spotify's 403.
+2. **The owner hears about every request:** each tester request fires a Resend notification to the owner's email, and the admin surface lists requests with status against the 25-seat dev-mode budget.
+3. **The loop closes:** the owner can mark a request approved (after allowlisting in the Spotify dashboard) and the applicant receives a "you're in" email; on their next attempt the gate passes them straight to Spotify.
+4. **One person, one account, no dead ends:** email-first users who later connect Spotify (or the reverse) converge on the same `users` row automatically; `OAuthAccountNotLinked` is unreachable in the supported flows.
+5. **Every auth surface is the product's own** — no unstyled NextAuth defaults in the sign-in/error funnel.
+6. **The permanent fix is filed:** the Extended Quota request is submitted with its prerequisites (public description, privacy policy) live, and the flag flip to open access is a documented one-liner.
+
+## Outcome → PRD Map
+
+| Cycle | PRD | Outcome(s) | Theme |
+| --- | --- | --- | --- |
+| C1 | [PRD 28 — Tester Request Loop](prds/prd-28-tester-request-loop.md) | 2, 3 | The capture-and-close machinery: `tester_requests` table, request API + form, Resend notification to the owner, admin list/approve against the 25-seat budget, "you're in" email. Self-contained; wires the deployed dead "Request Spotify access" button immediately. |
+| C2 | [PRD 29 — Sign-In Chooser & Pre-Redirect Gate](prds/prd-29-signin-chooser-and-gate.md) | 1, 5 | The interception point: one chooser component replacing every direct `signIn("spotify")` call (5 surfaces), gate check against approved testers before redirecting, custom `pages.signIn`, `SPOTIFY_OPEN_ACCESS` flag. |
+| C3 | [PRD 30 — One Identity: Auto-Link & Recovery](prds/prd-30-one-identity-autolink.md) | 4 | The convergence fix: `allowDangerousEmailAccountLinking`, link-while-signed-in verified end-to-end, error-copy updates, tests that `OAuthAccountNotLinked` is unreachable in supported flows. |
+| C4 | [PRD 31 — Extended Quota Readiness](prds/prd-31-extended-quota-readiness.md) | 6 | The exit ramp: privacy policy page, public app description, dashboard submission checklist, and the documented open-access flag flip that retires the gate. |
+
+## Delivery Sequence & Dependencies
+
+```
+C1 Tester Request Loop        (standalone; ships value day one — the dead button comes alive)
+ └──> C2 Sign-In Chooser & Gate   (the chooser's "Request access" option calls C1's form/API;
+        │                          the gate reads C1's approved-tester status)
+        └──> C3 One Identity      (auto-link matters most once C2 routes approved testers through;
+                                   its copy changes touch C2's surfaces)
+C4 Extended Quota Readiness   (parallel external track; only its flag-flip step depends on C2)
+```
+
+- **C1 first** — no dependencies, immediately stops the intent bleed via the existing error page's button.
+- **C2 second** — the epic's centerpiece; depends on C1's table and status read.
+- **C3 third** — a small cycle; sequenced after C2 so copy/UX changes land once.
+- **C4 runs in parallel from day one** (Spotify review time is the long pole); its final step (flag flip, gate retirement) waits on C2.
+
+## Shared Architecture (decided once here)
+
+- **`tester_requests`** — `id, email (citext/lowercased, unique), note, source (which surface), status ('pending'|'approved'|'declined'|'invited'), created_at, updated_at`. Requests are upserted by email (re-applying refreshes `updated_at`, never duplicates). Not joined to `users` — applicants usually have no account yet; convergence happens naturally when they later sign in with the same email.
+- **Gate truth lives in `tester_requests.status`**, mirroring the Spotify dashboard allowlist by owner discipline (approve here **after** allowlisting there — the admin UI copy enforces the order). The gate check needs an email: signed-in users are checked directly; anonymous chooser users who pick "Continue with Spotify" state their email once (also pre-fills the request form on a miss).
+- **All emails via Resend** — already a production dependency (magic links); notification + invite emails reuse it. New env: none beyond the existing `AUTH_RESEND_KEY`; owner notification address configured, not hardcoded.
+- **`SPOTIFY_OPEN_ACCESS`** env flag (via `lib/auth-flags.ts` pattern): `false` = gate + chooser "request access" active; `true` = chooser goes straight to Spotify for everyone. One flag, read in one place (the chooser/gate), so the C4 flip is a config change.
+- **Admin follows the established pattern** (`app/api/admin/*`, password-gated): a Tester Requests panel with the pending queue, seat count (approved / 25), and approve/decline actions.
+- **System Registry discipline:** new nodes registered in `lib/system-registry.ts`, system map regenerated, `npm run test:registry` green — every cycle.
+
+## Risks
+
+- **Numbering/phase collision with unpulled upstream work** — see the note up top; resolve at C1 kickoff.
+- **Dashboard/table drift:** the Spotify allowlist and `tester_requests` are reconciled by hand; if they drift, an approved user still 403s (or a dashboard-added user is still gated). Mitigated by the enforced approve-order copy, the seat counter, and treating Spotify's 403 fallthrough as a visible error state (C2), not a silent one.
+- **Auto-link stance change:** deployed copy promises no behind-the-back merging. Mitigated by C3 shipping the copy update in the same commit as the behavior change, and by the fact both doors verify email possession.
+- **Extended quota review is external and slow;** the epic's structure assumes the gate may live for months — hence C4 files early and everything else works at 25 seats.
+- **Email mismatch edge:** a user whose Spotify email differs from their AVLmc email can still produce `OAuthAccountNotLinked` post-C3. Handled: the recovery path (sign in first, connect from profile) stays intact and tested; the error page explains it.
+
+## Acceptance Criteria (epic level)
+
+- A brand-new visitor with zero context can: try Spotify → get caught by the chooser → apply → (owner approves) → receive the invite → sign in with Spotify → see taste-fed discovery — with the owner notified at the apply step, and no step landing on a Spotify error page or an unstyled default.
+- An email-first user who becomes a tester converges onto their existing account with their preferences intact — automatically.
+- With `SPOTIFY_OPEN_ACCESS=true` in a preview deployment, the chooser offers Spotify directly to everyone and no gate code executes.
+- All four cycle PRDs carry shipped Implementation Status sections per house discipline.
