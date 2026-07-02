@@ -54,6 +54,10 @@ const COUNT_QUERIES: Array<{ key: DerivedCountKey; text: string }> = [
     text: "select count(*)::int as count from public.spotify_access_requests",
   },
   {
+    key: "tester_requests",
+    text: "select count(*)::int as count from public.tester_requests",
+  },
+  {
     key: "music_connections",
     text: "select count(*)::int as count from public.music_connections",
   },

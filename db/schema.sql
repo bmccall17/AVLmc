@@ -151,6 +151,26 @@ create unique index if not exists spotify_access_requests_one_open_idx
 create index if not exists spotify_access_requests_status_idx
   on public.spotify_access_requests (status);
 
+-- ---- Anonymous Spotify tester requests (PRD 42 / Phase 17) ----------------------
+-- Pre-redirect capture of Spotify interest, keyed by email — applicants usually have no account
+-- yet; convergence happens naturally when they later sign in with the same email. Re-applying
+-- upserts (never duplicates, never demotes a status). Lifecycle: pending → approved (owner
+-- allowlisted the email in the Spotify dashboard) → invited (invite email sent); declined can
+-- re-apply without re-notifying the owner.
+create table if not exists public.tester_requests (
+  id serial primary key,
+  email text not null unique,
+  note text,
+  source text not null default 'direct',
+  status text not null default 'pending'
+    check (status in ('pending', 'approved', 'declined', 'invited')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists tester_requests_status_idx
+  on public.tester_requests (status);
+
 -- ---- Optional music identity / taste (Spotify) ---------------------------------
 create table if not exists public.music_connections (
   id text primary key,

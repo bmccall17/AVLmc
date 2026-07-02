@@ -18,6 +18,7 @@
     "test:curator-recommendations": "rm -rf /tmp/avlmc-curator-recommendations-tests && tsc -p tests/tsconfig.curator-recommendations.json && node --test /tmp/avlmc-curator-recommendations-tests/tests/curator-recommendations.test.js",
     "test:account-linking": "rm -rf /tmp/avlmc-account-linking-tests && tsc -p tests/tsconfig.account-linking.json && node --test /tmp/avlmc-account-linking-tests/tests/account-linking.test.js",
     "test:spotify-access": "rm -rf /tmp/avlmc-spotify-access-tests && tsc -p tests/tsconfig.spotify-access.json && node --test /tmp/avlmc-spotify-access-tests/tests/spotify-access-requests.test.js",
+    "test:tester-requests": "rm -rf /tmp/avlmc-tester-requests-tests && tsc -p tests/tsconfig.tester-requests.json && node --test /tmp/avlmc-tester-requests-tests/tests/tester-requests.test.js",
     "test:auth-failures": "rm -rf /tmp/avlmc-auth-failures-tests && tsc -p tests/tsconfig.auth-failures.json && node --test /tmp/avlmc-auth-failures-tests/tests/auth-failures.test.js",
     "test:auth-email": "rm -rf /tmp/avlmc-auth-email-tests && tsc -p tests/tsconfig.auth-email.json && node --test /tmp/avlmc-auth-email-tests/tests/auth-email.test.js",
     "test:feedback": "rm -rf /tmp/avlmc-feedback-tests && tsc -p tests/tsconfig.feedback.json && node --test /tmp/avlmc-feedback-tests/tests/feedback.test.js",

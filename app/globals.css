@@ -7965,3 +7965,42 @@ button.primary-action {
   padding: 1px 5px;
   text-transform: uppercase;
 }
+
+/* ── Anonymous Spotify tester request (PRD 42 / Phase 17) ─────────────────
+   /spotify-access renders inside .auth-recovery-shell, so the dark tokens
+   apply; these mirror .curator-apply-field for the request form itself. */
+.tester-request-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.tester-request-form .form-field {
+  display: grid;
+  gap: 5px;
+}
+
+.tester-request-form .form-field > span {
+  color: var(--ink, #fafafa);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.tester-request-form .form-field input,
+.tester-request-form .form-field textarea {
+  background: rgba(9, 9, 11, 0.6);
+  border: 1px solid rgba(82, 82, 91, 0.8);
+  border-radius: 8px;
+  color: #fafafa;
+  font: inherit;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.tester-request-form .form-field textarea {
+  resize: vertical;
+}
+
+.tester-request-form .primary-action {
+  justify-self: start;
+}

@@ -69,6 +69,7 @@ export type DerivedCountKey =
   | "accounts"
   | "user_emails"
   | "spotify_access_requests"
+  | "tester_requests"
   | "music_connections"
   | "music_profile_items"
   | "listener_discovery_preferences"
@@ -837,6 +838,25 @@ const NODES: RegistryNode[] = [
     ],
   },
   {
+    id: "db-tester-requests",
+    kind: "datastore",
+    layer: "data",
+    label: "tester_requests",
+    description:
+      "Anonymous Spotify tester interest (PRD 42 / Phase 17): email-keyed, pre-redirect capture of would-be testers — applicants usually have no account yet; convergence happens when they sign in with the same email. One row per email (upsert-on-reapply, status never demoted); lifecycle pending → approved (owner allowlisted in the Spotify dashboard) → invited (invite email sent), or declined (can re-apply without re-notifying). Emails private to applicant + owner.",
+    sourceOfTruth: "tester_requests",
+    access: "internal",
+    ownership: "automated",
+    countKey: "tester_requests",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "UNIQUE(email), stored lowercased/trimmed; `(xmax = 0)` on the upsert distinguishes a fresh insert (notify the owner) from a re-apply (silent). The seated count spans this table AND spotify_access_requests as distinct emails.",
+      },
+    ],
+  },
+  {
     id: "db-music-connections",
     kind: "datastore",
     layer: "data",
@@ -1344,6 +1364,60 @@ const NODES: RegistryNode[] = [
     ],
   },
   {
+    id: "api-tester-requests",
+    kind: "surface",
+    layer: "identity",
+    label: "Tester Request Capture API",
+    description:
+      "Public, anonymous-accessible Spotify tester request capture (PRD 42 / Phase 17) — the applicants we most want to catch have no account yet. POST { email, note?, source? } upserts one row per email (re-applying never duplicates, never demotes a status) and fires the owner-notification email exactly once per genuine new interest, after the response. Honeypot + per-IP/per-email sliding-window rate limit.",
+    sourceOfTruth: "app/api/tester-requests/route.ts",
+    access: "public",
+    ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Anonymous by design; `website` honeypot mirrors the community form; rate windows are per-warm-instance (pure logic in lib/tester-requests-core.ts). Owner notification via sendAdminNotificationEmail (ADMIN_NOTIFY_EMAIL, falls back to AUTH_EMAIL_FROM) inside next/server `after()` — never blocks the applicant's confirmation.",
+      },
+    ],
+  },
+  {
+    id: "ui-spotify-access-page",
+    kind: "surface",
+    layer: "identity",
+    label: "Spotify Access Request Page",
+    description:
+      "Public /spotify-access page (PRD 42 / Phase 17): explains the invite-only Spotify beta in the product's voice, captures a tester request (email + optional taste note) through the capture API, and points at email sign-in as the always-works door. The landing spot for every 'Request Spotify access' affordance (the /auth/error beta notice; the PRD 43 sign-in chooser).",
+    sourceOfTruth: "app/spotify-access/page.tsx",
+    access: "public",
+    ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Anonymous-accessible; a signed-in visitor's email pre-fills. Renders in the auth-recovery shell so the dark route tokens apply (PRD 39 discipline).",
+      },
+    ],
+  },
+  {
+    id: "api-admin-tester-requests",
+    kind: "surface",
+    layer: "operations",
+    label: "Admin Tester Requests API",
+    description:
+      "Admin-cookie-gated review of the anonymous tester-request queue (PRD 42 / Phase 17): list with the seat budget (distinct seated emails across both request stores vs. Spotify's 25-seat Development Mode cap), approve (sends the 'you're in' invite email; approved → invited once it sends), decline, re-open. Approval order is enforced by panel copy: allowlist in the Spotify dashboard FIRST.",
+    sourceOfTruth: "app/api/admin/tester-requests/route.ts",
+    access: "internal",
+    ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Admin-cookie-gated (ADMIN_SESSION_TOKEN). A failed invite send keeps the row `approved` (never rolls back) and the panel offers a resend; actions are verbs (approve/decline/reopen) so the email side effect stays server-side.",
+      },
+    ],
+  },
+  {
     id: "api-admin-spotify-access",
     kind: "surface",
     layer: "operations",
@@ -1701,6 +1775,10 @@ const EDGES: RegistryEdge[] = [
   { from: "db-spotify-access-requests", to: "db-users", kind: "dependsOn", label: "request per user (cascade)" },
   { from: "api-me-spotify-access-request", to: "db-spotify-access-requests", kind: "dependsOn", label: "submit + my status" },
   { from: "api-admin-spotify-access", to: "db-spotify-access-requests", kind: "dependsOn", label: "review queue + slot-added" },
+  { from: "api-tester-requests", to: "db-tester-requests", kind: "dependsOn", label: "upsert + owner notification" },
+  { from: "ui-spotify-access-page", to: "api-tester-requests", kind: "dependsOn", label: "request form submit" },
+  { from: "api-admin-tester-requests", to: "db-tester-requests", kind: "dependsOn", label: "queue + approve/invite" },
+  { from: "api-admin-tester-requests", to: "db-spotify-access-requests", kind: "dependsOn", label: "seat count spans both stores" },
   { from: "ui-listener-profile", to: "api-me", kind: "flowsTo", label: "reads/writes" },
   { from: "api-me", to: "svc-music", kind: "dependsOn", label: "sync taste" },
   { from: "api-me", to: "svc-listener-prefs", kind: "dependsOn", label: "save settings" },

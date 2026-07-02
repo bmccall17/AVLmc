@@ -2,13 +2,15 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SpotifyAccessSection } from "@/components/admin/SpotifyAccessSection";
+import { TesterRequestsSection } from "@/components/admin/TesterRequestsSection";
 import { ADMIN_COOKIE_NAME, isAdminSession } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Admin Spotify tester-slot access review page (PRD 36 / Phase 15). Admin-cookie gated; redirects to
- * the admin login when not authed. A focused sub-page like /admin/curators.
+ * Admin Spotify tester access review page: the signed-in slot queue (PRD 36 / Phase 15) and the
+ * anonymous email-keyed tester requests + seat budget (PRD 42 / Phase 17) in one place — the whole
+ * 25-seat Development Mode picture. Admin-cookie gated; redirects to the admin login when not authed.
  */
 export default async function AdminSpotifyAccessPage() {
   const cookieStore = await cookies();
@@ -21,6 +23,7 @@ export default async function AdminSpotifyAccessPage() {
       <Link className="back-link" href="/admin">
         ← Back to admin
       </Link>
+      <TesterRequestsSection />
       <SpotifyAccessSection />
     </main>
   );

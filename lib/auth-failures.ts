@@ -68,7 +68,8 @@ export const AUTH_FAILURES: Record<AuthFailureCode, AuthFailure> = {
     action: {
       kind: "request_spotify_access",
       label: "Request Spotify access",
-      href: "/",
+      // The public tester-request capture page (PRD 42) — previously a dead link to the homepage.
+      href: "/spotify-access",
     },
     secondaryAction: USE_EMAIL,
   },

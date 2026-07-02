@@ -12,7 +12,36 @@ A `tester_requests` table (email-unique, upsert-on-reapply), a public request AP
 
 ## Implementation Status
 
-**Not started.**
+**Shipped (July 2, 2026).** Delivered:
+
+- **`tester_requests` table** (`db/schema.sql`, additive; applied to prod Neon): `email` UNIQUE
+  (stored lowercased/trimmed), `note`, `source` (default `direct`), `status`
+  (`pending`/`approved`/`declined`/`invited`), `created_at`, `updated_at`. Registered as
+  `db-tester-requests` (countKey `tester_requests`); map regenerated; `test:registry` green.
+- **Pure core** (`lib/tester-requests-core.ts`): email/note/source validation + normalization, the
+  status lifecycle (seated = `approved`+`invited`; re-apply never demotes), the notify-once
+  decision, seat-budget constants (25, warn at 22), and the sliding rate window as pure timestamp
+  ops. Unit-tested (`npm run test:tester-requests`, 13 cases, incl. HTML-escaping of hostile input).
+- **Emails** (`lib/tester-request-emails.ts`): pure renderers (owner notification + "you're in"
+  invite, house dark style) and Resend senders. Owner notification reuses
+  `sendAdminNotificationEmail` — recipient from the existing **`ADMIN_NOTIFY_EMAIL`** (falls back
+  to `AUTH_EMAIL_FROM`) rather than a new `TESTER_NOTIFY_EMAIL`, matching the curator-recommendation
+  precedent; no new env var. Both sends are best-effort: notification fires via next/server
+  `after()` (never blocks the applicant's confirmation), a failed invite keeps the row `approved`
+  and the panel offers a resend.
+- **Public plane** — `POST app/api/tester-requests` (anonymous by design, `website` honeypot +
+  per-IP/per-email sliding-window 429), registered `api-tester-requests`; `/spotify-access` page
+  (auth-recovery shell, signed-in email pre-fill) + `components/TesterRequestForm.tsx`, registered
+  `ui-spotify-access-page`. The `/auth/error` beta notice's "Request Spotify access" action now
+  targets `/spotify-access` (was the dead homepage link — Gap 2 closed).
+- **Admin plane** — `GET/PATCH app/api/admin/tester-requests` (admin-cookie-gated), registered
+  `api-admin-tester-requests`; `components/admin/TesterRequestsSection.tsx` rendered on
+  `/admin/spotify-access` beside the PRD 36 signed-in queue, with the seat counter (distinct seated
+  emails across **both** request stores vs. 25, warning at 22+), approve-order confirm copy
+  ("dashboard first"), approve+invite / decline / re-open, and invite-send state with retry.
+- `$0`; no new deps; applicant emails private to applicant + owner; new code Snyk-clean (the one
+  repo finding predates this cycle, in `CommunityPanel.tsx`); typecheck/lint/`next build`/
+  `test:tester-requests`/`test:auth-failures`/`test:registry` green.
 
 ## Goals
 

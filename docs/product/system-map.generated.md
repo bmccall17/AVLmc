@@ -526,6 +526,22 @@ Spotify tester-slot access requests (PRD 36): a not-yet-approved listener's Spot
 - **Fed by / required by:**
   - ← Spotify Access Request API (dependsOn) — submit + my status
   - ← Admin Spotify Access API (dependsOn) — review queue + slot-added
+  - ← Admin Tester Requests API (dependsOn) — seat count spans both stores
+
+#### tester_requests  `db-tester-requests`
+
+Anonymous Spotify tester interest (PRD 42 / Phase 17): email-keyed, pre-redirect capture of would-be testers — applicants usually have no account yet; convergence happens when they sign in with the same email. One row per email (upsert-on-reapply, status never demoted); lifecycle pending → approved (owner allowlisted in the Spotify dashboard) → invited (invite email sent), or declined (can re-apply without re-notifying). Emails private to applicant + owner.
+
+- **Kind:** Data store
+- **Source of truth:** `tester_requests`
+- **Access:** internal
+- **Ownership:** automated
+- **Live count:** `tester_requests` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ UNIQUE(email), stored lowercased/trimmed; `(xmax = 0)` on the upsert distinguishes a fresh insert (notify the owner) from a re-apply (silent). The seated count spans this table AND spotify_access_requests as distinct emails.
+- **Fed by / required by:**
+  - ← Tester Request Capture API (dependsOn) — upsert + owner notification
+  - ← Admin Tester Requests API (dependsOn) — queue + approve/invite
 
 #### music_connections  `db-music-connections`
 
@@ -1000,6 +1016,34 @@ Signed-in-only listener plane (PRD 36): submit/refresh your OWN Spotify tester-s
 - **Flows to / depends on:**
   - → spotify_access_requests (dependsOn) — submit + my status
 
+#### Tester Request Capture API  `api-tester-requests`
+
+Public, anonymous-accessible Spotify tester request capture (PRD 42 / Phase 17) — the applicants we most want to catch have no account yet. POST { email, note?, source? } upserts one row per email (re-applying never duplicates, never demotes a status) and fires the owner-notification email exactly once per genuine new interest, after the response. Honeypot + per-IP/per-email sliding-window rate limit.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/tester-requests/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Anonymous by design; `website` honeypot mirrors the community form; rate windows are per-warm-instance (pure logic in lib/tester-requests-core.ts). Owner notification via sendAdminNotificationEmail (ADMIN_NOTIFY_EMAIL, falls back to AUTH_EMAIL_FROM) inside next/server `after()` — never blocks the applicant's confirmation.
+- **Flows to / depends on:**
+  - → tester_requests (dependsOn) — upsert + owner notification
+- **Fed by / required by:**
+  - ← Spotify Access Request Page (dependsOn) — request form submit
+
+#### Spotify Access Request Page  `ui-spotify-access-page`
+
+Public /spotify-access page (PRD 42 / Phase 17): explains the invite-only Spotify beta in the product's voice, captures a tester request (email + optional taste note) through the capture API, and points at email sign-in as the always-works door. The landing spot for every 'Request Spotify access' affordance (the /auth/error beta notice; the PRD 43 sign-in chooser).
+
+- **Kind:** Surface
+- **Source of truth:** `app/spotify-access/page.tsx`
+- **Access:** public
+- **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Anonymous-accessible; a signed-in visitor's email pre-fills. Renders in the auth-recovery shell so the dark route tokens apply (PRD 39 discipline).
+- **Flows to / depends on:**
+  - → Tester Request Capture API (dependsOn) — request form submit
+
 #### Curator Application API  `api-me-curator-application`
 
 Signed-in-only listener plane (PRD 29): submit a self-authored curator application and read your OWN curator standing. Promoted instantly under the self-serve gate, else `pending` for admin review. The acting user id comes from the session, never the body; applications are private to the applicant + admin (never public, no pay-to-play). Returns 401 when anonymous.
@@ -1057,6 +1101,20 @@ Signed-in-only /saved view with three private lists (events, venues, artists), i
 ### Operations
 
 _Jobs, admin, observability._
+
+#### Admin Tester Requests API  `api-admin-tester-requests`
+
+Admin-cookie-gated review of the anonymous tester-request queue (PRD 42 / Phase 17): list with the seat budget (distinct seated emails across both request stores vs. Spotify's 25-seat Development Mode cap), approve (sends the 'you're in' invite email; approved → invited once it sends), decline, re-open. Approval order is enforced by panel copy: allowlist in the Spotify dashboard FIRST.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/admin/tester-requests/route.ts`
+- **Access:** internal
+- **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Admin-cookie-gated (ADMIN_SESSION_TOKEN). A failed invite send keeps the row `approved` (never rolls back) and the panel offers a resend; actions are verbs (approve/decline/reopen) so the email side effect stays server-side.
+- **Flows to / depends on:**
+  - → tester_requests (dependsOn) — queue + approve/invite
+  - → spotify_access_requests (dependsOn) — seat count spans both stores
 
 #### Admin Spotify Access API  `api-admin-spotify-access`
 
@@ -1265,6 +1323,10 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | spotify_access_requests | → | users | dependsOn | request per user (cascade) |
 | Spotify Access Request API | → | spotify_access_requests | dependsOn | submit + my status |
 | Admin Spotify Access API | → | spotify_access_requests | dependsOn | review queue + slot-added |
+| Tester Request Capture API | → | tester_requests | dependsOn | upsert + owner notification |
+| Spotify Access Request Page | → | Tester Request Capture API | dependsOn | request form submit |
+| Admin Tester Requests API | → | tester_requests | dependsOn | queue + approve/invite |
+| Admin Tester Requests API | → | spotify_access_requests | dependsOn | seat count spans both stores |
 | Listener Profile | → | Listener (me) API | flowsTo | reads/writes |
 | Listener (me) API | → | Music Taste Sync | dependsOn | sync taste |
 | Listener (me) API | → | Listener Preferences | dependsOn | save settings |
@@ -1319,4 +1381,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_72 nodes, 97 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_76 nodes, 101 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
