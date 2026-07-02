@@ -28,6 +28,7 @@
     "test:social-guardrails": "rm -rf /tmp/avlmc-social-guardrails-tests && tsc -p tests/tsconfig.social-guardrails.json && node --test /tmp/avlmc-social-guardrails-tests/tests/social-guardrails.test.js",
     "test:personalization-benchmark": "rm -rf /tmp/avlmc-personalization-benchmark-tests && tsc -p tests/tsconfig.personalization-benchmark.json && node --test /tmp/avlmc-personalization-benchmark-tests/tests/personalization-benchmark.test.js",
     "test:registry": "node --import tsx --test tests/system-registry.test.ts",
+    "test:spotify-gate": "node --import tsx --test tests/spotify-gate.test.ts",
     "generate:system-map": "tsx scripts/generate-system-map.ts",
     "db:apply": "tsx scripts/apply-schema.ts",
     "typecheck": "tsc --noEmit"

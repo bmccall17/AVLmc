@@ -1400,6 +1400,43 @@ const NODES: RegistryNode[] = [
     ],
   },
   {
+    id: "api-spotify-gate",
+    kind: "surface",
+    layer: "identity",
+    label: "Spotify Gate API",
+    description:
+      "The pre-redirect gate (PRD 43 / Phase 17): Spotify Development Mode 403s non-allowlisted users on Spotify's own domain, so the check runs BEFORE signIn('spotify'). GET returns chooser config (flags only, no DB); POST checks a stated/session email against BOTH request stores (tester_requests + spotify_access_requests, most-permissive-wins) → allowed | pending | declined | not_found | email_required. SPOTIFY_OPEN_ACCESS=true short-circuits to allowed with no store read.",
+    sourceOfTruth: "app/api/spotify-gate/route.ts",
+    access: "public",
+    ownership: "automated",
+    envVars: ["SPOTIFY_OPEN_ACCESS"],
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Pure outcome matrix in lib/spotify-gate-core.ts (test:spotify-gate); reads via lib/spotify-gate.ts are 42P01-tolerant and degrade to the request path, never to an ungated redirect. Rate-limited per IP; outcomes reveal only beta-list membership.",
+      },
+    ],
+  },
+  {
+    id: "ui-signin-chooser",
+    kind: "surface",
+    layer: "identity",
+    label: "Sign-In Chooser",
+    description:
+      "The three-door sign-in chooser (PRD 43 / Phase 17): Continue with Spotify (gated), sign in with email (always present), Request Spotify access (hidden under SPOTIFY_OPEN_ACCESS). One component, two shells — the in-page modal for action nudges and the custom pages.signIn full page (/auth/signin), so no funnel state shows NextAuth's unstyled default. The ONLY module allowed to call signIn('spotify') — guard-tested.",
+    sourceOfTruth: "components/SignInChooser.tsx",
+    access: "public",
+    ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Call sites route through useSignInChooser (modal) or SpotifyGateButton (Spotify-specific spots): SaveButton, FollowButton, EventBoard nudge, EmailSignInPanel, ListenerProfileButton, CuratorManagePanel, AuthRecovery retry, SpotifyAccessRequest retry, MusicAccountPanel. Each preserves its original callbackUrl (e.g. the EventBoard keep-intent param); an anonymous allowed email is remembered client-side so the one-field step happens once per browser.",
+      },
+    ],
+  },
+  {
     id: "api-admin-tester-requests",
     kind: "surface",
     layer: "operations",
@@ -1779,6 +1816,11 @@ const EDGES: RegistryEdge[] = [
   { from: "ui-spotify-access-page", to: "api-tester-requests", kind: "dependsOn", label: "request form submit" },
   { from: "api-admin-tester-requests", to: "db-tester-requests", kind: "dependsOn", label: "queue + approve/invite" },
   { from: "api-admin-tester-requests", to: "db-spotify-access-requests", kind: "dependsOn", label: "seat count spans both stores" },
+  { from: "api-spotify-gate", to: "db-tester-requests", kind: "dependsOn", label: "seat check (email loop)" },
+  { from: "api-spotify-gate", to: "db-spotify-access-requests", kind: "dependsOn", label: "seat check (signed-in loop)" },
+  { from: "ui-signin-chooser", to: "api-spotify-gate", kind: "dependsOn", label: "pre-redirect gate + config" },
+  { from: "ui-signin-chooser", to: "api-tester-requests", kind: "dependsOn", label: "inline request form" },
+  { from: "ui-signin-chooser", to: "api-auth", kind: "dependsOn", label: "signIn (spotify/resend)" },
   { from: "ui-listener-profile", to: "api-me", kind: "flowsTo", label: "reads/writes" },
   { from: "api-me", to: "svc-music", kind: "dependsOn", label: "sync taste" },
   { from: "api-me", to: "svc-listener-prefs", kind: "dependsOn", label: "save settings" },

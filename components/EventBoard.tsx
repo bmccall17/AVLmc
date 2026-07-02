@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { Bell, CalendarCheck, Check, ChevronRight, ExternalLink, Flame, Headphones, Search, Share2, Star, UserPlus, X } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { useSignInChooser } from "@/components/SignInChooser";
 import { SaveButton } from "@/components/SaveButton";
 import { SharedSongsCard, type SharedSongSummary } from "@/components/SharedSongsCard";
 import { circleBadgeCount, type CircleEventActivity } from "@/lib/social-activity-core";
@@ -230,6 +230,7 @@ export function EventBoard({
   const [toastEvent, setToastEvent] = useState<EventRecord | null>(null);
   const [curatorPickToast, setCuratorPickToast] = useState(false);
   const [signInNudge, setSignInNudge] = useState<{ event: EventRecord; action: CardAction } | null>(null);
+  const { chooser: signInChooser, openChooser } = useSignInChooser();
   const [saveOfferEvent, setSaveOfferEvent] = useState<EventRecord | null>(null);
   const replayedIntent = useRef(false);
   const tooltipTimer = useRef<number | null>(null);
@@ -767,8 +768,16 @@ export function EventBoard({
     if (!signInNudge) {
       return;
     }
+    // Pre-redirect chooser (PRD 43): the keep-intent callback rides through whichever door the
+    // listener picks, so the original going/fire lands after sign-in exactly as before.
     const callbackUrl = `/?${KEEP_INTENT_PARAM}=${signInNudge.action}:${signInNudge.event.id}`;
-    void signIn("spotify", { callbackUrl });
+    openChooser({
+      callbackUrl,
+      source: "event-board-nudge",
+      heading: "Sign in to keep this",
+      description:
+        "Your going/fire lands on your account the moment you're signed in. Spotify is optional — email works for everyone.",
+    });
   }
 
   async function togglePositiveAction(event: EventRecord, action: Extract<ActionKind, "fire" | "going">) {
@@ -1220,6 +1229,7 @@ export function EventBoard({
           </div>
         </div>
       ) : null}
+      {signInChooser}
     </>
   );
 }

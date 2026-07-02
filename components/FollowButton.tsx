@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { UserPlus, UserCheck } from "lucide-react";
+import { useSignInChooser } from "@/components/SignInChooser";
 
 type FollowButtonProps = {
   /** The user id of the listener/curator to follow. */
@@ -39,13 +39,15 @@ export function FollowButton({
 }: FollowButtonProps) {
   const [following, setFollowing] = useState(initialFollowing);
   const [pending, setPending] = useState(false);
+  const { chooser, openChooser } = useSignInChooser();
 
   const who = followeeName?.trim() || "this listener";
 
   async function toggleFollow() {
     if (!isSignedIn) {
+      // Pre-redirect chooser (PRD 43): never fire a blind Spotify redirect from a nudge.
       const callbackUrl = typeof window !== "undefined" ? window.location.href : "/";
-      void signIn("spotify", { callbackUrl });
+      openChooser({ callbackUrl, source: "follow-button", heading: `Sign in to follow ${who}` });
       return;
     }
 
@@ -86,24 +88,27 @@ export function FollowButton({
   const labelText = following ? "Following" : "Follow";
 
   return (
-    <button
-      aria-label={title}
-      aria-pressed={following}
-      className={`follow-button follow-button--${variant} ${following ? "is-following" : ""} ${className ?? ""}`.trim()}
-      disabled={pending}
-      onClick={(clickEvent) => {
-        clickEvent.stopPropagation();
-        void toggleFollow();
-      }}
-      title={title}
-      type="button"
-    >
-      {following ? (
-        <UserCheck aria-hidden="true" size={variant === "chip" ? 16 : 18} strokeWidth={2.5} />
-      ) : (
-        <UserPlus aria-hidden="true" size={variant === "chip" ? 16 : 18} strokeWidth={2.5} />
-      )}
-      {variant === "chip" ? <span>{labelText}</span> : null}
-    </button>
+    <>
+      <button
+        aria-label={title}
+        aria-pressed={following}
+        className={`follow-button follow-button--${variant} ${following ? "is-following" : ""} ${className ?? ""}`.trim()}
+        disabled={pending}
+        onClick={(clickEvent) => {
+          clickEvent.stopPropagation();
+          void toggleFollow();
+        }}
+        title={title}
+        type="button"
+      >
+        {following ? (
+          <UserCheck aria-hidden="true" size={variant === "chip" ? 16 : 18} strokeWidth={2.5} />
+        ) : (
+          <UserPlus aria-hidden="true" size={variant === "chip" ? 16 : 18} strokeWidth={2.5} />
+        )}
+        {variant === "chip" ? <span>{labelText}</span> : null}
+      </button>
+      {chooser}
+    </>
   );
 }

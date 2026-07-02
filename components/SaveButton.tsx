@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { Bookmark, BookmarkCheck } from "lucide-react";
+import { useSignInChooser } from "@/components/SignInChooser";
 
 type SavedItemType = "event" | "venue" | "artist";
 
@@ -51,13 +51,15 @@ export function SaveButton({
 }: SaveButtonProps) {
   const [saved, setSaved] = useState(initialSaved);
   const [pending, setPending] = useState(false);
+  const { chooser, openChooser } = useSignInChooser();
 
   const noun = TYPE_NOUN[itemType];
 
   async function toggleSave() {
     if (!isSignedIn) {
+      // Pre-redirect chooser (PRD 43): never fire a blind Spotify redirect from a nudge.
       const callbackUrl = typeof window !== "undefined" ? window.location.href : "/";
-      void signIn("spotify", { callbackUrl });
+      openChooser({ callbackUrl, source: "save-button", heading: `Sign in to save this ${noun}` });
       return;
     }
 
@@ -100,24 +102,27 @@ export function SaveButton({
   const labelText = saved ? "Saved" : "Save";
 
   return (
-    <button
-      aria-label={title}
-      aria-pressed={saved}
-      className={`save-button save-button--${variant} ${saved ? "is-saved" : ""} ${className ?? ""}`.trim()}
-      disabled={pending}
-      onClick={(clickEvent) => {
-        clickEvent.stopPropagation();
-        void toggleSave();
-      }}
-      title={title}
-      type="button"
-    >
-      {saved ? (
-        <BookmarkCheck aria-hidden="true" size={variant === "chip" ? 16 : 18} strokeWidth={2.5} />
-      ) : (
-        <Bookmark aria-hidden="true" size={variant === "chip" ? 16 : 18} strokeWidth={2.5} />
-      )}
-      {variant === "chip" ? <span>{labelText}</span> : null}
-    </button>
+    <>
+      <button
+        aria-label={title}
+        aria-pressed={saved}
+        className={`save-button save-button--${variant} ${saved ? "is-saved" : ""} ${className ?? ""}`.trim()}
+        disabled={pending}
+        onClick={(clickEvent) => {
+          clickEvent.stopPropagation();
+          void toggleSave();
+        }}
+        title={title}
+        type="button"
+      >
+        {saved ? (
+          <BookmarkCheck aria-hidden="true" size={variant === "chip" ? 16 : 18} strokeWidth={2.5} />
+        ) : (
+          <Bookmark aria-hidden="true" size={variant === "chip" ? 16 : 18} strokeWidth={2.5} />
+        )}
+        {variant === "chip" ? <span>{labelText}</span> : null}
+      </button>
+      {chooser}
+    </>
   );
 }

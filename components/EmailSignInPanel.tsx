@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { SpotifyGateButton } from "@/components/SignInChooser";
 import type { AuthFeatureFlags } from "@/lib/auth-flags";
 
 type EmailState = { kind: "idle" | "notice" | "success" | "error"; message: string };
@@ -97,13 +98,10 @@ export function EmailSignInPanel({
 
       {features.spotify ? (
         <div className="listener-spotify-optional">
-          <button
-            className="ghost-control"
-            onClick={() => void signIn("spotify", { callbackUrl })}
-            type="button"
-          >
+          {/* Gated (PRD 43): seated testers pass straight through; everyone else is caught here. */}
+          <SpotifyGateButton callbackUrl={callbackUrl} className="ghost-control" source="email-signin-panel">
             {features.email ? "Or continue with Spotify" : "Continue with Spotify"}
-          </button>
+          </SpotifyGateButton>
         </div>
       ) : null}
     </div>

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { signIn } from "next-auth/react";
 import Link from "next/link";
+import { useSignInChooser } from "@/components/SignInChooser";
 
 type ManagedPick = {
   id: string;
@@ -50,6 +50,7 @@ export function CuratorManagePanel({
   upcomingEvents?: PickableEvent[];
 }) {
   const [loading, setLoading] = useState(true);
+  const { chooser, openChooser } = useSignInChooser();
   const [curator, setCurator] = useState<MyCurator | null>(null);
   const [notCurator, setNotCurator] = useState(false);
   const [flash, setFlash] = useState<Flash>({ kind: "idle", message: "" });
@@ -181,10 +182,17 @@ export function CuratorManagePanel({
         <button
           className="primary-action"
           type="button"
-          onClick={() => void signIn("spotify", { callbackUrl: "/curators/manage" })}
+          onClick={() =>
+            openChooser({
+              callbackUrl: "/curators/manage",
+              source: "curator-manage",
+              heading: "Sign in to manage your picks",
+            })
+          }
         >
           Sign in
         </button>
+        {chooser}
       </div>
     );
   }

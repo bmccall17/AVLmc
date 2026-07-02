@@ -1,7 +1,7 @@
 "use client";
 
-import { signIn } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { SpotifyGateButton } from "@/components/SignInChooser";
 
 type MySpotifyAccessRequest = {
   id: string;
@@ -85,13 +85,10 @@ export function SpotifyAccessRequest({ accountEmail }: { accountEmail: string | 
           You&apos;ve been added to a Spotify tester slot. Reconnect to import your taste — it&apos;ll
           link to this same account.
         </p>
-        <button
-          className="primary-action"
-          onClick={() => void signIn("spotify", { callbackUrl: "/" })}
-          type="button"
-        >
+        {/* Gated retry (PRD 43): slot_added counts as seated, so the gate passes them through. */}
+        <SpotifyGateButton callbackUrl="/" source="spotify-access-request-retry">
           Connect Spotify (retry)
-        </button>
+        </SpotifyGateButton>
       </div>
     );
   }

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Bookmark, Plus, RotateCcw, SlidersHorizontal, Star, Trash2, UserCircle, Users, X } from "lucide-react";
 import { MusicConnectionActions } from "@/components/MusicConnectionActions";
+import { SpotifyGateButton } from "@/components/SignInChooser";
 import { SpotifyAccessRequest } from "@/components/SpotifyAccessRequest";
 import type { AuthFeatureFlags } from "@/lib/auth-flags";
 import type { DiscoveryScoreComponents } from "@/lib/discovery";
@@ -493,13 +494,15 @@ export function ListenerProfileButton({
                     <MusicConnectionActions tasteOptedOut={spotifyTastePaused} />
                   ) : features.spotify ? (
                     <div className="listener-spotify-optional">
-                      <button
+                      {/* Gated (PRD 43): approved accounts pass straight through; everyone else
+                          gets the request path here instead of Spotify's 403. */}
+                      <SpotifyGateButton
+                        callbackUrl="/"
                         className="ghost-control"
-                        onClick={() => void signIn("spotify", { callbackUrl: "/" })}
-                        type="button"
+                        source="listener-profile"
                       >
                         Connect Spotify (optional)
-                      </button>
+                      </SpotifyGateButton>
                       <small>
                         Imports your top artists/tracks for sharper matches. Currently
                         <strong> invite-only beta</strong> — taste import only works for approved accounts;

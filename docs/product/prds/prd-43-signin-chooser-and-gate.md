@@ -12,7 +12,38 @@ One `SignInChooser` component (modal on in-page triggers; also rendered as the c
 
 ## Implementation Status
 
-**Not started.**
+**Shipped (July 2, 2026).** Delivered:
+
+- **Pure gate core** (`lib/spotify-gate-core.ts`): the outcome matrix — `allowed | pending |
+  declined | not_found | email_required` — over BOTH request stores (`tester_requests` seated =
+  `approved`/`invited`; PRD 36's `spotify_access_requests` seated = `slot_added`/`approved`),
+  most-permissive-wins since both mirror the one dashboard allowlist; `SPOTIFY_OPEN_ACCESS`
+  short-circuits everything. Tested (`npm run test:spotify-gate`, matrix × flag on/off).
+- **Gate service + API** (`lib/spotify-gate.ts`, `app/api/spotify-gate/route.ts`, registered
+  `api-spotify-gate`): GET = chooser config (flags only, zero DB — under open access no store is
+  ever read); POST = the check (session email/id used when the body omits one; per-IP rate window;
+  42P01-tolerant reads that degrade to the request path, never to an ungated redirect).
+- **`SignInChooser` module** (`components/SignInChooser.tsx`, registered `ui-signin-chooser`) —
+  the ONLY module allowed to call `signIn("spotify")`, enforced by a guard test that walks
+  `app/components/lib/auth.ts` and fails on any other invocation. Exports the three-door panel
+  (Spotify gated / email always / Request access hidden under open access), the modal shell +
+  `useSignInChooser` hook, and `SpotifyGateButton` for Spotify-specific spots. Anonymous allowed
+  emails are remembered client-side (`localStorage`), so the one-field step happens once per
+  browser; signed-in users are checked silently via session.
+- **Custom `pages.signIn`** — `app/auth/signin/page.tsx` renders the same chooser full-page
+  (relative-only `callbackUrl` pass-through, `?error=` rendered as taxonomy copy), wired in
+  `auth.ts`; no funnel state shows NextAuth's unstyled default.
+- **Call-site migration — 9 surfaces found in the pulled code** (the PRD's estimate was 5):
+  `SaveButton`, `FollowButton`, `EventBoard` keep-intent nudge, `CuratorManagePanel` (modal
+  chooser); `EmailSignInPanel`, `ListenerProfileButton`, `MusicAccountPanel` (server action
+  removed), `AuthRecovery` retry, `SpotifyAccessRequest` retry (`SpotifyGateButton`). Every
+  callback/redirect intent preserved (EventBoard's `?keep-intent` param verified in the chooser
+  path).
+- **Flag** — `spotifyOpenAccess` added to `lib/auth-flags.ts` (`isEnabled` pattern). `.env.example`
+  couldn't be edited from this session (env files are permission-protected); add
+  `SPOTIFY_OPEN_ACCESS=false` there manually — the PRD 45 runbook documents the production flip.
+- New code Snyk-clean (the one repo finding predates the epic, `CommunityPanel.tsx`);
+  `test:spotify-gate`/`test:registry`/typecheck/lint/`next build` green; map regenerated.
 
 ## Goals
 

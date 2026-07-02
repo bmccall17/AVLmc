@@ -63,6 +63,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
       strategy: "database",
     },
     pages: {
+      // The product's own chooser (PRD 43) — no funnel state shows NextAuth's unstyled default.
+      signIn: "/auth/signin",
       error: "/auth/error",
     },
     trustHost: true,

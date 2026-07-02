@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { signIn, signOut } from "next-auth/react";
+import { signOut } from "next-auth/react";
+import { SpotifyGateButton } from "@/components/SignInChooser";
 import type { AuthFailure, AuthFailureAction } from "@/lib/auth-failures";
 
 /**
@@ -35,16 +36,14 @@ export function AuthRecovery({ failure }: { failure: AuthFailure }) {
 function RecoveryAction({ action, primary }: { action: AuthFailureAction; primary: boolean }) {
   const className = primary ? "primary-action" : "ghost-control";
 
-  // Client-driven actions: re-run a provider sign-in, or clear the (stale) session.
+  // Client-driven actions: re-run a provider sign-in (through the PRD 43 gate — a retry from a
+  // non-allowlisted account must land on the request form, not back on Spotify's 403), or clear
+  // the (stale) session.
   if (action.kind === "retry_spotify") {
     return (
-      <button
-        className={className}
-        onClick={() => void signIn("spotify", { callbackUrl: "/" })}
-        type="button"
-      >
+      <SpotifyGateButton callbackUrl="/" className={className} source="auth-recovery">
         {action.label}
-      </button>
+      </SpotifyGateButton>
     );
   }
   if (action.kind === "clear_session") {

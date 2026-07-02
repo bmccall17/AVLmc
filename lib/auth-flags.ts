@@ -4,6 +4,12 @@ export type AuthFeatureFlags = {
   spotify: boolean;
   googleYouTube: boolean;
   appleMusic: boolean;
+  /**
+   * Spotify Extended Quota granted (PRD 43/45 / Phase 17): `SPOTIFY_OPEN_ACCESS=true` collapses the
+   * Development-Mode gate — the sign-in chooser sends everyone straight to Spotify and hides
+   * "Request access". The one-line go-live flip; see docs/product/prds/prd-45-*.md.
+   */
+  spotifyOpenAccess: boolean;
 };
 
 export function getAuthFeatureFlags(): AuthFeatureFlags {
@@ -23,6 +29,7 @@ export function getAuthFeatureFlags(): AuthFeatureFlags {
       Boolean(process.env.AUTH_SPOTIFY_ID && process.env.AUTH_SPOTIFY_SECRET),
     googleYouTube: auth && isEnabled(process.env.AUTH_GOOGLE_YOUTUBE_ENABLED),
     appleMusic: auth && isEnabled(process.env.AUTH_APPLE_MUSIC_ENABLED),
+    spotifyOpenAccess: isEnabled(process.env.SPOTIFY_OPEN_ACCESS),
   };
 }
 

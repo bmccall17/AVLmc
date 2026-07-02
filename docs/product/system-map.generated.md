@@ -527,6 +527,7 @@ Spotify tester-slot access requests (PRD 36): a not-yet-approved listener's Spot
   - ← Spotify Access Request API (dependsOn) — submit + my status
   - ← Admin Spotify Access API (dependsOn) — review queue + slot-added
   - ← Admin Tester Requests API (dependsOn) — seat count spans both stores
+  - ← Spotify Gate API (dependsOn) — seat check (signed-in loop)
 
 #### tester_requests  `db-tester-requests`
 
@@ -542,6 +543,7 @@ Anonymous Spotify tester interest (PRD 42 / Phase 17): email-keyed, pre-redirect
 - **Fed by / required by:**
   - ← Tester Request Capture API (dependsOn) — upsert + owner notification
   - ← Admin Tester Requests API (dependsOn) — queue + approve/invite
+  - ← Spotify Gate API (dependsOn) — seat check (email loop)
 
 #### music_connections  `db-music-connections`
 
@@ -900,6 +902,8 @@ Auth.js route handler for sign-in, callback, and session.
   - _Note:_ Auth.js catch-all route handler ([...nextauth]) for sign-in / callback / session; no custom logic beyond the auth.ts config.
 - **Flows to / depends on:**
   - → Auth.js (dependsOn)
+- **Fed by / required by:**
+  - ← Sign-In Chooser (dependsOn) — signIn (spotify/resend)
 
 #### Listener Profile  `ui-listener-profile`
 
@@ -1030,6 +1034,7 @@ Public, anonymous-accessible Spotify tester request capture (PRD 42 / Phase 17) 
   - → tester_requests (dependsOn) — upsert + owner notification
 - **Fed by / required by:**
   - ← Spotify Access Request Page (dependsOn) — request form submit
+  - ← Sign-In Chooser (dependsOn) — inline request form
 
 #### Spotify Access Request Page  `ui-spotify-access-page`
 
@@ -1043,6 +1048,38 @@ Public /spotify-access page (PRD 42 / Phase 17): explains the invite-only Spotif
   - _Note:_ Anonymous-accessible; a signed-in visitor's email pre-fills. Renders in the auth-recovery shell so the dark route tokens apply (PRD 39 discipline).
 - **Flows to / depends on:**
   - → Tester Request Capture API (dependsOn) — request form submit
+
+#### Spotify Gate API  `api-spotify-gate`
+
+The pre-redirect gate (PRD 43 / Phase 17): Spotify Development Mode 403s non-allowlisted users on Spotify's own domain, so the check runs BEFORE signIn('spotify'). GET returns chooser config (flags only, no DB); POST checks a stated/session email against BOTH request stores (tester_requests + spotify_access_requests, most-permissive-wins) → allowed | pending | declined | not_found | email_required. SPOTIFY_OPEN_ACCESS=true short-circuits to allowed with no store read.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/spotify-gate/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Env vars (names only):** `SPOTIFY_OPEN_ACCESS`
+- **Implementation notes:**
+  - _Note:_ Pure outcome matrix in lib/spotify-gate-core.ts (test:spotify-gate); reads via lib/spotify-gate.ts are 42P01-tolerant and degrade to the request path, never to an ungated redirect. Rate-limited per IP; outcomes reveal only beta-list membership.
+- **Flows to / depends on:**
+  - → tester_requests (dependsOn) — seat check (email loop)
+  - → spotify_access_requests (dependsOn) — seat check (signed-in loop)
+- **Fed by / required by:**
+  - ← Sign-In Chooser (dependsOn) — pre-redirect gate + config
+
+#### Sign-In Chooser  `ui-signin-chooser`
+
+The three-door sign-in chooser (PRD 43 / Phase 17): Continue with Spotify (gated), sign in with email (always present), Request Spotify access (hidden under SPOTIFY_OPEN_ACCESS). One component, two shells — the in-page modal for action nudges and the custom pages.signIn full page (/auth/signin), so no funnel state shows NextAuth's unstyled default. The ONLY module allowed to call signIn('spotify') — guard-tested.
+
+- **Kind:** Surface
+- **Source of truth:** `components/SignInChooser.tsx`
+- **Access:** public
+- **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Call sites route through useSignInChooser (modal) or SpotifyGateButton (Spotify-specific spots): SaveButton, FollowButton, EventBoard nudge, EmailSignInPanel, ListenerProfileButton, CuratorManagePanel, AuthRecovery retry, SpotifyAccessRequest retry, MusicAccountPanel. Each preserves its original callbackUrl (e.g. the EventBoard keep-intent param); an anonymous allowed email is remembered client-side so the one-field step happens once per browser.
+- **Flows to / depends on:**
+  - → Spotify Gate API (dependsOn) — pre-redirect gate + config
+  - → Tester Request Capture API (dependsOn) — inline request form
+  - → Auth API (dependsOn) — signIn (spotify/resend)
 
 #### Curator Application API  `api-me-curator-application`
 
@@ -1327,6 +1364,11 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | Spotify Access Request Page | → | Tester Request Capture API | dependsOn | request form submit |
 | Admin Tester Requests API | → | tester_requests | dependsOn | queue + approve/invite |
 | Admin Tester Requests API | → | spotify_access_requests | dependsOn | seat count spans both stores |
+| Spotify Gate API | → | tester_requests | dependsOn | seat check (email loop) |
+| Spotify Gate API | → | spotify_access_requests | dependsOn | seat check (signed-in loop) |
+| Sign-In Chooser | → | Spotify Gate API | dependsOn | pre-redirect gate + config |
+| Sign-In Chooser | → | Tester Request Capture API | dependsOn | inline request form |
+| Sign-In Chooser | → | Auth API | dependsOn | signIn (spotify/resend) |
 | Listener Profile | → | Listener (me) API | flowsTo | reads/writes |
 | Listener (me) API | → | Music Taste Sync | dependsOn | sync taste |
 | Listener (me) API | → | Listener Preferences | dependsOn | save settings |
@@ -1381,4 +1423,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_76 nodes, 101 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_78 nodes, 106 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

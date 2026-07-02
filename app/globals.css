@@ -8004,3 +8004,79 @@ button.primary-action {
 .tester-request-form .primary-action {
   justify-self: start;
 }
+
+/* ── Sign-in chooser & Spotify gate (PRD 43 / Phase 17) ───────────────────
+   The three-door chooser (modal + full-page /auth/signin) and the gated
+   "Continue with Spotify" flow. Dark-first, matching the auth-recovery card. */
+.signin-chooser {
+  display: grid;
+  gap: 12px;
+}
+
+.signin-chooser h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.25;
+  color: var(--ink, #fafafa);
+}
+
+.signin-chooser-copy {
+  margin: 0 0 6px;
+  color: var(--muted, #a1a1aa);
+}
+
+.signin-chooser-doors {
+  display: grid;
+  gap: 10px;
+  justify-items: stretch;
+}
+
+.signin-chooser-doors > button {
+  width: 100%;
+}
+
+.signin-chooser-footnote {
+  margin: 18px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted, #a1a1aa);
+}
+
+.spotify-gate {
+  display: grid;
+  gap: 10px;
+}
+
+.spotify-gate-step {
+  display: grid;
+  gap: 8px;
+}
+
+.spotify-gate-step label {
+  color: var(--ink, #fafafa);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.signin-chooser-modal {
+  position: relative;
+  width: min(480px, calc(100vw - 32px));
+  max-height: min(640px, calc(100vh - 48px));
+  overflow-y: auto;
+  background: #18181b;
+  border: 1px solid rgba(63, 63, 70, 0.7);
+  border-radius: 16px;
+  padding: 28px 26px;
+  --ink: #fafafa;
+  --muted: #a1a1aa;
+  --line: rgba(63, 63, 70, 0.7);
+  --border: rgba(63, 63, 70, 0.7);
+  --surface: #18181b;
+  --panel: #111113;
+  color: var(--ink);
+}
+
+.signin-chooser-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}

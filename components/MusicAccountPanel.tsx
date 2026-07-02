@@ -1,5 +1,6 @@
-import { auth, signIn, signOut } from "@/auth";
+import { auth, signOut } from "@/auth";
 import { MusicConnectionActions } from "@/components/MusicConnectionActions";
+import { SpotifyGateButton } from "@/components/SignInChooser";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
 import { SPOTIFY_LIMITED_BETA_MESSAGE } from "@/lib/spotify-limited-access";
@@ -36,11 +37,12 @@ export async function MusicAccountPanel({ spotifyLimitedBetaNotice = false }: Mu
         {spotifyLimitedBetaNotice ? (
           <p className="form-message notice">{SPOTIFY_LIMITED_BETA_MESSAGE}</p>
         ) : features.spotify ? (
-          <form action={connectSpotify}>
-            <button className="primary-action" type="submit">
-              Connect Spotify
-            </button>
-          </form>
+          <SpotifyGateButton
+            callbackUrl="/#personalized-discovery"
+            source="music-account-panel"
+          >
+            Connect Spotify
+          </SpotifyGateButton>
         ) : (
           <p className="empty-copy">Spotify sign-in is not configured yet.</p>
         )}
@@ -89,11 +91,12 @@ export async function MusicAccountPanel({ spotifyLimitedBetaNotice = false }: Mu
         {spotifyConnected ? (
           <MusicConnectionActions tasteOptedOut={spotifyTastePaused} />
         ) : features.spotify ? (
-          <form action={connectSpotify}>
-            <button className="primary-action" type="submit">
-              Connect Spotify
-            </button>
-          </form>
+          <SpotifyGateButton
+            callbackUrl="/#personalized-discovery"
+            source="music-account-panel"
+          >
+            Connect Spotify
+          </SpotifyGateButton>
         ) : null}
         <form action={signOutOfApp}>
           <button className="ghost-control" type="submit">
@@ -103,12 +106,6 @@ export async function MusicAccountPanel({ spotifyLimitedBetaNotice = false }: Mu
       </div>
     </section>
   );
-}
-
-async function connectSpotify() {
-  "use server";
-
-  await signIn("spotify", { redirectTo: "/#personalized-discovery" });
 }
 
 async function signOutOfApp() {
