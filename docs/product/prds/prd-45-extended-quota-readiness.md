@@ -1,6 +1,6 @@
-# PRD 31: Extended Quota Readiness
+# PRD 45: Extended Quota Readiness
 
-Part of the [Open Spotify Access initiative](../spotify-access-prd.md) (Phase 13, provisional). Cycle **C4** — a **parallel external track**, started day one because Spotify's review is the initiative's long pole. Satisfies epic outcome **6 (the permanent fix is filed)**. Only its final step (the flag flip) depends on C2 (PRD 29).
+Part of the [Open Spotify Access initiative](../spotify-access-prd.md) (Phase 17). Cycle **C4** — a **parallel external track**, started day one because Spotify's review is the initiative's long pole. Satisfies epic outcome **6 (the permanent fix is filed)**. Only its final step (the flag flip) depends on C2 (PRD 43).
 
 ## Goal
 
@@ -53,7 +53,7 @@ Spotify's Extension Request review checks that the app is a real, publicly-descr
 
 ## Dependencies
 
-- **C2 (PRD 29)** for the flag flip step only; the privacy page and submission have no code dependencies and start immediately.
+- **C2 (PRD 43)** for the flag flip step only; the privacy page and submission have no code dependencies and start immediately.
 - Truthfulness dependencies: the pulled code (verify claims), PRD 27's leak-audit posture (evidence).
 
 ## Risks

@@ -1,6 +1,6 @@
-# PRD 28: Tester Request Loop
+# PRD 42: Tester Request Loop
 
-Part of the [Open Spotify Access initiative](../spotify-access-prd.md) (Phase 13, provisional). Cycle **C1** (first of four). Satisfies epic outcomes **2 (the owner hears about every request)** and **3 (the loop closes)**. No dependencies on other cycles; ships standalone value by wiring the currently-dead "Request Spotify access" button on the deployed `/auth/error` page.
+Part of the [Open Spotify Access initiative](../spotify-access-prd.md) (Phase 17). Cycle **C1** (first of four). Satisfies epic outcomes **2 (the owner hears about every request)** and **3 (the loop closes)**. No dependencies on other cycles; ships standalone value by wiring the currently-dead "Request Spotify access" button on the deployed `/auth/error` page.
 
 ## Goal
 
@@ -8,7 +8,7 @@ Part of the [Open Spotify Access initiative](../spotify-access-prd.md) (Phase 13
 
 ## Summary
 
-A `tester_requests` table (email-unique, upsert-on-reapply), a public request API + minimal form page, a Resend notification to the owner on every new request, an invite email to the applicant on approval, and a password-gated admin panel section listing requests with status controls and a seat counter. This cycle builds the machinery; PRD 29 later moves the *offer* to the sign-in prompt itself. Until then, the existing error-page button and a linkable `/spotify-access` page start capturing intent immediately.
+A `tester_requests` table (email-unique, upsert-on-reapply), a public request API + minimal form page, a Resend notification to the owner on every new request, an invite email to the applicant on approval, and a password-gated admin panel section listing requests with status controls and a seat counter. This cycle builds the machinery; PRD 43 later moves the *offer* to the sign-in prompt itself. Until then, the existing error-page button and a linkable `/spotify-access` page start capturing intent immediately.
 
 ## Implementation Status
 
@@ -25,7 +25,7 @@ A `tester_requests` table (email-unique, upsert-on-reapply), a public request AP
 
 ## Non-Goals
 
-- **No** pre-redirect gate or chooser — that interception point is PRD 29; this cycle only builds what it will call.
+- **No** pre-redirect gate or chooser — that interception point is PRD 43; this cycle only builds what it will call.
 - **No** self-serve approval or automation against the Spotify dashboard (no API exists for the allowlist; reconciliation stays manual by design).
 - **No** account creation on request — applicants usually have no account; convergence happens when they later sign in with the same email.
 - **No** marketing/waitlist tooling beyond the single table and two emails.

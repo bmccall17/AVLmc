@@ -4,7 +4,7 @@ Created: July 2, 2026
 
 **Status: Scoped — not started.**
 
-> **Numbering note (resolve after `git pull`):** the local checkout is behind `origin/main`; the deployed app already carries auth work (Resend email provider, custom `/auth/error` pages) whose PRDs may have consumed numbers 28+. This epic provisionally claims **Phase 13, PRDs 28–31**. Confirm both against the pulled roadmap before the first cycle ships, renumber if taken, and add this epic's row to `master-roadmap.md` at that time (the roadmap file is not edited here to avoid a pull conflict).
+> **Numbering note (resolved July 2, 2026):** after `git pull`, the provisional claim (Phase 13, PRDs 28–31) was indeed taken — Phase 13 by Curator Onboarding, PRDs 28–31 by the personalization benchmark and curator cycles, and Phases 14–16 by the onboarding/linking/design epics. This epic is now **Phase 17, PRDs 42–45**; the roadmap row is added. The pulled work also shipped **PRD 36** (signed-in Spotify tester-slot request, `spotify_access_requests` keyed by `user_id`) — this epic's C1/C2 complement it with the *anonymous, pre-redirect* capture path (`tester_requests` keyed by email) and the gate reads **both** stores so neither loop strands an approved tester.
 
 ## One-Sentence Goal
 
@@ -48,10 +48,10 @@ Decided with product owner July 2, 2026:
 
 | Cycle | PRD | Outcome(s) | Theme |
 | --- | --- | --- | --- |
-| C1 | [PRD 28 — Tester Request Loop](prds/prd-28-tester-request-loop.md) | 2, 3 | The capture-and-close machinery: `tester_requests` table, request API + form, Resend notification to the owner, admin list/approve against the 25-seat budget, "you're in" email. Self-contained; wires the deployed dead "Request Spotify access" button immediately. |
-| C2 | [PRD 29 — Sign-In Chooser & Pre-Redirect Gate](prds/prd-29-signin-chooser-and-gate.md) | 1, 5 | The interception point: one chooser component replacing every direct `signIn("spotify")` call (5 surfaces), gate check against approved testers before redirecting, custom `pages.signIn`, `SPOTIFY_OPEN_ACCESS` flag. |
-| C3 | [PRD 30 — One Identity: Auto-Link & Recovery](prds/prd-30-one-identity-autolink.md) | 4 | The convergence fix: `allowDangerousEmailAccountLinking`, link-while-signed-in verified end-to-end, error-copy updates, tests that `OAuthAccountNotLinked` is unreachable in supported flows. |
-| C4 | [PRD 31 — Extended Quota Readiness](prds/prd-31-extended-quota-readiness.md) | 6 | The exit ramp: privacy policy page, public app description, dashboard submission checklist, and the documented open-access flag flip that retires the gate. |
+| C1 | [PRD 42 — Tester Request Loop](prds/prd-42-tester-request-loop.md) | 2, 3 | The capture-and-close machinery: `tester_requests` table, request API + form, Resend notification to the owner, admin list/approve against the 25-seat budget, "you're in" email. Self-contained; wires the deployed dead "Request Spotify access" button immediately. |
+| C2 | [PRD 43 — Sign-In Chooser & Pre-Redirect Gate](prds/prd-43-signin-chooser-and-gate.md) | 1, 5 | The interception point: one chooser component replacing every direct `signIn("spotify")` call (9 surfaces found in the pulled code), gate check against approved testers before redirecting, custom `pages.signIn`, `SPOTIFY_OPEN_ACCESS` flag. |
+| C3 | [PRD 44 — One Identity: Auto-Link & Recovery](prds/prd-44-one-identity-autolink.md) | 4 | The convergence fix: `allowDangerousEmailAccountLinking`, link-while-signed-in verified end-to-end, error-copy updates, tests that `OAuthAccountNotLinked` is unreachable in supported flows. |
+| C4 | [PRD 45 — Extended Quota Readiness](prds/prd-45-extended-quota-readiness.md) | 6 | The exit ramp: privacy policy page, public app description, dashboard submission checklist, and the documented open-access flag flip that retires the gate. |
 
 ## Delivery Sequence & Dependencies
 

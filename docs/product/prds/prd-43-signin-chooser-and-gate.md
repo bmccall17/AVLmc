@@ -1,6 +1,6 @@
-# PRD 29: Sign-In Chooser & Pre-Redirect Gate
+# PRD 43: Sign-In Chooser & Pre-Redirect Gate
 
-Part of the [Open Spotify Access initiative](../spotify-access-prd.md) (Phase 13, provisional). Cycle **C2** (the centerpiece). Satisfies epic outcomes **1 (no silent losses)** and **5 (every auth surface is the product's own)**. Depends on **C1 (PRD 28)** — the chooser's "Request access" path and the gate's approved-tester read both call C1's machinery.
+Part of the [Open Spotify Access initiative](../spotify-access-prd.md) (Phase 17). Cycle **C2** (the centerpiece). Satisfies epic outcomes **1 (no silent losses)** and **5 (every auth surface is the product's own)**. Depends on **C1 (PRD 42)** — the chooser's "Request access" path and the gate's approved-tester read both call C1's machinery.
 
 ## Goal
 
@@ -24,7 +24,7 @@ One `SignInChooser` component (modal on in-page triggers; also rendered as the c
 
 ## Non-Goals
 
-- **No** change to linking behavior or error-page linking copy — that's C3 (PRD 30).
+- **No** change to linking behavior or error-page linking copy — that’s C3 (PRD 44).
 - **No** removal of the email door anywhere: email sign-in remains the universal path on every chooser render.
 - **No** server-side Spotify allowlist automation (none exists); the gate mirrors C1's table only.
 - **No** redesign of the surfaces that trigger the chooser — their buttons keep their look; only the target changes.
@@ -60,7 +60,7 @@ One `SignInChooser` component (modal on in-page triggers; also rendered as the c
 
 ## Dependencies
 
-- **C1 (PRD 28)** — `tester_requests` store, request form/API, statuses.
+- **C1 (PRD 42)** — `tester_requests` store, request form/API, statuses.
 - The pulled deployed auth stack (Resend provider, `/auth/error` pages) — **build after `git pull`.**
 - Existing surfaces listed above (Phase 5–12 components).
 

@@ -1,6 +1,6 @@
-# PRD 30: One Identity — Auto-Link & Recovery
+# PRD 44: One Identity — Auto-Link & Recovery
 
-Part of the [Open Spotify Access initiative](../spotify-access-prd.md) (Phase 13, provisional). Cycle **C3** (small, surgical). Satisfies epic outcome **4 (one person, one account, no dead ends)**. Depends on **C2 (PRD 29)** for sequencing only — the copy/UX it touches should land once, after the chooser exists.
+Part of the [Open Spotify Access initiative](../spotify-access-prd.md) (Phase 17). Cycle **C3** (small, surgical). Satisfies epic outcome **4 (one person, one account, no dead ends)**. Depends on **C2 (PRD 43)** for sequencing only — the copy/UX it touches should land once, after the chooser exists.
 
 ## Goal
 
@@ -57,7 +57,7 @@ Production, July 2, 2026: the owner — whose account email matched an existing 
 
 ## Dependencies
 
-- **C2 (PRD 29)** — sequencing; the chooser is the surface whose copy and routing this cycle finalizes.
+- **C2 (PRD 43)** — sequencing; the chooser is the surface whose copy and routing this cycle finalizes.
 - The pulled deployed auth stack (Resend provider, error pages) — **build after `git pull`.**
 - NextAuth v5 beta + `@auth/pg-adapter` (existing).
 
