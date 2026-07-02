@@ -40,6 +40,9 @@ export default async function SpotifyAccessPage() {
           defaultEmail={session?.user?.email ?? null}
           source="spotify-access-page"
         />
+        <p className="signin-chooser-footnote">
+          What we do with your data: <Link href="/privacy">privacy</Link>.
+        </p>
       </section>
     </main>
   );

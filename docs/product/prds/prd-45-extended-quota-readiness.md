@@ -12,7 +12,71 @@ Spotify's Extension Request review checks that the app is a real, publicly-descr
 
 ## Implementation Status
 
-**Not started.**
+**Code shipped; submission prepared — awaiting the owner's dashboard filing (July 2, 2026).**
+
+Delivered in code:
+
+- **`/privacy` page** (`app/privacy/page.tsx`, registered `ui-privacy-page`): dated, house voice,
+  every claim verified against the code before publishing — read-only scopes exactly as `auth.ts`
+  requests them (`user-read-private`, `user-read-email`, `user-top-read`), tokens server-side (the
+  PRD 27 leak-audit posture), disconnect deletes tokens and "remove imported data" deletes
+  `music_profile_items` (`lib/music.ts`), anonymous-session cookie behavior, cookieless Umami
+  analytics (`app/layout.tsx`), no selling/ads/pay-to-play, deletion contact
+  (`avlmc@agent828.com` — the address already public in the sign-in email copy).
+- **Discoverability**: a site-wide footer (`app/layout.tsx`) links `/privacy` from every page —
+  Spotify reviewers check for it — and `/spotify-access` links it too.
+- **Flag-flip path verified** at the unit level: the C2 gate matrix (`test:spotify-gate`) proves
+  `SPOTIFY_OPEN_ACCESS=true` ⇒ every outcome is `allowed` with zero store reads, and the chooser
+  hides "Request access". Re-run in a preview deployment with the env set as the final pre-flip
+  check (runbook step 3).
+
+### Dashboard checklist (owner action, ~10 minutes)
+
+In [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) → the AVLmc app:
+
+1. App name: **AVL Music Companion**.
+2. Description: use the submission text below (first paragraph).
+3. Website: `https://avlmc.vercel.app`.
+4. Redirect URI (exact): `https://avlmc.vercel.app/api/auth/callback/spotify`.
+5. Privacy policy URL: `https://avlmc.vercel.app/privacy` (live as of this cycle).
+6. Then **Extension Request / Quota Extension** → submit the text below. Paste the submitted text
+   + date here when sent (house snapshot discipline), and log Spotify's responses here as they
+   arrive.
+
+### Submission text (ready to paste)
+
+> AVL Music Companion (avlmc.vercel.app) is a free community discovery board for live music in
+> Asheville, NC. It lists upcoming local shows and helps listeners find the ones worth attending.
+>
+> Spotify integration is optional and read-only. We request three scopes: `user-read-email` and
+> `user-read-private` to sign the listener in and attach their Spotify identity to one app
+> account, and `user-top-read` to read their top artists and tracks so the public event listings
+> can be ranked against their taste ("shows like what you already listen to"). We never write to
+> Spotify: no playlist changes, no follows, no playback control, no posting.
+>
+> Tokens are stored server-side and never exposed to other users; listeners can disconnect in-app
+> (which deletes our tokens and, optionally, the imported taste data) or revoke via Spotify. Our
+> privacy policy is at https://avlmc.vercel.app/privacy. The app is free, carries no ads, and
+> sells nothing — including placement (no pay-to-play).
+
+### Go-live runbook (on grant)
+
+1. Grant email received → paste date/terms here.
+2. Vercel → Project → Settings → Environment Variables: set `SPOTIFY_OPEN_ACCESS=true`
+   (Production) → redeploy.
+3. Verify: the sign-in chooser shows no "Request access"; a non-allowlisted account completes
+   Spotify sign-in in production; `GET /api/spotify-gate` returns `openAccess: true`.
+4. Optional courtesy email to remaining `pending` rows in `tester_requests` (admin panel has the
+   list): "no invite needed anymore — sign in now."
+5. Update the epic + this PRD; the dev-mode allowlist and both request queues become inert
+   history (keep the tables).
+
+### Fallback stance (if declined or stalled)
+
+The C1–C3 loop is the operating model at 25 seats indefinitely: the chooser catches every
+would-be tester, the owner triages with the cross-store seat counter, and seats are recycled by
+removing inactive entries in the dashboard's User Management (then declining/re-opening the
+matching request rows). Nothing else in the epic depends on the grant.
 
 ## Goals
 

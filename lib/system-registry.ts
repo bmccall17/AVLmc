@@ -1400,6 +1400,24 @@ const NODES: RegistryNode[] = [
     ],
   },
   {
+    id: "ui-privacy-page",
+    kind: "surface",
+    layer: "identity",
+    label: "Privacy Policy Page",
+    description:
+      "Public /privacy page (PRD 45 / Phase 17): plain-language, code-verified statement of data practices — email for magic links, read-only Spotify scopes with server-side tokens (PRD 27 leak-audit posture), per-listener activity rows, cookieless Umami analytics, no selling/ads/pay-to-play, contact + deletion path. A Spotify Extended Quota review prerequisite, linked from the site footer and /spotify-access. PRDs that change data practices must update it in the same cycle.",
+    sourceOfTruth: "app/privacy/page.tsx",
+    access: "public",
+    ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Static server component in the auth-recovery shell; every claim maps to a code path (scopes in auth.ts, disconnect/removal in lib/music.ts, analytics in app/layout.tsx). Dated; footer-linked site-wide.",
+      },
+    ],
+  },
+  {
     id: "api-spotify-gate",
     kind: "surface",
     layer: "identity",

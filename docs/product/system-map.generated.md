@@ -1049,6 +1049,17 @@ Public /spotify-access page (PRD 42 / Phase 17): explains the invite-only Spotif
 - **Flows to / depends on:**
   - → Tester Request Capture API (dependsOn) — request form submit
 
+#### Privacy Policy Page  `ui-privacy-page`
+
+Public /privacy page (PRD 45 / Phase 17): plain-language, code-verified statement of data practices — email for magic links, read-only Spotify scopes with server-side tokens (PRD 27 leak-audit posture), per-listener activity rows, cookieless Umami analytics, no selling/ads/pay-to-play, contact + deletion path. A Spotify Extended Quota review prerequisite, linked from the site footer and /spotify-access. PRDs that change data practices must update it in the same cycle.
+
+- **Kind:** Surface
+- **Source of truth:** `app/privacy/page.tsx`
+- **Access:** public
+- **Ownership:** manual
+- **Implementation notes:**
+  - _Note:_ Static server component in the auth-recovery shell; every claim maps to a code path (scopes in auth.ts, disconnect/removal in lib/music.ts, analytics in app/layout.tsx). Dated; footer-linked site-wide.
+
 #### Spotify Gate API  `api-spotify-gate`
 
 The pre-redirect gate (PRD 43 / Phase 17): Spotify Development Mode 403s non-allowlisted users on Spotify's own domain, so the check runs BEFORE signIn('spotify'). GET returns chooser config (flags only, no DB); POST checks a stated/session email against BOTH request stores (tester_requests + spotify_access_requests, most-permissive-wins) → allowed | pending | declined | not_found | email_required. SPOTIFY_OPEN_ACCESS=true short-circuits to allowed with no store read.
@@ -1423,4 +1434,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_78 nodes, 106 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_79 nodes, 106 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

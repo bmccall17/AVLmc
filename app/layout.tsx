@@ -21,6 +21,11 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
+        {/* Site-wide footer: the privacy link must be discoverable from every page — Spotify's
+            Extended Quota review checks for it (PRD 45), and it's the honest thing anyway. */}
+        <footer className="site-footer">
+          <a href="/privacy">Privacy</a>
+        </footer>
         {process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID && (
           <Script
             src="https://cloud.umami.is/script.js"
