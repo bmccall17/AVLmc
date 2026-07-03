@@ -12,7 +12,24 @@ Spotify's Extension Request review checks that the app is a real, publicly-descr
 
 ## Implementation Status
 
-**Not started.**
+**In progress — privacy prerequisite shipped July 2, 2026; dashboard audit + submission are owner actions (checklist below).**
+
+Shipped July 2, 2026:
+
+- **`/privacy` page** (`app/privacy/page.tsx`): listener-first privacy policy in the auth-recovery shell (dark route tokens). Every claim maps to a code path: read-only scopes enumerated, tokens server-side (PRD 27 leak-audit posture), anonymous-session hand-off (PRD 20), no-Spotify-writes / no-selling / no-pay-to-play invariants, opt-in-only social visibility (Phase 12), Umami cookie-less analytics (PRD 11), disconnect + spotify.com/account/apps revocation, contact/deletion email (brett@betterthanunicorns.com — swap if a product address is preferred).
+- **Discoverability:** linked from `/spotify-access` ("Read the privacy policy"). Site-wide footer link deferred — no global footer exists in the product; adding one is a design decision (PRD 41 territory). The dashboard's privacy-URL field (below) is what Spotify review actually checks.
+- **`.env.example` caught up** with the Phase 15/17 auth envs (`AUTH_EMAIL_ENABLED`, `AUTH_RESEND_KEY`, `AUTH_EMAIL_FROM`, `ADMIN_NOTIFY_EMAIL`, `SPOTIFY_OPEN_ACCESS`) so a fresh checkout sees the full surface.
+- Not yet verified in CI (typecheck/lint/build) — run with the next commit; the page is static JSX with no new dependencies or registry-node changes (house precedent: pure pages aren't registry nodes; PRD 37).
+
+### Owner checklist — dashboard audit + submission (in this order)
+
+1. Spotify Developer Dashboard → the AVLmc app → **Settings**: name "AVL Music Companion", description matching the submission text below, website `https://avlmc.vercel.app`, redirect URI exactly `https://avlmc.vercel.app/api/auth/callback/spotify`, privacy policy URL `https://avlmc.vercel.app/privacy`.
+2. **Extension Request** (Extended Quota Mode): submit with the text below; paste the submission date here when sent.
+3. Log any Spotify review feedback + resolution here as it arrives.
+
+### Submission text (ready to paste)
+
+> AVL Music Companion (https://avlmc.vercel.app) is a free community discovery board for live music in Asheville, NC. It lists upcoming local shows and helps listeners decide what's worth seeing. An optional Spotify connection personalizes this: with the user's explicit consent we read their profile (user-read-private, user-read-email) and top artists/tracks (user-top-read) to match upcoming local shows to their taste. Usage is strictly read-only — we never modify a user's library, playlists, or follows — and tokens are stored server-side, never exposed to clients. Privacy policy: https://avlmc.vercel.app/privacy. We are requesting Extended Quota because our Development Mode allowlist (25 users) is filling with waitlisted local listeners; the product is live, free, and has no monetization of ranking or data.
 
 ## Goals
 

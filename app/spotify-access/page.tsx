@@ -40,6 +40,9 @@ export default async function SpotifyAccessPage() {
           defaultEmail={session?.user?.email ?? null}
           source="spotify-access-page"
         />
+        <p className="auth-recovery-message" style={{ marginTop: 18, marginBottom: 0 }}>
+          Curious what we do with your email? <Link href="/privacy">Read the privacy policy</Link>.
+        </p>
       </section>
     </main>
   );

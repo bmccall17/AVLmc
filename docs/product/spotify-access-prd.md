@@ -2,9 +2,17 @@
 
 Created: July 2, 2026
 
-**Status: Scoped — not started.**
+**Status: In flight — C1 (PRD 42) and C2 (PRD 43) shipped July 2, 2026 (outcomes 1, 2, 3, 5 delivered; owner-notification email verified live). C3 (PRD 44) not started — awaiting the linking-stance decision recorded below. C4 (PRD 45) in progress: `/privacy` shipped July 2; dashboard audit + Extension Request are owner actions.**
 
 > **Numbering note (resolved July 2, 2026):** after `git pull`, the provisional claim (Phase 13, PRDs 28–31) was indeed taken — Phase 13 by Curator Onboarding, PRDs 28–31 by the personalization benchmark and curator cycles, and Phases 14–16 by the onboarding/linking/design epics. This epic is now **Phase 17, PRDs 42–45**; the roadmap row is added. The pulled work also shipped **PRD 36** (signed-in Spotify tester-slot request, `spotify_access_requests` keyed by `user_id`) — this epic's C1/C2 complement it with the *anonymous, pre-redirect* capture path (`tester_requests` keyed by email) and the gate reads **both** stores so neither loop strands an approved tester.
+
+## Cross-Epic Boundary (Phase 15 vs. Phase 17 — who owns what)
+
+Two auth initiatives touch the same funnel; this line keeps them from tangling:
+
+- **Phase 15 — Account, Sign-in & Linking ([`account-signin-linking-prd.md`](account-signin-linking-prd.md)) owns identity:** the multi-email spine (`user_emails` + `withMultiEmailResolution`), the failure/recovery taxonomy (`lib/auth-failures.ts`, PRD 37), and the **no-silent-merge posture** (no "merge anyway" action anywhere — guard-tested). It answers: *once someone signs in, which account are they?*
+- **Phase 17 — Open Spotify Access (this epic) owns access:** intent capture (**two deliberate stores**: PRD 36's `spotify_access_requests`, keyed by `user_id` for signed-in listeners at the profile beta wall; PRD 42's `tester_requests`, keyed by email for anonymous pre-redirect capture), the gate that reads **both** (most-permissive-wins, PRD 43), the notification/invite loop, and the quota exit ramp (PRD 45). It answers: *who can reach Spotify's consent screen, and what happens to everyone who can't yet?*
+- **The one sanctioned overlap is PRD 44 (C3):** it amends Phase 15's posture in exactly one case — an OAuth sign-in whose **verified** email already belongs to an account converges automatically instead of erroring. Phase 15's guard ("no merge-anyway button in recovery UI") **stays in force**: it protects the genuinely-different-email edge, which remains a manual sign-in-then-link. Any future provider must re-justify auto-link explicitly.
 
 ## One-Sentence Goal
 

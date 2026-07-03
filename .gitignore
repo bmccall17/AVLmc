@@ -9,8 +9,12 @@ public/uploads/voice/*
 !public/uploads/voice/.gitkeep
 tsconfig.tsbuildinfo
 .env*
+<<<<<<< Updated upstream
 
 # Playwright (PRD 38 cross-browser harness) — generated output, not source
 /test-results/
 /playwright-report/
 output/
+=======
+.env*.local
+>>>>>>> Stashed changes
