@@ -41,7 +41,7 @@ export default async function SpotifyAccessPage() {
           source="spotify-access-page"
         />
         <p className="signin-chooser-footnote">
-          What we do with your data: <Link href="/privacy">privacy</Link>.
+          Curious what we do with your email? <Link href="/privacy">Read the privacy policy</Link>.
         </p>
       </section>
     </main>

@@ -9,6 +9,7 @@ public/uploads/voice/*
 !public/uploads/voice/.gitkeep
 tsconfig.tsbuildinfo
 .env*
+.env*.local
 
 # Playwright (PRD 38 cross-browser harness) — generated output, not source
 /test-results/

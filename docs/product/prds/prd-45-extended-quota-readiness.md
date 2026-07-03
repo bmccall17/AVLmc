@@ -12,19 +12,26 @@ Spotify's Extension Request review checks that the app is a real, publicly-descr
 
 ## Implementation Status
 
-**Code shipped; submission prepared — awaiting the owner's dashboard filing (July 2, 2026).**
+**Code shipped; submission prepared — awaiting the owner's dashboard filing (July 2, 2026;
+parallel passes merged July 3).**
 
 Delivered in code:
 
-- **`/privacy` page** (`app/privacy/page.tsx`, registered `ui-privacy-page`): dated, house voice,
-  every claim verified against the code before publishing — read-only scopes exactly as `auth.ts`
-  requests them (`user-read-private`, `user-read-email`, `user-top-read`), tokens server-side (the
-  PRD 27 leak-audit posture), disconnect deletes tokens and "remove imported data" deletes
-  `music_profile_items` (`lib/music.ts`), anonymous-session cookie behavior, cookieless Umami
-  analytics (`app/layout.tsx`), no selling/ads/pay-to-play, deletion contact
-  (`avlmc@agent828.com` — the address already public in the sign-in email copy).
+- **`/privacy` page** (`app/privacy/page.tsx`, registered `ui-privacy-page`): dated, listener-first
+  house voice (two parallel July 2 drafts merged July 3 — structure + code-verified claims from
+  one, the anonymous-session hand-off, opt-in-only social visibility, and "what we never do"
+  invariants from the other). Every claim maps to a code path: read-only scopes exactly as
+  `auth.ts` requests them (`user-read-private`, `user-read-email`, `user-top-read`), tokens
+  server-side (the PRD 27 leak-audit posture, test-enforced), anonymous-session hand-off (PRD 20),
+  disconnect deletes tokens and "remove imported data" deletes `music_profile_items`
+  (`lib/music.ts`), cookieless Umami analytics (`app/layout.tsx`), no Spotify writes / no selling /
+  no pay-to-play, deletion contact `avlmc@agent828.com` (the product address already public in the
+  sign-in email copy).
 - **Discoverability**: a site-wide footer (`app/layout.tsx`) links `/privacy` from every page —
-  Spotify reviewers check for it — and `/spotify-access` links it too.
+  Spotify reviewers check for it — and `/spotify-access` links it too ("Read the privacy policy").
+- **`.env.example` caught up** with the Phase 15/17 auth envs (`AUTH_EMAIL_ENABLED`,
+  `AUTH_RESEND_KEY`, `AUTH_EMAIL_FROM`, `ADMIN_NOTIFY_EMAIL`, `SPOTIFY_OPEN_ACCESS`) so a fresh
+  checkout sees the full surface.
 - **Flag-flip path verified** at the unit level: the C2 gate matrix (`test:spotify-gate`) proves
   `SPOTIFY_OPEN_ACCESS=true` ⇒ every outcome is `allowed` with zero store reads, and the chooser
   hides "Request access". Re-run in a preview deployment with the env set as the final pre-flip
@@ -58,6 +65,10 @@ In [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) �
 > (which deletes our tokens and, optionally, the imported taste data) or revoke via Spotify. Our
 > privacy policy is at https://avlmc.vercel.app/privacy. The app is free, carries no ads, and
 > sells nothing — including placement (no pay-to-play).
+>
+> We are requesting Extended Quota because our Development Mode allowlist (25 users) is filling
+> with waitlisted local listeners; the product is live, free, and has no monetization of ranking
+> or data.
 
 ### Go-live runbook (on grant)
 

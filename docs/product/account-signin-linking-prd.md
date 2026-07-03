@@ -30,6 +30,8 @@ PRD 35 sign-in *resolution* (adapter `getUserByEmail` wrapper + explicit linking
 tracked follow-up because it changes live auth behavior and must be validated with the C4 runbook under live
 OAuth (PRD 38 is observe-only by design).
 
+> **Related initiative (added July 2, 2026):** the **Open Spotify Access epic** ([`spotify-access-prd.md`](spotify-access-prd.md), Phase 17) owns the *access* side of the same funnel — anonymous pre-redirect capture (`tester_requests`, PRD 42), the Spotify gate + sign-in chooser (PRD 43), and the Extended-Quota exit (PRD 45). Boundary and the one sanctioned overlap (PRD 44's verified-email auto-link amendment to this epic's no-silent-merge posture) are defined in that epic's **Cross-Epic Boundary** section. This epic remains the authority on identity resolution and recovery.
+
 **Update (June 18, 2026) — the loop is wired and live in code; only the live *proof* remains.** Verified
 against the installed `next-auth@5.0.0-beta.31` source: signed-in OAuth account linking is **native** Auth.js
 behavior (`handle-login.js:130–138` calls `linkAccount` onto the current session user, no
