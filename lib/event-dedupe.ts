@@ -51,6 +51,8 @@ type ScoredEvent<EventType extends CanonicalEventRecord> = {
   event: EventType;
   groupKey: string;
   quality: EventCanonicalQuality;
+  startMinuteLabel: string;
+  startMinuteOfDay: number | null;
 };
 
 type CanonicalEventGroup<EventType extends CanonicalEventRecord> = {
@@ -59,6 +61,8 @@ type CanonicalEventGroup<EventType extends CanonicalEventRecord> = {
   hidden: Array<ScoredEvent<EventType>>;
   winnerReasons: string[];
 };
+
+export const FUZZY_START_WINDOW_MINUTES = 90;
 
 const LOCAL_TIME_ZONE = "America/New_York";
 const GENERIC_TITLE_SUFFIXES = new Set(["band", "show", "event", "concert"]);
@@ -92,40 +96,113 @@ function groupCanonicalEvents<EventType extends CanonicalEventRecord>(
   const groups = new Map<string, Array<ScoredEvent<EventType>>>();
 
   for (const event of events) {
-    const groupKey = getCanonicalEventKey(event);
-    const candidates = groups.get(groupKey) ?? [];
+    const baseKey = getCanonicalEventBaseKey(event);
+    const candidates = groups.get(baseKey) ?? [];
+    const startMinuteLabel = getLocalStartMinute(event);
     candidates.push({
       event,
-      groupKey,
+      groupKey: baseKey,
       quality: scoreEventQuality(event),
+      startMinuteLabel,
+      startMinuteOfDay: minuteLabelToMinuteOfDay(startMinuteLabel),
     });
-    groups.set(groupKey, candidates);
+    groups.set(baseKey, candidates);
   }
 
-  return Array.from(groups.entries()).map(([groupKey, candidates]) => {
-    const sorted = [...candidates].sort(compareScoredEvents);
-    const [canonical, ...hidden] = sorted;
+  return Array.from(groups.entries()).flatMap(([baseKey, candidates]) =>
+    clusterByStartTime(candidates).map((cluster) => {
+      const sorted = [...cluster].sort(compareScoredEvents);
+      const [canonical, ...hidden] = sorted;
 
-    if (!canonical) {
-      throw new Error("Cannot pick a canonical event from an empty group.");
-    }
+      if (!canonical) {
+        throw new Error("Cannot pick a canonical event from an empty group.");
+      }
 
-    return {
-      groupKey,
-      canonical,
-      hidden,
-      winnerReasons: describeWinner(canonical, hidden),
-    };
-  });
+      const groupKey = buildClusterKey(baseKey, cluster);
+      for (const candidate of cluster) {
+        candidate.groupKey = groupKey;
+      }
+
+      const winnerReasons = describeWinner(canonical, hidden);
+      if (clusterSpansStartTimes(cluster)) {
+        winnerReasons.push(
+          `merged: start times within ${FUZZY_START_WINDOW_MINUTES} minutes across sources`
+        );
+      }
+
+      return { groupKey, canonical, hidden, winnerReasons };
+    })
+  );
 }
 
-function getCanonicalEventKey(event: CanonicalEventRecord) {
+function getCanonicalEventBaseKey(event: CanonicalEventRecord) {
   return [
     event.eventDate,
-    getLocalStartMinute(event),
     normalizeVenueKey(event.venueName),
     normalizeTitleCore(event.eventTitle),
   ].join("|");
+}
+
+// Chain-clusters a (date, venue, title-core) group by local start time. A timed
+// event joins the current cluster only while it stays within
+// FUZZY_START_WINDOW_MINUTES of the cluster's earliest member (the anchor), so
+// 7:00 + 8:00 merge but 7:00 + 8:15 + 9:30 never collapse into one. TBA events
+// join the group's timed cluster only when exactly one exists; otherwise they
+// stay together as their own cluster rather than guessing.
+function clusterByStartTime<EventType extends CanonicalEventRecord>(
+  candidates: Array<ScoredEvent<EventType>>
+): Array<Array<ScoredEvent<EventType>>> {
+  const timed = candidates
+    .filter((candidate) => candidate.startMinuteOfDay !== null)
+    .sort(
+      (a, b) =>
+        (a.startMinuteOfDay ?? 0) - (b.startMinuteOfDay ?? 0) ||
+        a.event.id.localeCompare(b.event.id)
+    );
+  const untimed = candidates.filter((candidate) => candidate.startMinuteOfDay === null);
+
+  const clusters: Array<Array<ScoredEvent<EventType>>> = [];
+  let anchorMinute: number | null = null;
+
+  for (const candidate of timed) {
+    const minute = candidate.startMinuteOfDay as number;
+    if (anchorMinute === null || minute - anchorMinute > FUZZY_START_WINDOW_MINUTES) {
+      clusters.push([candidate]);
+      anchorMinute = minute;
+    } else {
+      clusters[clusters.length - 1].push(candidate);
+    }
+  }
+
+  if (untimed.length > 0) {
+    if (clusters.length === 1) {
+      clusters[0].push(...untimed);
+    } else {
+      clusters.push(untimed);
+    }
+  }
+
+  return clusters;
+}
+
+function buildClusterKey<EventType extends CanonicalEventRecord>(
+  baseKey: string,
+  cluster: Array<ScoredEvent<EventType>>
+) {
+  const [eventDate, venue, titleCore] = baseKey.split("|");
+  const anchorLabel = cluster[0]?.startMinuteLabel ?? "tba";
+  return [eventDate, anchorLabel, venue, titleCore].join("|");
+}
+
+function clusterSpansStartTimes<EventType extends CanonicalEventRecord>(
+  cluster: Array<ScoredEvent<EventType>>
+) {
+  return new Set(cluster.map((candidate) => candidate.startMinuteLabel)).size > 1;
+}
+
+function minuteLabelToMinuteOfDay(label: string) {
+  const match = label.match(/^(\d{2}):(\d{2})$/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 }
 
 function scoreEventQuality(event: CanonicalEventRecord): EventCanonicalQuality {

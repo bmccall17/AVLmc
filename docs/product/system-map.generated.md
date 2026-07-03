@@ -96,7 +96,7 @@ Fetches the AVLgo feed, normalizes fields, filters to music events, applies the 
 
 #### Deduplication  `svc-event-dedupe`
 
-Groups near-identical events and picks a canonical record, hiding the rest. Surfaces the audit in the admin Gaps tab.
+Groups near-identical events with fuzzy time bucketing — start times within FUZZY_START_WINDOW_MINUTES (90) of a cluster's earliest member merge — and picks a canonical record, hiding the rest. Surfaces the audit in the admin Gaps tab.
 
 - **Kind:** Service
 - **Source of truth:** `lib/event-dedupe.ts`
@@ -104,7 +104,7 @@ Groups near-identical events and picks a canonical record, hiding the rest. Surf
 - **Ownership:** automated
 - **Implementation notes:**
   - _Param mapping:_ The grouping key is normalizeVenueKey(venue) + normalizeTitleCore(title) — article/plural-stripped word tokens — not the raw strings, so 'The Orange Peel' and 'Orange Peel' collapse.
-  - _Note:_ getCanonicalEvents picks one winner per normalized (venue, title-core, date) signature and hides the rest; the audit feeds the admin Gaps tab.
+  - _Note:_ getCanonicalEvents picks one winner per normalized (venue, title-core, date) signature — clustering start times within a 90-minute fuzzy window so cross-source doors-vs-showtime copies collapse — and hides the rest; the audit feeds the admin Gaps tab.
 - **Flows to / depends on:**
   - → events (flowsTo) — upsert canonical
 - **Fed by / required by:**

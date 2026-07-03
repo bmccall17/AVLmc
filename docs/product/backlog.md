@@ -1,6 +1,6 @@
 # AVL Music Companion Backlog
 
-Updated: July 2, 2026
+Updated: July 3, 2026
 
 ## Urgent
 
@@ -113,6 +113,15 @@ Updated: July 2, 2026
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
 ## Done
+
+* **Cross-source duplicate event unification (Phase 18, PRD 06)** — Shipped (July 3, 2026). The dedupe
+  pipeline (`lib/event-dedupe.ts`) now fuzzy-buckets start times: cross-source copies of the same show
+  within 90 minutes (`FUZZY_START_WINDOW_MINUTES`) at the same date/venue/title-core collapse to one
+  canonical card, anchored to the cluster's earliest start so runs of distinct shows never chain-merge;
+  TBA copies join only an unambiguous timed cluster. The real Spoon @ Orange Peel pair (Jul 5, 2026)
+  verified merged against prod rows; fuzzy merges now appear in the admin Gaps audit with a
+  `merged: start times within 90 minutes across sources` reason. Later phase (unscheduled): DB cleanup
+  of hidden loser rows. See [PRD 06](prds/prd-06-cross-source-duplicate-unification.md).
 
 * **Open Spotify Access epic (Phase 17, PRDs 42–45)** — Shipped (July 2, 2026), four cycles in one
   sprint; see [`spotify-access-prd.md`](spotify-access-prd.md) for the epic record. Closes the July 2

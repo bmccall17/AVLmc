@@ -302,7 +302,7 @@ const NODES: RegistryNode[] = [
     layer: "processing",
     label: "Deduplication",
     description:
-      "Groups near-identical events and picks a canonical record, hiding the rest. Surfaces the audit in the admin Gaps tab.",
+      "Groups near-identical events with fuzzy time bucketing — start times within FUZZY_START_WINDOW_MINUTES (90) of a cluster's earliest member merge — and picks a canonical record, hiding the rest. Surfaces the audit in the admin Gaps tab.",
     sourceOfTruth: "lib/event-dedupe.ts",
     access: "internal",
     ownership: "automated",
@@ -315,7 +315,7 @@ const NODES: RegistryNode[] = [
       {
         kind: "note",
         detail:
-          "getCanonicalEvents picks one winner per normalized (venue, title-core, date) signature and hides the rest; the audit feeds the admin Gaps tab.",
+          "getCanonicalEvents picks one winner per normalized (venue, title-core, date) signature — clustering start times within a 90-minute fuzzy window so cross-source doors-vs-showtime copies collapse — and hides the rest; the audit feeds the admin Gaps tab.",
       },
     ],
   },

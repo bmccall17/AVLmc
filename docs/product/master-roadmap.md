@@ -29,6 +29,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 15 | [Reliable Account Sign-In & Spotify Connection (Epic)](account-signin-linking-prd.md) | Shipped & proven by executed tests (C1–C4; live in-browser OAuth pass is the only manual remainder) | Make the two Phase 14 sign-in methods resolve to **one** identity: merge-safe account linking (magic-link ↔ Spotify, no duplicate `users` row, no lost data), a Spotify tester-slot access request while Spotify is in Development Mode, clear/recoverable auth & linking failures (no more "Beta testing"/redirect-loop/stale-session dead-ends), and a repeatable cross-browser test of the whole loop. `$0`, anonymous-first, no Spotify writes. Driven by [`account-signin-linking_desiredoutcomes.md`](account-signin-linking_desiredoutcomes.md). PRDs 35–38 across four cycles. |
 | 16 | [Design-System Readability & Integrity Repair (Epic)](design-system-readability-prd.md) | C1–C2 Shipped (Jun 25, 2026); C3 in progress | Repair the split design system the June 25 audit found (light tokens leaking into dark routes → unreadable pages) with one canonical dark route-shell token context, fix the functional blockers surfaced as design failures (`/icon.png`, silent admin failures, form labels, auth mobile CTA), and codify the result in the design spec + a readability smoke test. `$0`, no new deps, dark-mode-exclusive. PRDs 39–41 across three cycles. |
 | 17 | [Open Spotify Access (Epic)](spotify-access-prd.md) | C1–C4 shipped (Jul 2, 2026); Extension Request awaiting owner filing | Any listener with an active Spotify account can sign in, connect, and have their taste persistently feed discovery — one account per person, no dead ends. While Spotify's 25-seat Development Mode cap applies: capture sign-in intent at the exact moment it's expressed (pre-redirect chooser + gate, anonymous `tester_requests` capture with owner notification + invite loop), auto-link the two email-verified doors onto one identity, and file the Extended Quota exit ramp so the gate retires with one `SPOTIFY_OPEN_ACCESS` flag flip. `$0`, read-only scopes, no Spotify writes. PRDs 42–45 across four cycles. |
+| 18 | [Cross-Source Duplicate Event Unification](prds/prd-06-cross-source-duplicate-unification.md) | Shipped (Jul 3, 2026) | Collapse cross-source copies of the same show (doors-vs-showtime listings, e.g. the Spoon @ Orange Peel pair) into one canonical card via fuzzy time bucketing in `lib/event-dedupe.ts`, while keeping legitimate same-night repeats and distinctly titled early/late shows separate. Pure read-path change; `$0`. |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
@@ -570,6 +571,20 @@ spec is now rewritten to match the real CSS-custom-property implementation.
 | C1 | [PRD 39: Dark Route-Shell Readability & Token Consolidation](prds/prd-39-dark-route-shell-readability.md) | Legible non-home surfaces; consolidated tokens | **Shipped** |
 | C2 | [PRD 40: Legible Failure States & Functional Integrity](prds/prd-40-legible-failure-states-and-integrity.md) | Error/404/auth legibility + mobile CTA; `/icon.png`; honest admin failures; labeled form | **Shipped** |
 | C3 | [PRD 41: Design-System Codification & Visual Guardrails](prds/prd-41-design-system-codification.md) | Spec rewrite (done); local-DB degradation + readability smoke test (open) | In progress |
+
+### Phase 18: Cross-Source Duplicate Event Unification (shipped Jul 3, 2026)
+
+A single-PRD data-quality fix tracked by
+[PRD 06: Cross-Source Duplicate Event Unification](prds/prd-06-cross-source-duplicate-unification.md).
+Different feeds report different start times for the same show (doors vs. showtime), so cross-source
+copies landed in different dedupe groups and both rendered — the Spoon @ The Orange Peel pair (Jul 5,
+2026, 7:00 PM EXPLORE_ASHEVILLE vs 8:00 PM ORANGE_PEEL) was the reference case. The dedupe pipeline
+(`lib/event-dedupe.ts`) now chain-clusters events within a (date, venue, title-core) group when start
+times fall within `FUZZY_START_WINDOW_MINUTES` (90) of the cluster's earliest member, anchored to
+prevent chain collapse; TBA copies join only an unambiguous single timed cluster. Winner scoring is
+unchanged, the canonical keeps its own start time, and fuzzy merges surface in the admin Gaps audit
+with a `merged: start times within 90 minutes across sources` reason. Verified against the live prod
+rows; regression-locked by a real-fixture test. DB cleanup of hidden loser rows stays a later phase.
 
 ## Scaling Milestones & Tracking
 
