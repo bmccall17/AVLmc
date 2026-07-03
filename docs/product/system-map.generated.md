@@ -351,6 +351,7 @@ Append-only record of scheduled job outcomes (start, finish, success/failure, it
 - **Fed by / required by:**
   - ← AVLgo Sync (cron) (flowsTo) — records outcome
   - ← Image Cleanup (cron) (flowsTo) — records outcome
+  - ← Hero Image Backfill (manual) (flowsTo) — records outcome
 
 #### admin_resources  `db-admin-resources`
 
@@ -1221,6 +1222,20 @@ Daily scheduled cleanup of stale cached event images from blob storage (11:00 UT
   - → Vercel Blob (flowsTo) — delete stale images
   - → system_job_runs (flowsTo) — records outcome
 
+#### Hero Image Backfill (manual)  `job-image-backfill`
+
+Manual repair pass that re-ingests stored expiring Facebook CDN image URLs into Blob and clears dead ones to NULL (PRD 06).
+
+- **Kind:** Scheduled job
+- **Source of truth:** `app/api/sync/backfill-images/route.ts`
+- **Access:** internal
+- **Ownership:** manual
+- **Implementation notes:**
+  - _Note:_ Idempotent GET; scans rows with fbcdn image URLs, uploads still-live ones to Blob, nulls the rest so the initials fallback is intentional. Records the run via recordJobRun (job: image_backfill). Precedence rules live in lib/image-resilience.ts.
+- **Flows to / depends on:**
+  - → Vercel Blob (flowsTo) — re-ingest images
+  - → system_job_runs (flowsTo) — records outcome
+
 #### Vercel Blob  `int-blob`
 
 Stores cached event images so cards stay fast and the upstream feed isn't hammered.
@@ -1236,6 +1251,7 @@ Stores cached event images so cards stay fast and the upstream feed isn't hammer
 - **Fed by / required by:**
   - ← Event Ingestion (flowsTo) — cache images
   - ← Image Cleanup (cron) (flowsTo) — delete stale images
+  - ← Hero Image Backfill (manual) (flowsTo) — re-ingest images
 
 #### Umami Analytics  `int-umami`
 
@@ -1421,6 +1437,8 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | Image Cleanup (cron) | → | Vercel Blob | flowsTo | delete stale images |
 | AVLgo Sync (cron) | → | system_job_runs | flowsTo | records outcome |
 | Image Cleanup (cron) | → | system_job_runs | flowsTo | records outcome |
+| Hero Image Backfill (manual) | → | Vercel Blob | flowsTo | re-ingest images |
+| Hero Image Backfill (manual) | → | system_job_runs | flowsTo | records outcome |
 | Umami Analytics | → | Admin Portal | flowsTo | stats read back |
 | Umami Analytics | → | Homepage | dependsOn | tracks usage |
 | Admin Data Loader | → | events | dependsOn | reads counts |
@@ -1434,4 +1452,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_79 nodes, 106 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_80 nodes, 108 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

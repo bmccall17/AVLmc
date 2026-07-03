@@ -9,6 +9,7 @@
     "lint": "eslint . --max-warnings=0",
     "test:discovery": "rm -rf /tmp/avlmc-discovery-tests && tsc -p tests/tsconfig.discovery.json && node --test /tmp/avlmc-discovery-tests/tests/discovery-scoring.test.js",
     "test:event-dedupe": "rm -rf /tmp/avlmc-event-dedupe-tests && tsc --target es2022 --module commonjs --moduleResolution node --rootDir . --outDir /tmp/avlmc-event-dedupe-tests --esModuleInterop --skipLibCheck --strict tests/event-dedupe.test.ts lib/event-dedupe.ts && node --test /tmp/avlmc-event-dedupe-tests/tests/event-dedupe.test.js",
+    "test:image-resilience": "rm -rf /tmp/avlmc-image-resilience-tests && tsc --target es2022 --module commonjs --moduleResolution node --rootDir . --outDir /tmp/avlmc-image-resilience-tests --esModuleInterop --skipLibCheck --strict tests/image-resilience.test.ts lib/image-resilience.ts && node --test /tmp/avlmc-image-resilience-tests/tests/image-resilience.test.js",
     "test:taxonomy": "rm -rf /tmp/avlmc-taxonomy-tests && tsc -p tests/tsconfig.taxonomy.json && node --test /tmp/avlmc-taxonomy-tests/tests/genre-taxonomy.test.js",
     "test:shared-songs": "rm -rf /tmp/avlmc-shared-songs-tests && tsc -p tests/tsconfig.shared-songs.json && node --test /tmp/avlmc-shared-songs-tests/tests/shared-songs.test.js",
     "test:insight": "rm -rf /tmp/avlmc-insight-tests && tsc -p tests/tsconfig.insight.json && node --test /tmp/avlmc-insight-tests/tests/insight-metrics.test.js",

@@ -1651,6 +1651,24 @@ const NODES: RegistryNode[] = [
     ],
   },
   {
+    id: "job-image-backfill",
+    kind: "job",
+    layer: "operations",
+    label: "Hero Image Backfill (manual)",
+    description:
+      "Manual repair pass that re-ingests stored expiring Facebook CDN image URLs into Blob and clears dead ones to NULL (PRD 06).",
+    sourceOfTruth: "app/api/sync/backfill-images/route.ts",
+    access: "internal",
+    ownership: "manual",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Idempotent GET; scans rows with fbcdn image URLs, uploads still-live ones to Blob, nulls the rest so the initials fallback is intentional. Records the run via recordJobRun (job: image_backfill). Precedence rules live in lib/image-resilience.ts.",
+      },
+    ],
+  },
+  {
     id: "int-blob",
     kind: "integration",
     layer: "operations",
@@ -1882,6 +1900,8 @@ const EDGES: RegistryEdge[] = [
   { from: "job-cleanup", to: "int-blob", kind: "flowsTo", label: "delete stale images" },
   { from: "job-avlgo-sync", to: "db-job-runs", kind: "flowsTo", label: "records outcome" },
   { from: "job-cleanup", to: "db-job-runs", kind: "flowsTo", label: "records outcome" },
+  { from: "job-image-backfill", to: "int-blob", kind: "flowsTo", label: "re-ingest images" },
+  { from: "job-image-backfill", to: "db-job-runs", kind: "flowsTo", label: "records outcome" },
   { from: "int-umami", to: "ui-admin", kind: "flowsTo", label: "stats read back" },
   { from: "int-umami", to: "ui-homepage", kind: "dependsOn", label: "tracks usage" },
   { from: "svc-admin-data", to: "db-events", kind: "dependsOn", label: "reads counts" },

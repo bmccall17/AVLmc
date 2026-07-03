@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getCommunityCountsByEvent, type CommunityCounts } from "@/lib/community";
 import {
   isUsingCustomAvlgoFeed,
-  syncUpcomingEvents,
+  syncUpcomingEventsDetailed,
   syncUpcomingEventsWithDuplicateAudit,
   type EventSyncWithDuplicateAudit,
 } from "@/lib/events";
+import { describeImageIngestStats } from "@/lib/image-resilience";
 import { recordJobRun } from "@/lib/admin/job-runs";
 
 export async function GET(request: Request) {
@@ -21,7 +22,10 @@ export async function GET(request: Request) {
         job: "avlgo_sync",
         status: "success",
         itemsProcessed: result.events.length,
-        detail: `audit mode · ${duplicateGroups.length} duplicate groups`,
+        detail: joinDetail(
+          `audit mode · ${duplicateGroups.length} duplicate groups`,
+          describeImageIngestStats(result.imageStats)
+        ),
         startedAt,
       });
 
@@ -29,6 +33,7 @@ export async function GET(request: Request) {
         ...baseSyncResponse(),
         eventCount: result.events.length,
         events: result.events,
+        imageStats: result.imageStats,
         duplicateAudit: {
           duplicateGroupCount: duplicateGroups.length,
           incomingDuplicateGroupCount: result.incomingDuplicateAudit.length,
@@ -38,19 +43,21 @@ export async function GET(request: Request) {
       });
     }
 
-    const events = await syncUpcomingEvents();
+    const { events, imageStats } = await syncUpcomingEventsDetailed();
 
     await recordJobRun({
       job: "avlgo_sync",
       status: "success",
       itemsProcessed: events.length,
+      detail: describeImageIngestStats(imageStats),
       startedAt,
     });
 
     return NextResponse.json({
       ...baseSyncResponse(),
       eventCount: events.length,
-      events
+      events,
+      imageStats
     });
   } catch (error) {
     await recordJobRun({
@@ -61,6 +68,11 @@ export async function GET(request: Request) {
     });
     throw error;
   }
+}
+
+function joinDetail(...parts: Array<string | null>) {
+  const present = parts.filter(Boolean);
+  return present.length > 0 ? present.join(" · ") : null;
 }
 
 function baseSyncResponse() {

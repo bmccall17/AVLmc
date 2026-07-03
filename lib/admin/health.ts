@@ -66,6 +66,7 @@ const SEVERITY_RANK: Record<HealthSeverity, number> = {
 const CRON_SCHEDULES: Record<JobName, string> = {
   avlgo_sync: "0 10 * * *",
   cleanup: "0 11 * * *",
+  image_backfill: "manual",
 };
 
 export async function loadSystemHealth(force = false): Promise<SystemHealth> {

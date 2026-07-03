@@ -532,7 +532,7 @@ create index if not exists event_shared_songs_event_status_idx
 -- ---- Operations: scheduled-job observability -----------------------------------
 create table if not exists public.system_job_runs (
   id text primary key,
-  job text not null check (job in ('avlgo_sync', 'cleanup')),
+  job text not null check (job in ('avlgo_sync', 'cleanup', 'image_backfill')),
   status text not null check (status in ('success', 'failure')),
   detail text,
   items_processed integer,
@@ -540,6 +540,11 @@ create table if not exists public.system_job_runs (
   finished_at timestamptz not null default now(),
   duration_ms integer
 );
+
+alter table public.system_job_runs
+  drop constraint if exists system_job_runs_job_check;
+alter table public.system_job_runs
+  add constraint system_job_runs_job_check check (job in ('avlgo_sync', 'cleanup', 'image_backfill'));
 
 create index if not exists system_job_runs_job_finished_idx
   on public.system_job_runs (job, finished_at desc);

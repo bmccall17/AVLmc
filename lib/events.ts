@@ -5,6 +5,13 @@ import {
   type EventDuplicateAuditGroup,
 } from "@/lib/event-dedupe";
 import { ingestImageToBlob, deleteImageBlob } from "@/lib/blob-storage";
+import {
+  emptyImageIngestStats,
+  isBlobImageUrl,
+  isExpiringImageUrl,
+  resolveStoredImageUrl,
+  type ImageIngestStats,
+} from "@/lib/image-resilience";
 
 export type EventRecord = {
   id: string;
@@ -47,6 +54,12 @@ export type EventSyncWithDuplicateAudit = {
   duplicateAudit: EventDuplicateAuditGroup[];
   incomingDuplicateAudit: EventDuplicateAuditGroup[];
   storedDuplicateAudit: EventDuplicateAuditGroup[];
+  imageStats: ImageIngestStats;
+};
+
+export type EventSyncResult = {
+  events: EventRecord[];
+  imageStats: ImageIngestStats;
 };
 
 type EventRow = {
@@ -174,16 +187,21 @@ export async function getEventById(id: string): Promise<EventRecord | null> {
 }
 
 export async function syncUpcomingEvents(now = new Date()): Promise<EventRecord[]> {
+  const { events } = await syncUpcomingEventsDetailed(now);
+  return events;
+}
+
+export async function syncUpcomingEventsDetailed(now = new Date()): Promise<EventSyncResult> {
   const { events: rawEvents, shouldPersist } = await getRawEvents(now);
   const normalized = normalizeEvents(rawEvents, now);
 
   if (shouldPersist && normalized.length > 0) {
-    await ingestImagesForEvents(normalized);
+    const imageStats = await ingestImagesForEvents(normalized);
     await upsertEvents(normalized);
-    return listUpcomingEventsFromDatabase(now);
+    return { events: await listUpcomingEventsFromDatabase(now), imageStats };
   }
 
-  return normalized;
+  return { events: normalized, imageStats: emptyImageIngestStats() };
 }
 
 export async function syncUpcomingEventsWithDuplicateAudit(
@@ -195,7 +213,7 @@ export async function syncUpcomingEventsWithDuplicateAudit(
   const normalized = getCanonicalEvents(normalizedCandidates).sort(compareByDateTime);
 
   if (shouldPersist && normalized.length > 0) {
-    await ingestImagesForEvents(normalized);
+    const imageStats = await ingestImagesForEvents(normalized);
     await upsertEvents(normalized);
 
     const storedCandidates = await listUpcomingEventsFromDatabase(now, { dedupe: false });
@@ -206,6 +224,7 @@ export async function syncUpcomingEventsWithDuplicateAudit(
       duplicateAudit: mergeDuplicateAuditGroups(storedDuplicateAudit, incomingDuplicateAudit),
       incomingDuplicateAudit,
       storedDuplicateAudit,
+      imageStats,
     };
   }
 
@@ -214,6 +233,7 @@ export async function syncUpcomingEventsWithDuplicateAudit(
     duplicateAudit: incomingDuplicateAudit,
     incomingDuplicateAudit,
     storedDuplicateAudit: [],
+    imageStats: emptyImageIngestStats(),
   };
 }
 
@@ -359,16 +379,103 @@ async function getEventByIdFromDatabase(id: string) {
   return result.rows[0] ? mapEventRow(result.rows[0]) : null;
 }
 
-async function ingestImagesForEvents(events: EventRecord[]) {
-  const promises = events.map(async (event) => {
-    if (event.imageUrl && event.imageUrl.includes("fbcdn.net")) {
-      const blobUrl = await ingestImageToBlob(event.imageUrl, event.id);
+async function ingestImagesForEvents(events: EventRecord[]): Promise<ImageIngestStats> {
+  const stats = emptyImageIngestStats();
+  const expiring = events.filter((event) => isExpiringImageUrl(event.imageUrl));
+  if (expiring.length === 0) {
+    return stats;
+  }
+
+  const storedUrlsById = await getStoredImageUrls(expiring.map((event) => event.id));
+
+  await Promise.allSettled(
+    expiring.map(async (event) => {
+      const stored = storedUrlsById.get(event.id) ?? null;
+
+      // Already durably ingested on a previous sync — keep the blob, skip the upload.
+      if (isBlobImageUrl(stored)) {
+        event.imageUrl = stored;
+        stats.reused += 1;
+        return;
+      }
+
+      const blobUrl = await ingestImageToBlob(event.imageUrl as string, event.id);
       if (blobUrl) {
         event.imageUrl = blobUrl;
+        stats.ingested += 1;
+        return;
       }
+
+      stats.failed += 1;
+      event.imageUrl = resolveStoredImageUrl(stored, event.imageUrl);
+      if (!event.imageUrl) {
+        stats.deadSkipped += 1;
+      }
+    })
+  );
+
+  return stats;
+}
+
+async function getStoredImageUrls(eventIds: string[]): Promise<Map<string, string | null>> {
+  if (eventIds.length === 0) {
+    return new Map();
+  }
+
+  const result = await query<{ id: string; image_url: string | null }>(
+    `
+      select id, image_url
+      from public.events
+      where id = any($1)
+    `,
+    [eventIds]
+  );
+
+  return new Map(result.rows.map((row) => [row.id, row.image_url]));
+}
+
+export type ImageBackfillResult = {
+  scanned: number;
+  repaired: number;
+  cleared: number;
+};
+
+/**
+ * One-time repair for rows persisted before the resilience rules existed: re-ingests any stored
+ * expiring-CDN URL that still resolves, and clears the rest to NULL so the placeholder renders
+ * intentionally instead of a broken image.
+ */
+export async function backfillDeadImageUrls(): Promise<ImageBackfillResult> {
+  const result = await query<{ id: string; image_url: string }>(
+    `
+      select id, image_url
+      from public.events
+      where image_url like '%fbcdn.net%'
+    `
+  );
+
+  let repaired = 0;
+  let cleared = 0;
+  const updatedAt = new Date().toISOString();
+
+  for (const row of result.rows) {
+    const blobUrl = await ingestImageToBlob(row.image_url, row.id);
+    await query(
+      `
+        update public.events
+        set image_url = $2, updated_at = $3
+        where id = $1
+      `,
+      [row.id, blobUrl, updatedAt]
+    );
+    if (blobUrl) {
+      repaired += 1;
+    } else {
+      cleared += 1;
     }
-  });
-  await Promise.allSettled(promises);
+  }
+
+  return { scanned: result.rows.length, repaired, cleared };
 }
 
 async function upsertEvents(events: EventRecord[]) {
@@ -432,7 +539,18 @@ async function upsertEventBatch(events: EventRecord[], updatedAt: string) {
         event_time = excluded.event_time,
         starts_at = excluded.starts_at,
         event_url = excluded.event_url,
-        image_url = excluded.image_url,
+        -- Image precedence (PRD 06; mirrors lib/image-resilience resolveStoredImageUrl):
+        -- a stored blob URL is durable and only another blob URL may replace it; a stored
+        -- expiring-CDN URL is never worth keeping; otherwise an incoming NULL never erases
+        -- a working stored image.
+        image_url = case
+          when events.image_url like '%blob.vercel-storage.com%'
+               and coalesce(excluded.image_url, '') not like '%blob.vercel-storage.com%'
+            then events.image_url
+          when events.image_url like '%fbcdn.net%'
+            then excluded.image_url
+          else coalesce(excluded.image_url, events.image_url)
+        end,
         source = excluded.source,
         tags = excluded.tags,
         updated_at = excluded.updated_at
