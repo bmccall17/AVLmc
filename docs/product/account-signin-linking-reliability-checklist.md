@@ -41,7 +41,8 @@ that don't need live OAuth (the data-integrity invariants — see `lib/account-i
 | No-reset data integrity (one user, expected accounts/emails, no orphaned data) | engine-independent | **Automated** — `npm run test:account-integrity` (`lib/account-integrity.ts`), and exercised live by `test:account-loop`. |
 | Failure taxonomy mapping (Auth.js params + our codes) | engine-independent | **Automated** — `npm run test:auth-failures`. |
 | **Magic-link email rendering** (branded dark-mode body: true-black bg, white-on-black sign-in button, uppercase-tracked metadata, sign-in URL present + HTML-escaped) | engine-independent | **Automated** — `npm run test:auth-email` (`lib/auth-email.ts` `renderMagicLinkEmail`, 4 assertions). The *rendered look* in real mail clients is the manual leg-1 check below. |
-| Sign-in / linking / request / approval / reconnection legs (live OAuth + magic-link side effects) | all | **Manual** — needs live Spotify credentials + a real mail click; run the six-leg script below. |
+| Sign-in / linking / request / approval / reconnection legs (live OAuth + magic-link side effects) | all | **Manual** — needs live Spotify credentials + a real mail click; run the eight-leg script below (legs 7–8 added July 3, 2026 for the Phase 17 auto-link + chooser/gate changes). |
+| **PRD 44 convergence in real SQL** (email-first → fresh Spotify sign-in links; Spotify-first → magic link resolves; mismatch edge) | real Postgres | **Automated & executed** (Jul 2, 2026, throwaway Neon branch) — `npm run test:one-identity` (`tests/one-identity.integration.mts`), 9/9. The live-browser leg 7 below confirms the same path through the real Auth.js runtime. |
 | WebKit/Safari + mobile + in-app-webview cells | WebKit / devices | **Manual** — WebKit's system libraries aren't installable in the CI sandbox; run on a real Mac/iOS device. |
 
 Run the automated layer with `npm run test:e2e && npm run test:account-integrity && npm run test:auth-failures && npm run test:auth-email`.
@@ -58,8 +59,10 @@ run them through the data-integrity assertions below.
    is the **branded dark-mode** body (true-black background, white-on-black "Sign in to AVL Music Companion"
    button, uppercase-tracked footer), not the Auth.js stock template — and the button + fallback link both
    open the sign-in URL. (`lib/auth-email.ts`; rendering is unit-tested by `npm run test:auth-email`.)
-2. **Sign-in (Spotify).** From a fresh browser, Connect Spotify. *Assert:* either an account is created (if
-   allowlisted) or the PRD 37 `spotify_limited_beta` recovery shows **Request access** (not a dead-end).
+2. **Sign-in (Spotify).** From a fresh browser, Continue with Spotify. *Assert (updated for
+   PRD 43):* the **chooser/gate intercepts before any redirect** — an allowlisted email passes
+   straight to Spotify consent and an account is created; a non-allowlisted email lands on the
+   inline tester-request form (never on Spotify's 403, never on a dead-end).
 3. **Linking — email → Spotify.** Signed in via magic link, Connect Spotify. *Assert:* one `users` row, two
    `accounts` rows (`resend` + `spotify`), both emails in `user_emails` (one primary), `lower(email)` unique.
 4. **Linking — Spotify → email.** Signed in via Spotify, add email access. *Assert:* same as leg 3 from the
@@ -71,6 +74,18 @@ run them through the data-integrity assertions below.
 6. **Returning-user session.** Close and reopen the browser. *Assert:* the session resumes to the same
    identity — no redirect loop, no stale-session error. Then sign in via the **secondary (Spotify-sourced)**
    email and *assert* it resolves to the same account.
+7. **PRD 44 auto-link — the July 2 brick, now expected to converge.** With an existing email-first
+   account, from a **fresh signed-out browser**, Continue with Spotify using a Spotify account whose
+   email **matches** the account email. *Assert:* sign-in completes onto the **existing** account —
+   no `OAuthAccountNotLinked`, no new `users` row — with the `spotify` `accounts` row added,
+   `music_connections` written, taste import runnable, and prior saves/follows/preferences intact
+   (run the integrity assertions). This is the audit condition on the PRD 44 stance change.
+8. **PRD 42/43 anonymous tester loop.** From a fresh browser with a never-seen email: Continue with
+   Spotify → gate asks for the email → *assert* the request form appears pre-filled → apply →
+   *assert* the owner-notification email arrives and the request shows at `/admin/spotify-access`
+   (seat counter spans both stores) → allowlist in the Spotify dashboard, then **Approve + invite**
+   → *assert* the "you're in" email arrives → from the invite, sign in with Spotify → *assert* the
+   gate passes straight through to consent and the account is created.
 
 ## Data-integrity assertions (the no-reset guarantee, checked)
 
@@ -95,7 +110,7 @@ manual pass confirms it renders per browser:
 | --- | --- | --- |
 | `spotify_limited_beta` | Connect Spotify while not allowlisted | "invite-only" → **Request access** / use email |
 | `access_denied` | Cancel the Spotify consent screen | "cancelled" → **retry** / use email |
-| `duplicate_account` | Connect a Spotify whose email is on a different account | "already belongs to an account" → **sign in there, then link** (never "merge anyway") |
+| `duplicate_account` | Connect a Spotify whose email **differs** from the account email (PRD 44: a *matching* verified email now auto-links instead of erroring — leg 7) | "uses a different email" → **sign in there, then link** (never "merge anyway") |
 | `redirect_loop` | Interrupt/loop the sign-in | "didn't complete" → **sign out & retry** |
 | `stale_session` | Resume with an expired session | "session expired" → **sign out & sign back in** |
 | `browser_fallback` | Open in an in-app webview / cookies blocked | "open in your default browser" |
@@ -108,6 +123,10 @@ PRDs 35–37 (and any future provider sprint) are graded against this:
 - [ ] Any recorded, verified email resolves to the one account (leg 6 secondary-email check).
 - [ ] No preferences / follows / curator status / saved items lost on linking (integrity assertions).
 - [ ] Non-allowlisted tester can request access, be slot-added, and retry onto the existing account (leg 5).
+- [ ] A fresh signed-out Spotify sign-in on an existing **matching** email converges onto that account —
+      `OAuthAccountNotLinked` unreachable on this path (leg 7, the PRD 44 audit condition).
+- [ ] The anonymous tester loop closes end-to-end: gate catch → apply → owner notified → approve+invite →
+      gated sign-in passes (leg 8, PRDs 42/43).
 - [ ] Every named failure state renders recoverable copy + one action across the matrix (failure-state table).
 - [ ] Returning users resume to the same identity with no loop / stale-session dead-end (leg 6).
 - [ ] The magic-link email renders in the branded dark-mode design with a working sign-in button (leg 1 + `test:auth-email`).
