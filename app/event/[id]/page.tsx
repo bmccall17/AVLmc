@@ -202,20 +202,21 @@ export default async function EventPage({ params }: EventPageProps) {
         initialDiscoveryState={discoveryStates[event.id]}
         initialCommunity={publicCommunity}
         spotifySearchEnabled={spotifySearchEnabled}
+        topTracksSlot={
+          artistMatch ? (
+            <ArtistEmbed
+              artistName={event.artistName}
+              eventId={event.id}
+              isSignedIn={isSignedIn}
+              spotifyArtistId={artistMatch.spotifyArtistId}
+              spotifyArtistName={artistMatch.spotifyArtistName}
+              spotifyConnected={spotifySearchEnabled}
+            />
+          ) : null
+        }
       />
 
       <CirclePresence activity={circleActivity} />
-
-      {artistMatch ? (
-        <ArtistEmbed
-          artistName={event.artistName}
-          eventId={event.id}
-          isSignedIn={isSignedIn}
-          spotifyArtistId={artistMatch.spotifyArtistId}
-          spotifyArtistName={artistMatch.spotifyArtistName}
-          spotifyConnected={spotifySearchEnabled}
-        />
-      ) : null}
 
       <SharedListening
         eventId={event.id}

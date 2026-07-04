@@ -104,7 +104,7 @@ export type ResolveOutcome =
     }
   | { result: "rejected" }
   | { result: "skipped"; reason: string }
-  | { result: "error"; reason: string };
+  | { result: "error"; reason: string; retryAfterSeconds?: number };
 
 /**
  * Fetch + store an artist's top tracks, swallowing a Spotify failure (returns the reason string)
@@ -228,9 +228,10 @@ export async function resolveAndStoreArtistMatch(input: {
       return { result: "skipped", reason: "table not migrated" };
     }
     if (error instanceof SpotifyAppTokenError) {
-      // Surface the status so the backfill can back off on 429/5xx and resume later.
+      // Surface the status so the backfill can back off on 429/5xx and resume later, plus the
+      // Retry-After (seconds) Spotify asked for so the caller can wait exactly long enough.
       const reason = error.status ? `spotify ${error.status}` : error.message;
-      return { result: "error", reason };
+      return { result: "error", reason, retryAfterSeconds: error.retryAfterSeconds };
     }
     throw error;
   }
@@ -328,6 +329,8 @@ export type ArtistMatchBackfillSummary = {
   remaining: number;
   /** True when a Spotify 429/5xx made us stop early — the next run resumes where this left off. */
   backedOff: boolean;
+  /** Seconds to wait before the next run, from Spotify's 429 `Retry-After` (when it sent one). */
+  retryAfterSeconds?: number;
 };
 
 /**
@@ -418,6 +421,9 @@ export async function runArtistMatchBackfill(options: {
         // A Spotify 429/5xx means rate-limited/degraded — stop and let the next run resume.
         if (/\b(429|5\d\d)\b/.test(outcome.reason)) {
           summary.backedOff = true;
+          if (outcome.retryAfterSeconds !== undefined) {
+            summary.retryAfterSeconds = outcome.retryAfterSeconds;
+          }
         }
         break;
       default:

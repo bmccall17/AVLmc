@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type {
   CommunityCounts,
@@ -28,6 +28,8 @@ type CommunityPanelProps = {
   initialDiscoveryState?: DiscoveryPersonEventState;
   initialCommunity: PublicEventCommunity;
   spotifySearchEnabled: boolean;
+  /** Optional artist "top tracks" player, rendered between the Community signal strip and the Songs/Notes grid. */
+  topTracksSlot?: ReactNode;
 };
 
 type FormState = {
@@ -51,6 +53,7 @@ export function CommunityPanel({
   initialDiscoveryState,
   initialCommunity,
   spotifySearchEnabled,
+  topTracksSlot,
 }: CommunityPanelProps) {
   const [community, setCommunity] = useState(initialCommunity);
   const [discoveryState, setDiscoveryState] = useState(
@@ -366,6 +369,8 @@ export function CommunityPanel({
       </div>
 
       <FormMessage state={reactionState} />
+
+      {topTracksSlot}
 
       <div className="contribution-grid">
         <ContributionList empty="No songs yet." items={grouped.songs} title={`Songs (${community.songs})`} />

@@ -28,11 +28,14 @@ import {
 
 export class SpotifyAppTokenError extends Error {
   status?: number;
+  /** Seconds Spotify asked us to wait (from the 429 `Retry-After` header), when present. */
+  retryAfterSeconds?: number;
 
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, retryAfterSeconds?: number) {
     super(message);
     this.name = "SpotifyAppTokenError";
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -114,7 +117,8 @@ async function requestAppToken(): Promise<string> {
   if (!response.ok) {
     throw new SpotifyAppTokenError(
       `Could not mint Spotify app token (${response.status}).`,
-      response.status
+      response.status,
+      parseRetryAfter(response)
     );
   }
 
@@ -174,11 +178,22 @@ async function appApiGet<T>(path: string): Promise<T> {
   if (!response.ok) {
     throw new SpotifyAppTokenError(
       `Spotify catalog read failed (${response.status}).`,
-      response.status
+      response.status,
+      parseRetryAfter(response)
     );
   }
 
   return (await response.json()) as T;
+}
+
+/** Parse a `Retry-After` header (Spotify sends integer seconds on a 429) into a number. */
+function parseRetryAfter(response: Response): number | undefined {
+  const raw = response.headers.get("retry-after");
+  if (!raw) {
+    return undefined;
+  }
+  const seconds = Number(raw);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
 }
 
 /** Search the Spotify catalog for artists matching `artistName` (app token, up to 5 candidates). */

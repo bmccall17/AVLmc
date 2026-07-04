@@ -27,6 +27,7 @@ type BackfillSummary = {
   lastTrackError?: string;
   remaining: number;
   backedOff: boolean;
+  retryAfterSeconds?: number;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -62,11 +63,21 @@ async function main() {
       `  batch ${i + 1}: processed ${summary.processed}, matched ${summary.matched}, cached ${summary.cached}, review ${summary.needsReview}, rejected ${summary.rejected}, errors ${summary.errors}, tracks +${summary.tracksFilled}/-${summary.tracksFailed}${summary.lastTrackError ? ` (${summary.lastTrackError})` : ""}, remaining ${summary.remaining}${summary.backedOff ? " (backed off)" : ""}`
     );
 
-    if (summary.remaining <= 0 || summary.processed === 0) {
+    if (summary.remaining <= 0) {
       break;
     }
-    // Back off harder when Spotify rate-limited us; otherwise a light pause between batches.
-    await sleep(summary.backedOff ? 15_000 : 500);
+    if (summary.backedOff) {
+      // Honor Spotify's Retry-After (seconds) when present; else a sane default. Cap a single
+      // sleep so the loop stays responsive, then keep going (remaining is still > 0).
+      const waitSeconds = Math.min(Math.max(summary.retryAfterSeconds ?? 30, 15), 300);
+      // eslint-disable-next-line no-console
+      console.log(`  rate-limited (429) — waiting ${waitSeconds}s before resuming…`);
+      await sleep(waitSeconds * 1000);
+    } else if (summary.processed === 0) {
+      break;
+    } else {
+      await sleep(500);
+    }
   }
 
   // eslint-disable-next-line no-console
