@@ -687,6 +687,37 @@ body {
   line-height: 1.2;
 }
 
+/* Homepage filter drawer: collapsed to a single row until the toggle opens it. */
+.filter-drawer {
+  display: grid;
+  gap: 12px;
+}
+
+.filter-drawer-toggle {
+  flex: 0 0 auto;
+}
+
+.filter-count-badge {
+  background: #f4f4f5;
+  border-radius: 999px;
+  color: #09090b;
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  min-width: 18px;
+  padding: 3px 6px;
+  text-align: center;
+}
+
+.filter-drawer-chevron {
+  transition: transform 0.18s ease;
+}
+
+.filter-drawer-chevron.is-open {
+  transform: rotate(180deg);
+}
+
 .filter-panel-kicker,
 .filter-section-label,
 .filter-field > span:first-child {
@@ -1296,8 +1327,8 @@ body {
   align-items: center;
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  margin-bottom: 34px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 20px;
 }
 
 .sandbox-profile,
@@ -1961,6 +1992,41 @@ body {
 .curator-action.is-playlist {
   background: #f4f4f5;
   color: #09090b;
+}
+
+/* Compact curator strip that sits beside the hero search bar. */
+.sandbox-search-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.sandbox-search-row .sandbox-search {
+  margin-top: 0;
+}
+
+.curator-inline {
+  align-items: center;
+  backdrop-filter: blur(18px);
+  background: rgba(24, 24, 27, 0.44);
+  border: 1px solid rgba(63, 63, 70, 0.78);
+  border-radius: 999px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 48px;
+  padding: 5px 8px 5px 16px;
+}
+
+.curator-inline .curator-status {
+  margin-bottom: 0;
+}
+
+.curator-inline .curator-action {
+  min-height: 34px;
+  padding: 0 11px;
 }
 
 .sandbox-hero {

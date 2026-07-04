@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
-import { Bell, CalendarCheck, Check, ChevronRight, ExternalLink, Flame, Headphones, Search, Share2, Star, UserPlus, X } from "lucide-react";
+import { Bell, CalendarCheck, Check, ChevronDown, ChevronRight, ExternalLink, Flame, Headphones, Search, Share2, SlidersHorizontal, Star, UserPlus, X } from "lucide-react";
 import { useSignInChooser } from "@/components/SignInChooser";
 import { SaveButton } from "@/components/SaveButton";
 import { SharedSongsCard, type SharedSongSummary } from "@/components/SharedSongsCard";
@@ -100,6 +100,8 @@ const SKIP_REMOVE_CONFIRM_KEY = "avlmc:homepage:skip-remove-confirm";
 const SIGNIN_NUDGE_DISMISS_KEY = "avlmc:signin-nudge-dismissed";
 const KEEP_INTENT_PARAM = "keepIntent";
 const NUDGEABLE_ACTIONS = new Set<CardAction>(["fire", "planning", "remove"]);
+// Number of event cards shown above the collapsed filter bar (matches the desktop grid row).
+const FIRST_ROW_COUNT = 3;
 
 const actionHelp: Record<ActionKind, { body: string; impact: string; title: string }> = {
   going: {
@@ -247,6 +249,8 @@ export function EventBoard({
   const [customDateStart, setCustomDateStart] = useState("");
   const [customDateEnd, setCustomDateEnd] = useState("");
   const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "shared">("idle");
+  // Filter drawer is collapsed by default; the listener opens it deliberately.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [urlStateReady, setUrlStateReady] = useState(false);
   const [eventCounts, setEventCounts] = useState(counts);
   const [eventScores, setEventScores] = useState(discoveryScores);
@@ -331,6 +335,13 @@ export function EventBoard({
     customDateStart !== "" ||
     customDateEnd !== "" ||
     sortMode !== defaultSortMode;
+
+  const activeFilterCount =
+    selectedVenues.length +
+    (tag !== "all" ? 1 : 0) +
+    activeQuickFilters.length +
+    (rangeDays !== 0 || customDateStart || customDateEnd ? 1 : 0) +
+    (sortMode !== defaultSortMode ? 1 : 0);
 
   const effectiveWindowLabel = rangeWindowLabel(
     rangeDays,
@@ -901,6 +912,48 @@ export function EventBoard({
     }
   }
 
+  function renderEventCard(event: EventRecord, index: number) {
+    const score = eventScores[event.id];
+    const reasons = score?.reasons ?? [];
+    const countsForEvent = eventCounts[event.id];
+    const state = discoveryStates[event.id];
+
+    return (
+      <DiscoveryEventCard
+        activeTooltip={activeTooltip}
+        counts={countsForEvent}
+        event={event}
+        index={index}
+        isPending={pendingAction?.startsWith(`${event.id}:`) ?? false}
+        isRevealed={revealedEventId === event.id}
+        isSaved={savedEventKeySet.has(event.id)}
+        isSignedIn={isSignedIn}
+        isTop30={top30EventIdSet.has(event.id)}
+        key={event.id}
+        onClearTooltip={clearTooltip}
+        onQueueTooltip={queueTooltip}
+        onRemove={requestRemove}
+        onSettle={() => {
+          setOrderFreeze((current) => (current?.eventId === event.id ? null : current));
+        }}
+        onScoreChange={(updatedScore) => {
+          setEventScores((current) => ({
+            ...current,
+            [event.id]: updatedScore,
+          }));
+        }}
+        onTogglePositiveAction={togglePositiveAction}
+        onTrackAvlgoClick={trackAvlgoClick}
+        circleActivity={circleActivityByEvent?.[event.id]}
+        curatedBy={curatedByEvent?.[event.id]}
+        reasons={reasons}
+        score={score}
+        sharedSongSummary={sharedSongSummaries[event.id]}
+        state={state}
+      />
+    );
+  }
+
   return (
     <>
       <section className="sandbox-hero" id="for-you">
@@ -910,15 +963,18 @@ export function EventBoard({
           <p className="lede">
             A {rangeDays > 0 ? "" : "rolling "}{effectiveWindowLabel} live music board, ranked by your taste, local pulse, and curator signals.
           </p>
-          <label className="sandbox-search">
-            <Search aria-hidden="true" size={17} strokeWidth={2.4} />
-            <input
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search venues, artists, signals"
-              type="search"
-              value={query}
-            />
-          </label>
+          <div className="sandbox-search-row">
+            <label className="sandbox-search">
+              <Search aria-hidden="true" size={17} strokeWidth={2.4} />
+              <input
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search venues, artists, signals"
+                type="search"
+                value={query}
+              />
+            </label>
+            <CuratorInline />
+          </div>
         </div>
 
         <SocialDiscoveryBeats
@@ -930,12 +986,41 @@ export function EventBoard({
         />
       </section>
 
-      <CuratorComingSoon />
+      {errorMessage ? <p className="sandbox-error-message">{errorMessage}</p> : null}
+
+      <FireTurbulenceFilter />
+
+      {filteredEvents.length === 0 ? (
+        <section className="empty-state">
+          <h2>No matching music events</h2>
+          <p>Try clearing a filter or searching for a different artist, venue, or tag.</p>
+        </section>
+      ) : (
+        <section className="sandbox-layout" id="cards" aria-label="Upcoming music events">
+          {displayedEvents.slice(0, FIRST_ROW_COUNT).map((event, index) => renderEventCard(event, index))}
+        </section>
+      )}
 
       <section className="search-panel discovery-filter-panel" aria-label="Discovery controls">
         <div className="filter-panel-head">
+          <button
+            aria-controls="filter-drawer"
+            aria-expanded={filtersOpen}
+            className="filter-reset filter-drawer-toggle"
+            onClick={() => setFiltersOpen((current) => !current)}
+            type="button"
+          >
+            <SlidersHorizontal aria-hidden="true" size={15} strokeWidth={2.6} />
+            Filters
+            {activeFilterCount > 0 ? <em className="filter-count-badge">{activeFilterCount}</em> : null}
+            <ChevronDown
+              aria-hidden="true"
+              className={`filter-drawer-chevron${filtersOpen ? " is-open" : ""}`}
+              size={15}
+              strokeWidth={2.6}
+            />
+          </button>
           <div>
-            <span className="filter-panel-kicker">Filters</span>
             <strong>
               {filteredEvents.length} of {visibleEvents.length} showing
             </strong>
@@ -958,6 +1043,8 @@ export function EventBoard({
           </div>
         </div>
 
+        {filtersOpen ? (
+        <div className="filter-drawer" id="filter-drawer">
         <div className="filter-section">
           <span className="filter-section-label">Dates</span>
           <div className="filter-group" aria-label="Date range filters">
@@ -1149,6 +1236,8 @@ export function EventBoard({
             </datalist>
           </div>
         </details>
+        </div>
+        ) : null}
       </section>
 
       <section className="toolbar" aria-label="Event list summary">
@@ -1168,60 +1257,13 @@ export function EventBoard({
         </div>
       </section>
 
-      {errorMessage ? <p className="sandbox-error-message">{errorMessage}</p> : null}
-
-      <FireTurbulenceFilter />
-
-      {filteredEvents.length === 0 ? (
-        <section className="empty-state">
-          <h2>No matching music events</h2>
-          <p>Try clearing a filter or searching for a different artist, venue, or tag.</p>
+      {displayedEvents.length > FIRST_ROW_COUNT ? (
+        <section className="sandbox-layout" aria-label="More music events">
+          {displayedEvents
+            .slice(FIRST_ROW_COUNT)
+            .map((event, index) => renderEventCard(event, index + FIRST_ROW_COUNT))}
         </section>
-      ) : (
-        <section className="sandbox-layout" id="cards" aria-label="Upcoming music events">
-          {displayedEvents.map((event, index) => {
-            const score = eventScores[event.id];
-            const reasons = score?.reasons ?? [];
-            const countsForEvent = eventCounts[event.id];
-            const state = discoveryStates[event.id];
-
-            return (
-              <DiscoveryEventCard
-                activeTooltip={activeTooltip}
-                counts={countsForEvent}
-                event={event}
-                index={index}
-                isPending={pendingAction?.startsWith(`${event.id}:`) ?? false}
-                isRevealed={revealedEventId === event.id}
-                isSaved={savedEventKeySet.has(event.id)}
-                isSignedIn={isSignedIn}
-                isTop30={top30EventIdSet.has(event.id)}
-                key={event.id}
-                onClearTooltip={clearTooltip}
-                onQueueTooltip={queueTooltip}
-                onRemove={requestRemove}
-                onSettle={() => {
-                  setOrderFreeze((current) => (current?.eventId === event.id ? null : current));
-                }}
-                onScoreChange={(updatedScore) => {
-                  setEventScores((current) => ({
-                    ...current,
-                    [event.id]: updatedScore,
-                  }));
-                }}
-                onTogglePositiveAction={togglePositiveAction}
-                onTrackAvlgoClick={trackAvlgoClick}
-                circleActivity={circleActivityByEvent?.[event.id]}
-                curatedBy={curatedByEvent?.[event.id]}
-                reasons={reasons}
-                score={score}
-                sharedSongSummary={sharedSongSummaries[event.id]}
-                state={state}
-              />
-            );
-          })}
-        </section>
-      )}
+      ) : null}
 
       {confirmEvent ? (
         <RemoveConfirmationDialog
@@ -1867,33 +1909,30 @@ function SocialDiscoveryBeats({
   );
 }
 
-function CuratorComingSoon() {
+function CuratorInline() {
   return (
-    <section className="curator-callout" id="curators" aria-label="Curators">
-      <div className="curator-callout-copy">
-        <span className="curator-status">
-          <Bell aria-hidden="true" size={14} strokeWidth={2.6} />
-          Now live
-        </span>
-        <h2>Curators</h2>
-        <p>
-          Follow local tastemakers and music circles so their show picks carry into your discovery feed.
-        </p>
-      </div>
-      <div className="curator-actions">
-        <Link className="curator-action is-playlist" href="/curators">
-          Browse curators
-          <ChevronRight aria-hidden="true" size={16} strokeWidth={2.4} />
-        </Link>
-        <Link className="curator-action" href="/curators/apply">
-          <UserPlus aria-hidden="true" size={14} strokeWidth={2.6} />
-          Sign up
-        </Link>
-        <Link className="curator-action" href="/curators/recommend">
-          Recommend a curator
-        </Link>
-      </div>
-    </section>
+    <div
+      className="curator-inline"
+      id="curators"
+      aria-label="Curators"
+      title="Follow local tastemakers and music circles so their show picks carry into your discovery feed."
+    >
+      <span className="curator-status">
+        <Bell aria-hidden="true" size={13} strokeWidth={2.6} />
+        Curators
+      </span>
+      <Link className="curator-action is-playlist" href="/curators">
+        Browse
+        <ChevronRight aria-hidden="true" size={14} strokeWidth={2.4} />
+      </Link>
+      <Link className="curator-action" href="/curators/apply">
+        <UserPlus aria-hidden="true" size={13} strokeWidth={2.6} />
+        Sign up
+      </Link>
+      <Link className="curator-action" href="/curators/recommend">
+        Recommend
+      </Link>
+    </div>
   );
 }
 
