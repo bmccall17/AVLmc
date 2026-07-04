@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+import { ArtistEmbed } from "@/components/ArtistEmbed";
 import { CirclePresence } from "@/components/CirclePresence";
 import { CommunityPanel } from "@/components/CommunityPanel";
 import { EventImage } from "@/components/EventImage";
 import { SaveButton } from "@/components/SaveButton";
 import { SharedListening } from "@/components/SharedListening";
 import { TicketIntentLink } from "@/components/TicketIntentLink";
+import { getPublishedArtistMatch } from "@/lib/artist-match";
 import {
   ANONYMOUS_SESSION_COOKIE_NAME,
   getAnonymousSessionIdFromCookieValue,
@@ -83,6 +85,7 @@ export default async function EventPage({ params }: EventPageProps) {
     publicSharedSongs,
     circleActivityByEvent,
     curatedByEvent,
+    artistMatch,
   ] = await Promise.all([
     userId ? listMusicConnections(userId) : Promise.resolve([]),
     listDiscoveryStates([event.id], { sessionId, userId }),
@@ -90,6 +93,7 @@ export default async function EventPage({ params }: EventPageProps) {
     listPublicSharedSongs(event.id, userId),
     getCircleEventActivity(userId, [event.id]),
     getCuratedByForEvents([event.id]),
+    getPublishedArtistMatch(event.id),
   ]);
   // Attribute in-circle seeders server-side at the gate (no-op for anonymous viewers).
   const sharedSongs = await attributeSharedSongs(userId, event.id, publicSharedSongs);
@@ -201,6 +205,17 @@ export default async function EventPage({ params }: EventPageProps) {
       />
 
       <CirclePresence activity={circleActivity} />
+
+      {artistMatch ? (
+        <ArtistEmbed
+          artistName={event.artistName}
+          eventId={event.id}
+          isSignedIn={isSignedIn}
+          spotifyArtistId={artistMatch.spotifyArtistId}
+          spotifyArtistName={artistMatch.spotifyArtistName}
+          spotifyConnected={spotifySearchEnabled}
+        />
+      ) : null}
 
       <SharedListening
         eventId={event.id}

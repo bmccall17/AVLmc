@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "/tmp/avlmc-hover-player-tests",
+    "rootDir": "..",
+    "target": "es2022"
+  },
+  "include": ["../next-env.d.ts", "hover-player.test.ts", "../lib/hover-player-core.ts"]
+}

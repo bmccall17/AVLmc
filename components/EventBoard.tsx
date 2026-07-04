@@ -12,6 +12,8 @@ import { circleBadgeCount, type CircleEventActivity } from "@/lib/social-activit
 import type { CuratedBy } from "@/lib/curators-core";
 import { resolveGenres, type CanonicalGenre } from "@/lib/genre-taxonomy";
 import { SHARED_SONGS_REFRESH_EVENT } from "@/lib/shared-songs-core";
+import { useHoverPlayer, type HoverPlayer } from "@/components/useHoverPlayer";
+import { isArmed } from "@/lib/hover-player-core";
 import type { CommunityCounts } from "@/lib/community";
 import { scoreDiscoveryEvents, type DiscoveryReason, type DiscoveryScore, type DiscoveryScoresByEvent, type SavedFavorite } from "@/lib/discovery";
 import type {
@@ -59,6 +61,8 @@ type EventBoardProps = {
   musicProfileItems: MusicProfileItem[];
   preferenceSignals: DiscoveryPreferenceSignal[];
   sharedSongSummaries: Record<string, SharedSongSummary | undefined>;
+  /** Count of cached matched-artist preview tracks per event (PRD 46, Story E). */
+  artistTrackCounts: Record<string, number | undefined>;
   spotifyMatchCorrections: SpotifyMatchCorrection[];
   top30EventIds: string[];
   top30SourceUrl: string;
@@ -230,11 +234,14 @@ export function EventBoard({
   musicProfileItems,
   preferenceSignals,
   sharedSongSummaries,
+  artistTrackCounts,
   spotifyMatchCorrections,
   top30EventIds,
   top30SourceUrl,
   windowLabel,
 }: EventBoardProps) {
+  // One shared hover-listening controller for the whole board — only one event plays at a time.
+  const hover = useHoverPlayer();
   const [query, setQuery] = useState("");
   const [selectedVenues, setSelectedVenues] = useState<string[]>([]);
   const [venueQuery, setVenueQuery] = useState("");
@@ -917,12 +924,20 @@ export function EventBoard({
     const reasons = score?.reasons ?? [];
     const countsForEvent = eventCounts[event.id];
     const state = discoveryStates[event.id];
+    // Playable songs (PRD 46, Story E): community song contributions + PRD 17 shared songs +
+    // matched-artist top tracks. A count > 0 renders the chip in its "listenable" style.
+    const playableSongs =
+      (countsForEvent?.songs ?? 0) +
+      (sharedSongSummaries[event.id]?.count ?? 0) +
+      (artistTrackCounts[event.id] ?? 0);
 
     return (
       <DiscoveryEventCard
         activeTooltip={activeTooltip}
         counts={countsForEvent}
         event={event}
+        hover={hover}
+        playableSongs={playableSongs}
         index={index}
         isPending={pendingAction?.startsWith(`${event.id}:`) ?? false}
         isRevealed={revealedEventId === event.id}
@@ -1334,12 +1349,94 @@ export function EventBoard({
   );
 }
 
+// The board card's songs affordance (PRD 46, Story E). Advertises listenability ("♫ N songs" in a
+// listenable style when > 0) and rewards mouse/keyboard dwell with faded-in preview audio via the
+// shared hover player. Hover/focus arm; leaving disarms. Click is never intercepted here, so the
+// card's own click-to-navigate is untouched (the interactive buttons stopPropagation only). Touch
+// pointers don't arm (no hover), degrading to a plain chip.
+function HoverSongsChip({
+  event,
+  hover,
+  playableSongs,
+}: {
+  event: EventRecord;
+  hover: HoverPlayer;
+  playableSongs: number;
+}) {
+  const listenable = playableSongs > 0;
+  const { state } = hover;
+  const isThisEvent = state.eventId === event.id;
+  const armed = isThisEvent && isArmed(state);
+  const playing = isThisEvent && state.phase === "playing";
+  const blocked = isThisEvent && state.phase === "blocked";
+
+  function onEnter(pointerType: string) {
+    // Only a real hovering pointer (mouse/pen) arms — touch keeps plain tap behavior.
+    if (listenable && pointerType !== "touch") {
+      hover.arm(event.id);
+    }
+  }
+
+  return (
+    <div
+      className={`sandbox-pulse sandbox-pulse-chip${listenable ? " is-listenable" : ""}${
+        armed ? " is-arming" : ""
+      }${playing ? " is-playing" : ""}`}
+      aria-label={listenable ? `${playableSongs} playable songs — hover to listen` : "No songs yet"}
+      onPointerEnter={(pointerEvent) => onEnter(pointerEvent.pointerType)}
+      onPointerLeave={() => hover.disarm(event.id)}
+      onFocus={() => (listenable ? hover.arm(event.id) : undefined)}
+      onBlur={() => hover.disarm(event.id)}
+      tabIndex={listenable ? 0 : undefined}
+    >
+      <span className="chip-note" aria-hidden="true">
+        ♫
+      </span>
+      <span>
+        {playableSongs} {playableSongs === 1 ? "song" : "songs"}
+      </span>
+      {armed ? (
+        <span className="chip-preplay" role="status" aria-label="music will play soon">
+          <span className="chip-preplay-ring" aria-hidden="true" />
+        </span>
+      ) : null}
+      {playing ? (
+        <button
+          className="chip-stop"
+          aria-label="Stop preview"
+          onClick={(clickEvent) => {
+            clickEvent.stopPropagation();
+            hover.stop();
+          }}
+          type="button"
+        >
+          ■
+        </button>
+      ) : null}
+      {blocked ? (
+        <button
+          className="chip-unlock"
+          onClick={(clickEvent) => {
+            clickEvent.stopPropagation();
+            hover.unlock(event.id);
+          }}
+          type="button"
+        >
+          click ♫ to listen
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function DiscoveryEventCard({
   activeTooltip,
   circleActivity,
   curatedBy,
   counts,
   event,
+  hover,
+  playableSongs,
   index,
   isPending,
   isRevealed,
@@ -1363,6 +1460,8 @@ function DiscoveryEventCard({
   curatedBy: CuratedBy[] | undefined;
   counts: CommunityCounts | undefined;
   event: EventRecord;
+  hover: HoverPlayer;
+  playableSongs: number;
   index: number;
   isPending: boolean;
   isRevealed: boolean;
@@ -1386,7 +1485,6 @@ function DiscoveryEventCard({
   const match = formatMatchScore(score, index);
   const fire = counts?.fire ?? 0;
   const going = counts?.going ?? 0;
-  const songs = counts?.songs ?? 0;
   const spotifySaves = counts?.goingSources.spotify ?? 0;
   const ticketClicks = counts?.goingSources.ticket_click ?? 0;
 
@@ -1504,14 +1602,7 @@ function DiscoveryEventCard({
           <span className="sandbox-card-tag">{tag}</span>
         </div>
         <div className="sandbox-card-top-right">
-          <div className="sandbox-pulse sandbox-pulse-chip" aria-label="Social pulse">
-            <span className="avatar-stack" aria-hidden="true">
-              <i>M</i>
-              <i>J</i>
-              <i>R</i>
-            </span>
-            <span>{songs} songs</span>
-          </div>
+          <HoverSongsChip event={event} hover={hover} playableSongs={playableSongs} />
           <strong className="sandbox-match-pill">{match}% match</strong>
           {isTop30 ? (
             <span className="sandbox-top30-badge">

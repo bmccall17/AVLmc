@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { pickBestArtistMatch } from "@/lib/artist-match-core";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { query } from "@/lib/db";
 import { SpotifyLimitedBetaAccessError } from "@/lib/spotify-limited-access";
@@ -543,15 +544,6 @@ async function fetchSpotifyArtistMatches(accessToken: string, queryText: string)
   return (payload.artists?.items ?? []).filter(
     (item): item is { id: string; name: string } => Boolean(item?.id && item?.name)
   );
-}
-
-/** Prefer an exact (case-insensitive) name match; otherwise fall back to Spotify's top hit. */
-function pickBestArtistMatch(
-  matches: Array<{ id: string; name: string }>,
-  artistName: string
-) {
-  const normalized = artistName.trim().toLowerCase();
-  return matches.find((item) => item.name.trim().toLowerCase() === normalized) ?? matches[0] ?? null;
 }
 
 async function upsertMusicConnection(input: {

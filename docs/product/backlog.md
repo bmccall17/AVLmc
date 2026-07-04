@@ -114,6 +114,25 @@ Updated: July 4, 2026
 
 ## Done
 
+* **Hotfix: un-fire / un-going returned 500 in production** —
+  Shipped (July 4, 2026), follow-on hotfix to the July 3 fire/going toggle fix below (no PRD/admin cycle;
+  recorded in [PRD 02](prds/prd-02-community-contributions-and-reactions.md) Implementation Status).
+  * **Symptom:** de-clicking Fire or Going returned HTTP 500 ("Could not save discovery action") every
+    time; the user's personal reaction cleared but the public count never dropped — inconsistent state.
+  * **Root cause** (not the permissions issue the handover guessed — prod runs on Neon as `neondb_owner`,
+    which already has DELETE): the two DELETE queries the toggle fix added used a parameter as `$N::text`
+    alongside `user_id = $N`, so Postgres inferred the parameter as text and `user_id (integer) = $N (text)`
+    failed to plan with `42883 operator does not exist: integer = text`. A plan-time error, so it fired on
+    every removal regardless of sign-in state. Confirmed live via Vercel runtime logs (13 occurrences,
+    first 03:13 July 4).
+  * **Fix** (`lib/community.ts` `removeEventIntent` + `deleteLegacyReaction`): cast the comparisons to int,
+    matching the working pattern in `lib/spotify-gate.ts`. Verified against prod Neon with `EXPLAIN` — the
+    old form errors, the new form plans clean on both `event_intents` and `reactions`.
+  * **Hardening** (`app/api/discovery/event-action/route.ts`): wrapped `recordCountAction` in try/catch so a
+    count-write failure returns a JSON error instead of the empty 500 that had masked the real cause.
+  * `typecheck` / `lint` / `test:registry` (7) / `test:discovery` (38) / `test:feedback` (5) green; `$0`,
+    no new deps, no schema change. Deployed to production (commit `8637fb2`).
+
 * **Event page layout polish — unified source link, save-chip clarity, curated-by in the Community Signal strip** —
   Shipped (July 4, 2026), standalone event-detail UX polish (no PRD/admin cycle).
   * **Source unified** (`app/event/[id]/page.tsx`, `components/TicketIntentLink.tsx`): the Source cell in the

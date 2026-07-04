@@ -9,6 +9,7 @@ import {
   ANONYMOUS_SESSION_COOKIE_NAME,
   getAnonymousSessionIdFromCookieValue,
 } from "@/lib/anonymous-session";
+import { getArtistTrackCountsByEvent } from "@/lib/artist-match";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { getCommunityCountsByEvent } from "@/lib/community";
 import { scoreDiscoveryEvents, type DiscoveryScore } from "@/lib/discovery";
@@ -76,6 +77,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     circleActivityByEvent,
     curatedByEvent,
     followedCuratorPicksByEvent,
+    artistTrackCounts,
   ] =
     await Promise.all([
       getCommunityCountsByEvent(eventIds),
@@ -96,6 +98,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       // Followed-curator picks feed the off-by-default socialCircle component (PRD 26 / C4); empty
       // for anonymous viewers and for curators the viewer doesn't follow.
       getFollowedCuratorPicks(userId, eventIds),
+      // Matched-artist preview-track counts for the board's listenable chip (PRD 46, Story E).
+      getArtistTrackCountsByEvent(eventIds),
     ]);
   const savedEventKeys = savedKeys
     .filter((key) => key.itemType === "event")
@@ -182,6 +186,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           musicProfileItems={musicProfileItems}
           preferenceSignals={preferenceSignals}
           sharedSongSummaries={sharedSongSummaries}
+          artistTrackCounts={artistTrackCounts}
           spotifyMatchCorrections={spotifyMatchCorrections}
           top30EventIds={avlgoTop30EventIds}
           top30SourceUrl={AVLGO_TOP_30_URL}

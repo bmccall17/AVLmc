@@ -8713,3 +8713,248 @@ button.primary-action {
   margin-top: 10px;
   font-size: 0.85rem;
 }
+
+/* ============================================================
+   PRD 46 — Artist embed (event detail) + board hover listening
+   ============================================================ */
+
+/* ---- Artist embed (event detail page) ---- */
+.artist-embed {
+  margin: 24px 0;
+}
+
+.artist-embed-head h2 {
+  font-size: 1.05rem;
+  margin: 0 0 4px;
+}
+
+.artist-embed-head p {
+  color: #a1a1aa;
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+}
+
+.artist-embed-frame {
+  border-radius: 12px;
+  display: block;
+  width: 100%;
+}
+
+.artist-embed-correction {
+  margin-top: 8px;
+}
+
+.artist-embed-flag-toggle {
+  background: none;
+  border: none;
+  color: #71717a;
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 4px 0;
+  text-decoration: underline;
+}
+
+.artist-embed-correction-panel {
+  border: 1px solid rgba(212, 212, 216, 0.16);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 12px;
+}
+
+.artist-embed-flag,
+.artist-embed-cancel,
+.artist-embed-search-pick {
+  background: rgba(39, 39, 42, 0.6);
+  border: 1px solid rgba(212, 212, 216, 0.18);
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 6px 10px;
+}
+
+.artist-embed-flag:disabled,
+.artist-embed-search-pick:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.artist-embed-correction-note,
+.artist-embed-notice,
+.artist-embed-search-status {
+  color: #a1a1aa;
+  font-size: 0.8rem;
+  margin: 4px 0 0;
+}
+
+.artist-embed-search-label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.78rem;
+  gap: 4px;
+}
+
+.artist-embed-search-label input {
+  background: rgba(24, 24, 27, 0.6);
+  border: 1px solid rgba(212, 212, 216, 0.2);
+  border-radius: 8px;
+  color: inherit;
+  padding: 6px 10px;
+}
+
+.artist-embed-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.artist-embed-search-pick {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.artist-embed-search-pick img {
+  border-radius: 50%;
+}
+
+/* ---- Board songs chip: listenable state + hover indicators ---- */
+.sandbox-pulse-chip.is-listenable {
+  border-color: rgba(34, 197, 94, 0.5);
+  color: #bbf7d0;
+}
+
+.sandbox-pulse-chip.is-listenable .chip-note {
+  color: #4ade80;
+}
+
+.sandbox-pulse-chip.is-playing {
+  border-color: rgba(34, 197, 94, 0.85);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.4);
+}
+
+.chip-note {
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.chip-preplay {
+  display: inline-flex;
+  height: 12px;
+  width: 12px;
+}
+
+.chip-preplay-ring {
+  animation: chip-preplay-pulse 1s ease-in-out infinite;
+  border: 2px solid #4ade80;
+  border-radius: 50%;
+  border-top-color: transparent;
+  display: block;
+  height: 12px;
+  width: 12px;
+}
+
+@keyframes chip-preplay-pulse {
+  0% {
+    opacity: 0.4;
+    transform: scale(0.7) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) rotate(180deg);
+  }
+  100% {
+    opacity: 0.4;
+    transform: scale(0.7) rotate(360deg);
+  }
+}
+
+.chip-stop,
+.chip-unlock {
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  border-radius: 999px;
+  color: #bbf7d0;
+  cursor: pointer;
+  font-size: 0.62rem;
+  line-height: 1;
+  padding: 2px 7px;
+}
+
+.chip-stop {
+  padding: 2px 6px;
+}
+
+/* Reduced motion: keep the ring visible but stop the pulse (fade audio still applies). */
+@media (prefers-reduced-motion: reduce) {
+  .chip-preplay-ring {
+    animation: none;
+  }
+}
+
+/* ---- Admin artist-match review queue ---- */
+.admin-artist-match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.admin-artist-match {
+  align-items: center;
+  border: 1px solid rgba(212, 212, 216, 0.16);
+  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.admin-artist-match-main {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.admin-artist-match-main img {
+  border-radius: 8px;
+}
+
+.admin-artist-match-main strong {
+  display: block;
+}
+
+.admin-artist-match-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-artist-match-actions button,
+.admin-artist-match-actions a {
+  background: rgba(39, 39, 42, 0.6);
+  border: 1px solid rgba(212, 212, 216, 0.18);
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 5px 10px;
+  text-decoration: none;
+}
+
+.admin-artist-match-actions .admin-artist-match-reject {
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #fca5a5;
+}

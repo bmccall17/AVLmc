@@ -8,6 +8,7 @@ import {
 } from "@/lib/events";
 import { describeImageIngestStats } from "@/lib/image-resilience";
 import { recordJobRun } from "@/lib/admin/job-runs";
+import { matchArtistsForNewEvents } from "@/lib/artist-match";
 
 export async function GET(request: Request) {
   const startedAt = new Date();
@@ -53,6 +54,10 @@ export async function GET(request: Request) {
       startedAt,
     });
 
+    // Ingestion hook (PRD 46, Story B): resolve Spotify artist matches for any freshly-ingested
+    // events that don't yet have one. Best-effort and bounded — never blocks or fails the sync.
+    await runArtistMatchHook();
+
     return NextResponse.json({
       ...baseSyncResponse(),
       eventCount: events.length,
@@ -67,6 +72,24 @@ export async function GET(request: Request) {
       startedAt,
     });
     throw error;
+  }
+}
+
+async function runArtistMatchHook() {
+  const startedAt = new Date();
+  try {
+    const summary = await matchArtistsForNewEvents();
+    if (summary && summary.processed > 0) {
+      await recordJobRun({
+        job: "artist_match",
+        status: "success",
+        itemsProcessed: summary.processed,
+        detail: `matched ${summary.matched} · cached ${summary.cached} · review ${summary.needsReview} · rejected ${summary.rejected} · errors ${summary.errors} · remaining ${summary.remaining}`,
+        startedAt,
+      });
+    }
+  } catch {
+    // matchArtistsForNewEvents already swallows errors; this guard is belt-and-suspenders.
   }
 }
 

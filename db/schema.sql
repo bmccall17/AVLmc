@@ -529,10 +529,56 @@ create table if not exists public.event_shared_songs (
 create index if not exists event_shared_songs_event_status_idx
   on public.event_shared_songs (event_id, status, share_count desc);
 
+-- ---- Artist embed matches (PRD 46): one resolved Spotify artist per event, resolved
+-- server-side with an app-only token. Only exact-normalized matches auto-publish; fuzzy
+-- matches are held for review. Cached by normalized_name so repeat artists (residencies,
+-- multi-night runs) resolve without a new API call. Outside discovery scoring. ----------
+create table if not exists public.event_artist_matches (
+  id text primary key,
+  event_id text not null,
+  artist_name text not null,
+  normalized_name text not null,
+  provider text not null default 'spotify' check (provider in ('spotify')),
+  spotify_artist_id text,
+  spotify_artist_name text,
+  spotify_artist_image_url text,
+  confidence text check (confidence in ('exact', 'fuzzy')),
+  status text not null check (status in ('auto', 'needs_review', 'confirmed', 'rejected', 'replaced')),
+  matched_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (event_id, provider)
+);
+
+create index if not exists event_artist_matches_normalized_idx
+  on public.event_artist_matches (normalized_name);
+create index if not exists event_artist_matches_status_idx
+  on public.event_artist_matches (status);
+
+-- ---- Cached top tracks for a matched artist (PRD 46): powers the board hover-play playlist
+-- and a track-list fallback if the artist iframe is ever undesirable. Kept in a sibling table
+-- (not event_shared_songs) so it never touches PRD 17's community list or discovery scoring. --
+create table if not exists public.event_artist_tracks (
+  id text primary key,
+  event_id text not null,
+  provider text not null default 'spotify' check (provider in ('spotify')),
+  provider_track_id text not null,
+  name text not null,
+  artist_names text[] not null default '{}',
+  preview_url text,
+  image_url text,
+  external_url text,
+  rank integer not null default 0,
+  created_at timestamptz not null default now(),
+  unique (event_id, provider, provider_track_id)
+);
+
+create index if not exists event_artist_tracks_event_idx
+  on public.event_artist_tracks (event_id, rank);
+
 -- ---- Operations: scheduled-job observability -----------------------------------
 create table if not exists public.system_job_runs (
   id text primary key,
-  job text not null check (job in ('avlgo_sync', 'cleanup', 'image_backfill')),
+  job text not null check (job in ('avlgo_sync', 'cleanup', 'image_backfill', 'artist_match')),
   status text not null check (status in ('success', 'failure')),
   detail text,
   items_processed integer,
@@ -544,7 +590,7 @@ create table if not exists public.system_job_runs (
 alter table public.system_job_runs
   drop constraint if exists system_job_runs_job_check;
 alter table public.system_job_runs
-  add constraint system_job_runs_job_check check (job in ('avlgo_sync', 'cleanup', 'image_backfill'));
+  add constraint system_job_runs_job_check check (job in ('avlgo_sync', 'cleanup', 'image_backfill', 'artist_match'));
 
 create index if not exists system_job_runs_job_finished_idx
   on public.system_job_runs (job, finished_at desc);

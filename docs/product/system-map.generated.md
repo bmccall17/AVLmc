@@ -69,6 +69,7 @@ Optional. Supplies a signed-in listener's top artists/tracks for taste and power
 - **Flows to / depends on:**
   - → Music Taste Sync (flowsTo) — top artists/tracks
   - → Shared Listening (flowsTo) — artist top tracks
+  - → Artist Matcher (flowsTo) — app-token catalog reads
 
 ### Processing
 
@@ -89,6 +90,7 @@ Fetches the AVLgo feed, normalizes fields, filters to music events, applies the 
 - **Flows to / depends on:**
   - → Deduplication (flowsTo) — normalized rows
   - → Vercel Blob (flowsTo) — cache images
+  - → Artist Matcher (flowsTo) — ingestion hook
 - **Fed by / required by:**
   - ← AVLgo Export (flowsTo) — daily JSON export
   - ← Seed Events (flowsTo) — fallback when feed down
@@ -146,6 +148,26 @@ When a signed-in listener Goes/Fires an event, resolves the artist's Spotify top
 - **Fed by / required by:**
   - ← Spotify Web API (flowsTo) — artist top tracks
   - ← Discovery Action API (flowsTo) — seed on going/fire
+
+#### Artist Matcher  `svc-artist-match`
+
+Resolves an event's artist_name to a Spotify artist with an app-only (Client Credentials) token — no user, no allowlist seat, no new scopes. Only exact-normalized name matches auto-publish an embed; fuzzy matches are held in needs_review (a wrong artist is worse than none). Caches per normalized name so repeat artists never re-hit the API, and caches the matched artist's top tracks for the board hover player. Runs on the ingestion hook and the backfill route.
+
+- **Kind:** Service
+- **Source of truth:** `lib/artist-match.ts`
+- **Access:** internal
+- **Ownership:** automated
+- **Env vars (names only):** `AUTH_SPOTIFY_ID`, `AUTH_SPOTIFY_SECRET`
+- **Implementation notes:**
+  - _Note:_ Pure matching core (normalization, exact-vs-fuzzy, base62 id sink guard) lives in lib/artist-match-core.ts and is shared with the PRD 17 user-token path.
+  - _SQL fallback:_ Every read/write is 42P01 (undefined_table) tolerant and degrades to empty, so the embed and board survive a not-yet-migrated DB and matching never breaks event ingestion.
+  - _Runtime gotcha:_ Backfill backs off on a Spotify 429/5xx and persists partial progress; events with a row are skipped so re-runs are no-ops (matches are stable).
+- **Flows to / depends on:**
+  - → event_artist_matches (flowsTo) — persist match
+  - → event_artist_tracks (flowsTo) — cache top tracks
+- **Fed by / required by:**
+  - ← Spotify Web API (flowsTo) — app-token catalog reads
+  - ← Event Ingestion (flowsTo) — ingestion hook
 
 #### Discovery Scoring  `svc-discovery`
 
@@ -712,6 +734,38 @@ Public, deduped per-event song list seeded when a signed-in Spotify listener Goe
   - ← Shared Listening (flowsTo) — upsert shared songs
   - ← Social Activity (Inner-Circle) (dependsOn) — seeder attribution (gated)
 
+#### event_artist_matches  `db-event-artist-matches`
+
+One resolved Spotify artist per event (PRD 46). Only auto/confirmed/replaced statuses publish an embed; needs_review holds fuzzy matches out of sight; rejected tombstones a no-hit. Indexed on normalized_name so repeat artists resolve from cache. Outside discovery scoring.
+
+- **Kind:** Data store
+- **Source of truth:** `event_artist_matches`
+- **Access:** public
+- **Ownership:** hybrid
+- **Live count:** `event_artist_matches` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ Unique (event_id, provider); the live count is all rows. The embed sink re-validates spotify_artist_id as base62 before building the iframe URL.
+- **Flows to / depends on:**
+  - → Event Detail (flowsTo) — artist embed
+- **Fed by / required by:**
+  - ← Artist Matcher (flowsTo) — persist match
+
+#### event_artist_tracks  `db-event-artist-tracks`
+
+Cached top tracks for a matched artist (PRD 46), powering the board hover-play playlist and a track-list fallback. Sibling of event_shared_songs so it never touches the PRD 17 community list or discovery scoring.
+
+- **Kind:** Data store
+- **Source of truth:** `event_artist_tracks`
+- **Access:** public
+- **Ownership:** automated
+- **Live count:** `event_artist_tracks` (resolved in portal/API)
+- **Implementation notes:**
+  - _Note:_ Only auto/confirmed/replaced (published) matches get tracks written; upsert dedups per track via `on conflict (event_id, provider, provider_track_id)`.
+- **Flows to / depends on:**
+  - → Event Board (flowsTo) — hover playlist
+- **Fed by / required by:**
+  - ← Artist Matcher (flowsTo) — cache top tracks
+
 ### Public Experience
 
 _What listeners see._
@@ -752,6 +806,7 @@ Card grid of events with shareable URL-backed filters, custom date ranges, react
   - ← Discovery Scoring (flowsTo) — ranked order
   - ← events (flowsTo) — event rows
   - ← event_shared_songs (flowsTo) — compact affordance
+  - ← event_artist_tracks (flowsTo) — hover playlist
   - ← Social Activity (Inner-Circle) (flowsTo) — circle badge (signed-in)
   - ← Curators (flowsTo) — curated-by board signal
 
@@ -772,6 +827,7 @@ Per-event page with full context, community panel, and share metadata.
   - ← Homepage (flowsTo) — navigates to
   - ← events (flowsTo) — event by id
   - ← event_shared_songs (flowsTo) — shared listening
+  - ← event_artist_matches (flowsTo) — artist embed
   - ← Social Activity (Inner-Circle) (flowsTo) — people-you-follow strip + attribution
   - ← Curators (flowsTo) — curated-by detail signal
 
@@ -1373,6 +1429,12 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 | Shared Listening | → | event_shared_songs | flowsTo | upsert shared songs |
 | event_shared_songs | → | Event Detail | flowsTo | shared listening |
 | event_shared_songs | → | Event Board | flowsTo | compact affordance |
+| Spotify Web API | → | Artist Matcher | flowsTo | app-token catalog reads |
+| Event Ingestion | → | Artist Matcher | flowsTo | ingestion hook |
+| Artist Matcher | → | event_artist_matches | flowsTo | persist match |
+| Artist Matcher | → | event_artist_tracks | flowsTo | cache top tracks |
+| event_artist_matches | → | Event Detail | flowsTo | artist embed |
+| event_artist_tracks | → | Event Board | flowsTo | hover playlist |
 | Community Panel | → | Community API | flowsTo | writes |
 | Community API | → | Community Service | dependsOn |  |
 | Community Service | → | contributions | flowsTo | songs/notes/voices |
@@ -1453,4 +1515,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_80 nodes, 108 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_83 nodes, 114 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

@@ -12,7 +12,7 @@ import { query } from "@/lib/db";
  * never fail because observability is off.
  */
 
-export type JobName = "avlgo_sync" | "cleanup" | "image_backfill";
+export type JobName = "avlgo_sync" | "cleanup" | "image_backfill" | "artist_match";
 export type JobRunStatus = "success" | "failure";
 
 export type JobRun = {

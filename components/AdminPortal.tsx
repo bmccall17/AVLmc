@@ -14,6 +14,7 @@ import type { ListenerSummary, ListenerTrace } from "@/lib/admin/listener-graph"
 import type { EventDuplicateAuditGroup } from "@/lib/event-dedupe";
 import type { PublicContribution, ContributionStatus } from "@/lib/community";
 import { AdminModeration } from "@/components/AdminModeration";
+import { ArtistMatchReviewSection, type AdminArtistMatch } from "@/components/admin/ArtistMatchReviewSection";
 import { ArchitectureSection } from "@/components/admin/ArchitectureSection";
 import { KnowledgeGraphSection } from "@/components/admin/KnowledgeGraphSection";
 import { HealthSection } from "@/components/admin/HealthSection";
@@ -45,6 +46,7 @@ type TabId =
   | "gaps"
   | "resources"
   | "card-lab"
+  | "artist-matches"
   | "moderation";
 
 const TABS: Array<{ id: TabId; label: string }> = [
@@ -59,6 +61,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: "gaps", label: "Gaps" },
   { id: "resources", label: "Resources" },
   { id: "card-lab", label: "Card FX Lab" },
+  { id: "artist-matches", label: "Artist Matches" },
   { id: "moderation", label: "Moderation" },
 ];
 
@@ -77,6 +80,7 @@ export function AdminPortal({
   const [stewardship, setStewardship] = useState<StewardshipData | null>(null);
   const [analytics, setAnalytics] = useState<SystemAnalytics | null>(null);
   const [listenerBundle, setListenerBundle] = useState<ListenerBundle | null>(null);
+  const [artistMatches, setArtistMatches] = useState<{ matches: AdminArtistMatch[] } | null>(null);
 
   return (
     <div className="admin-portal">
@@ -239,6 +243,14 @@ export function AdminPortal({
         {activeTab === "gaps" && <GapsSection data={data} />}
         {activeTab === "resources" && <ResourcesSection data={data} />}
         {activeTab === "card-lab" && <CardFxLabSection />}
+        {activeTab === "artist-matches" && (
+          <LazySection
+            value={artistMatches}
+            setValue={setArtistMatches}
+            url="/api/admin/artist-matches"
+            render={(value) => <ArtistMatchReviewSection matches={value.matches} />}
+          />
+        )}
         {activeTab === "moderation" && (
           <AdminModeration
             contributions={contributions}

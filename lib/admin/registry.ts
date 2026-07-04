@@ -87,6 +87,14 @@ const COUNT_QUERIES: Array<{ key: DerivedCountKey; text: string }> = [
     text: "select count(*)::int as count from public.event_shared_songs where status = 'visible'",
   },
   {
+    key: "event_artist_matches",
+    text: "select count(*)::int as count from public.event_artist_matches",
+  },
+  {
+    key: "event_artist_tracks",
+    text: "select count(*)::int as count from public.event_artist_tracks",
+  },
+  {
     key: "listener_follows",
     text: "select count(*)::int as count from public.listener_follows where status = 'active'",
   },

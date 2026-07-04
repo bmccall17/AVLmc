@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "/tmp/avlmc-artist-match-tests",
+    "rootDir": "..",
+    "target": "es2022"
+  },
+  "include": ["../next-env.d.ts", "artist-match.test.ts", "../lib/artist-match-core.ts"]
+}

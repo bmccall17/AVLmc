@@ -78,6 +78,8 @@ export type DerivedCountKey =
   | "admin_resources"
   | "saved_items"
   | "event_shared_songs"
+  | "event_artist_matches"
+  | "event_artist_tracks"
   | "listener_follows"
   | "curators"
   | "curator_picks"
@@ -367,6 +369,35 @@ const NODES: RegistryNode[] = [
         kind: "note",
         detail:
           "Seeding upserts `on conflict (event_id, provider, provider_track_id) do update` (dedup per track) and is best-effort, so a Spotify failure never breaks the reaction.",
+      },
+    ],
+  },
+  {
+    id: "svc-artist-match",
+    kind: "service",
+    layer: "processing",
+    label: "Artist Matcher",
+    description:
+      "Resolves an event's artist_name to a Spotify artist with an app-only (Client Credentials) token — no user, no allowlist seat, no new scopes. Only exact-normalized name matches auto-publish an embed; fuzzy matches are held in needs_review (a wrong artist is worse than none). Caches per normalized name so repeat artists never re-hit the API, and caches the matched artist's top tracks for the board hover player. Runs on the ingestion hook and the backfill route.",
+    sourceOfTruth: "lib/artist-match.ts",
+    access: "internal",
+    ownership: "automated",
+    envVars: ["AUTH_SPOTIFY_ID", "AUTH_SPOTIFY_SECRET"],
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Pure matching core (normalization, exact-vs-fuzzy, base62 id sink guard) lives in lib/artist-match-core.ts and is shared with the PRD 17 user-token path.",
+      },
+      {
+        kind: "sql_fallback",
+        detail:
+          "Every read/write is 42P01 (undefined_table) tolerant and degrades to empty, so the embed and board survive a not-yet-migrated DB and matching never breaks event ingestion.",
+      },
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "Backfill backs off on a Spotify 429/5xx and persists partial progress; events with a row are skipped so re-runs are no-ops (matches are stable).",
       },
     ],
   },
@@ -1054,6 +1085,44 @@ const NODES: RegistryNode[] = [
         kind: "runtime_gotcha",
         detail:
           "seeded_by_user_id is stored server-side only (the inner-circle attribution on-ramp) and never appears in the anonymous/public payload.",
+      },
+    ],
+  },
+  {
+    id: "db-event-artist-matches",
+    kind: "datastore",
+    layer: "data",
+    label: "event_artist_matches",
+    description:
+      "One resolved Spotify artist per event (PRD 46). Only auto/confirmed/replaced statuses publish an embed; needs_review holds fuzzy matches out of sight; rejected tombstones a no-hit. Indexed on normalized_name so repeat artists resolve from cache. Outside discovery scoring.",
+    sourceOfTruth: "event_artist_matches",
+    access: "public",
+    ownership: "hybrid",
+    countKey: "event_artist_matches",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Unique (event_id, provider); the live count is all rows. The embed sink re-validates spotify_artist_id as base62 before building the iframe URL.",
+      },
+    ],
+  },
+  {
+    id: "db-event-artist-tracks",
+    kind: "datastore",
+    layer: "data",
+    label: "event_artist_tracks",
+    description:
+      "Cached top tracks for a matched artist (PRD 46), powering the board hover-play playlist and a track-list fallback. Sibling of event_shared_songs so it never touches the PRD 17 community list or discovery scoring.",
+    sourceOfTruth: "event_artist_tracks",
+    access: "public",
+    ownership: "automated",
+    countKey: "event_artist_tracks",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Only auto/confirmed/replaced (published) matches get tracks written; upsert dedups per track via `on conflict (event_id, provider, provider_track_id)`.",
       },
     ],
   },
@@ -1834,6 +1903,14 @@ const EDGES: RegistryEdge[] = [
   { from: "svc-shared-songs", to: "db-shared-songs", kind: "flowsTo", label: "upsert shared songs" },
   { from: "db-shared-songs", to: "ui-event-detail", kind: "flowsTo", label: "shared listening" },
   { from: "db-shared-songs", to: "ui-eventboard", kind: "flowsTo", label: "compact affordance" },
+
+  // Artist embed + board hover listening (PRD 46)
+  { from: "int-spotify", to: "svc-artist-match", kind: "flowsTo", label: "app-token catalog reads" },
+  { from: "svc-events", to: "svc-artist-match", kind: "flowsTo", label: "ingestion hook" },
+  { from: "svc-artist-match", to: "db-event-artist-matches", kind: "flowsTo", label: "persist match" },
+  { from: "svc-artist-match", to: "db-event-artist-tracks", kind: "flowsTo", label: "cache top tracks" },
+  { from: "db-event-artist-matches", to: "ui-event-detail", kind: "flowsTo", label: "artist embed" },
+  { from: "db-event-artist-tracks", to: "ui-eventboard", kind: "flowsTo", label: "hover playlist" },
 
   // Community
   { from: "ui-community-panel", to: "api-community", kind: "flowsTo", label: "writes" },

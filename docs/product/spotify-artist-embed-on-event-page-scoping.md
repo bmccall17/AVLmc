@@ -1,6 +1,6 @@
 # Scoping: Spotify artist embed on every event page
 
-Status: **Scoping + recommendation — no build.** Created 2026-07-04.
+Status: **Superseded by [PRD 46](prds/prd-46-spotify-artist-embed-and-hover-listening.md).** Created 2026-07-04.
 
 ## The ask
 
