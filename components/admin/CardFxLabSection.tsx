@@ -137,6 +137,46 @@ const DEFAULT_VISIBLE: Record<ElementKey, boolean> = {
 
 const LOCKED = new Set(ELEMENTS.filter((el) => el.locked).map((el) => el.key));
 
+// --- pushable button styles ----------------------------------------------------
+// Explores 3D "pressable" treatments for the real action surfaces (Going / Fire /
+// Remove / Save, optionally Details / AVLgo) so buttons read uniquely as buttons
+// while informational pills (match %, genre, social pulse) stay flat.
+
+type ButtonFx = "flush" | "keycap" | "arcade" | "soft" | "gloss" | "bevel";
+
+const BUTTON_FX: Array<{ key: ButtonFx; label: string; blurb: string }> = [
+  {
+    key: "flush",
+    label: "Flush (current)",
+    blurb: "Flat color cells, edge to edge — the production look today.",
+  },
+  {
+    key: "keycap",
+    label: "Keycap",
+    blurb: "Solid darker edge extruded below the face; pressing sinks the key into it.",
+  },
+  {
+    key: "arcade",
+    label: "Arcade",
+    blurb: "Hard offset shadow down-right; pressing snaps the button flush into the shadow.",
+  },
+  {
+    key: "soft",
+    label: "Soft raised",
+    blurb: "Lit from above with a soft drop shadow; pressing inverts it into an inset dish.",
+  },
+  {
+    key: "gloss",
+    label: "Gel",
+    blurb: "Glossy highlight across the top half like a gel key; pressing squashes the shine.",
+  },
+  {
+    key: "bevel",
+    label: "Bevel",
+    blurb: "Retro chiseled edges — light top/left, dark bottom/right; pressing flips the chisel.",
+  },
+];
+
 // --- fire FX settings --------------------------------------------------------
 
 type FxSettings = {
@@ -172,6 +212,11 @@ const ACTION_BAR_H = 40;
 export function CardFxLabSection() {
   const [visible, setVisible] = useState<Record<ElementKey, boolean>>(DEFAULT_VISIBLE);
   const [fx, setFx] = useState<FxSettings>(DEFAULT_FX);
+
+  // pushable-button explorer
+  const [btnFx, setBtnFx] = useState<ButtonFx>("keycap");
+  const [btnDepth, setBtnDepth] = useState(3);
+  const [btnLinks, setBtnLinks] = useState(true);
 
   // live pressed state for the action buttons
   const [going, setGoing] = useState(false);
@@ -273,8 +318,9 @@ export function CardFxLabSection() {
         "--fire-speed": `${fx.pulseSpeed}s`,
         "--fire-hotspot": fx.hotspotOn ? fx.hotspotStrength : 0,
         "--churn": dragging ? 1 : 0,
+        "--btn-depth": `${btnDepth}px`,
       }) as CSSProperties,
-    [fx.color, fx.intensity, fx.pulseSpeed, fx.hotspotOn, fx.hotspotStrength, dragging],
+    [fx.color, fx.intensity, fx.pulseSpeed, fx.hotspotOn, fx.hotspotStrength, dragging, btnDepth],
   );
 
   // Embers represent community FIRE traction and show whenever the event has fire —
@@ -342,6 +388,8 @@ export function CardFxLabSection() {
             }${showGlow ? " is-fired" : ""}${showTurb ? " fx-turbulence" : ""}${
               showHotspot ? " fx-hotspot" : ""
             }`}
+            data-btnfx={btnFx}
+            data-btnfx-links={btnLinks ? "on" : "off"}
             style={cardStyle}
             onPointerMove={handlePointerMove}
             onPointerDown={() => setDragging(true)}
@@ -660,6 +708,55 @@ export function CardFxLabSection() {
 
           <div className="card-lab-panel">
             <div className="card-lab-panel-head">
+              <h3>Pushable Buttons</h3>
+            </div>
+            <p className="card-lab-readout">
+              Only real actions get Z-axis depth — Going / Fire / Remove / Save (and
+              optionally the Details / AVLgo links). Informational pills (match %, genre,
+              social pulse) stay flat, so buttons read uniquely as buttons. Hover and press
+              them on the card to feel each style.
+            </p>
+            <div className="card-lab-btnfx-list" role="radiogroup" aria-label="Button style">
+              {BUTTON_FX.map((opt) => (
+                <label
+                  key={opt.key}
+                  className={`card-lab-btnfx${btnFx === opt.key ? " is-active" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="card-lab-btnfx"
+                    checked={btnFx === opt.key}
+                    onChange={() => setBtnFx(opt.key)}
+                  />
+                  <span>
+                    <strong>{opt.label}</strong>
+                    <em>{opt.blurb}</em>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <FxSlider
+              label="Press depth"
+              min={2}
+              max={6}
+              step={1}
+              value={btnDepth}
+              onChange={(v) => setBtnDepth(v)}
+              display={`${btnDepth}px`}
+              disabled={btnFx === "flush"}
+            />
+            <FxRow label="Also style Details / AVLgo links">
+              <input
+                type="checkbox"
+                checked={btnLinks}
+                disabled={btnFx === "flush"}
+                onChange={(e) => setBtnLinks(e.target.checked)}
+              />
+            </FxRow>
+          </div>
+
+          <div className="card-lab-panel">
+            <div className="card-lab-panel-head">
               <h3>On Fire 🔥</h3>
             </div>
 
@@ -791,6 +888,7 @@ export function CardFxLabSection() {
               <h3>Export</h3>
             </div>
             <pre className="card-lab-export">{exportCss(fx, emberCount)}</pre>
+            <pre className="card-lab-export">{exportButtonCss(btnFx, btnDepth, btnLinks)}</pre>
           </div>
         </div>
       </div>
@@ -954,6 +1052,22 @@ function FxSlider({
       />
     </label>
   );
+}
+
+function exportButtonCss(style: ButtonFx, depth: number, links: boolean) {
+  if (style === "flush") {
+    return "/* buttons: flush — production default, no extra CSS */";
+  }
+  return [
+    `/* button fx: ${style} · press depth ${depth}px · details/avlgo links: ${
+      links ? "styled" : "flat"
+    } */`,
+    `.sandbox-event-card { --btn-depth: ${depth}px; }`,
+    `/* to ship: copy the .card-lab-card[data-btnfx="${style}"] rules from globals.css`,
+    `   onto .sandbox-event-card, targeting .sandbox-action-bar button${
+      links ? " + .sandbox-card-links a" : ""
+    } */`,
+  ].join("\n");
 }
 
 function exportCss(fx: FxSettings, emberCount: number) {

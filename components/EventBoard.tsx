@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { Bell, CalendarCheck, Check, ChevronRight, ExternalLink, Flame, Headphones, Search, Share2, Star, UserPlus, X } from "lucide-react";
@@ -222,6 +223,8 @@ export function EventBoard({
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
   const [confirmEvent, setConfirmEvent] = useState<EventRecord | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // First card starts revealed as a "this is how cards open" affordance; clicking a
+  // card now navigates to its details page instead of toggling the disclosure.
   const [revealedEventId, setRevealedEventId] = useState<string | null>(events[0]?.id ?? null);
   const [skipConfirm, setSkipConfirm] = useState(false);
   const [skipFutureConfirm, setSkipFutureConfirm] = useState(false);
@@ -841,10 +844,6 @@ export function EventBoard({
     }
   }
 
-  function toggleReveal(eventId: string) {
-    setRevealedEventId((current) => (current === eventId ? null : eventId));
-  }
-
   return (
     <>
       <section className="sandbox-hero" id="for-you">
@@ -1144,7 +1143,6 @@ export function EventBoard({
                 onClearTooltip={clearTooltip}
                 onQueueTooltip={queueTooltip}
                 onRemove={requestRemove}
-                onReveal={toggleReveal}
                 onScoreChange={(updatedScore) => {
                   setEventScores((current) => ({
                     ...current,
@@ -1249,7 +1247,6 @@ function DiscoveryEventCard({
   onClearTooltip,
   onQueueTooltip,
   onRemove,
-  onReveal,
   onScoreChange,
   onTogglePositiveAction,
   onTrackAvlgoClick,
@@ -1272,7 +1269,6 @@ function DiscoveryEventCard({
   onClearTooltip: () => void;
   onQueueTooltip: (eventId: string, action: ActionKind) => void;
   onRemove: (event: EventRecord) => void;
-  onReveal: (eventId: string) => void;
   onScoreChange: (score: DiscoveryScore) => void;
   onTogglePositiveAction: (event: EventRecord, action: Extract<ActionKind, "fire" | "going">) => void;
   onTrackAvlgoClick: (event: EventRecord) => void;
@@ -1296,6 +1292,7 @@ function DiscoveryEventCard({
   const showEmbers = fire > 0;
   const embers = showEmbers ? buildEmbers(fire) : [];
   const cardElRef = useRef<HTMLElement | null>(null);
+  const router = useRouter();
 
   function handleFirePointerMove(pointerEvent: PointerEvent<HTMLElement>) {
     if (!userFired) {
@@ -1321,12 +1318,15 @@ function DiscoveryEventCard({
     cardElRef.current?.style.setProperty("--churn", String(value));
   }
 
+  // Any click on a non-interactive surface (poster, title, pills, empty space)
+  // clicks through to the event details page. Buttons, links, inputs, and labels
+  // keep their own behavior via the isInteractiveTarget guard.
   function handleCardClick(eventClick: MouseEvent<HTMLElement>) {
     if (isInteractiveTarget(eventClick.target)) {
       return;
     }
 
-    onReveal(event.id);
+    router.push(`/event/${event.id}`);
   }
 
   function handleCardKeyDown(keyEvent: KeyboardEvent<HTMLElement>) {
@@ -1339,7 +1339,7 @@ function DiscoveryEventCard({
     }
 
     keyEvent.preventDefault();
-    onReveal(event.id);
+    router.push(`/event/${event.id}`);
   }
 
   return (

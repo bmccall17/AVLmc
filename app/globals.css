@@ -7966,6 +7966,254 @@ button.primary-action {
   text-transform: uppercase;
 }
 
+/* ── Card FX Lab: pushable button explorer ──────────────────────────────────
+   Applied via data-btnfx="..." on the lab card ONLY (the legacy archive card has
+   no attribute and is untouched). Real actions gain Z-axis depth so they read as
+   pressable; informational pills stay flat. Press depth comes from --btn-depth,
+   set inline by the lab. data-btnfx-links="on" extends the treatment to the
+   Details / AVLgo pill links. */
+
+/* per-surface extruded-edge colors (a darker shade of each face) */
+.card-lab-card .sandbox-action-bar .is-going,
+.card-lab-card .sandbox-action-bar .is-save {
+  --btn-edge: #0c0c0e;
+}
+
+.card-lab-card .sandbox-action-bar .is-fire {
+  --btn-edge: #9a3412;
+}
+
+.card-lab-card .sandbox-action-bar .is-remove {
+  --btn-edge: #18181c;
+}
+
+.card-lab-card .sandbox-card-links a {
+  --btn-edge: #71717a;
+}
+
+/* any 3D style: open up the flush bar so depth has room to read */
+.card-lab-card[data-btnfx]:not([data-btnfx="flush"]) .sandbox-action-bar {
+  background: rgba(9, 9, 11, 0.92);
+  gap: 8px;
+  height: 54px;
+  padding: 8px 9px 10px;
+}
+
+.card-lab-card[data-btnfx]:not([data-btnfx="flush"]) .sandbox-action-bar button {
+  border-radius: 9px;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    filter 140ms ease,
+    transform 120ms ease;
+}
+
+.card-lab-card[data-btnfx]:not([data-btnfx="flush"])[data-btnfx-links="on"]
+  .sandbox-card-links
+  a {
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    filter 140ms ease,
+    transform 120ms ease;
+}
+
+/* — keycap: solid extruded edge below the face; press sinks the key into it — */
+.card-lab-card[data-btnfx="keycap"] .sandbox-action-bar button,
+.card-lab-card[data-btnfx="keycap"][data-btnfx-links="on"] .sandbox-card-links a {
+  box-shadow:
+    0 var(--btn-depth, 3px) 0 var(--btn-edge),
+    0 calc(var(--btn-depth, 3px) + 6px) 12px rgba(0, 0, 0, 0.45);
+}
+
+.card-lab-card[data-btnfx="keycap"] .sandbox-action-bar button:hover,
+.card-lab-card[data-btnfx="keycap"][data-btnfx-links="on"] .sandbox-card-links a:hover {
+  box-shadow:
+    0 calc(var(--btn-depth, 3px) + 1px) 0 var(--btn-edge),
+    0 calc(var(--btn-depth, 3px) + 9px) 14px rgba(0, 0, 0, 0.5);
+  transform: translateY(-1px);
+}
+
+.card-lab-card[data-btnfx="keycap"] .sandbox-action-bar button:active,
+.card-lab-card[data-btnfx="keycap"][data-btnfx-links="on"] .sandbox-card-links a:active {
+  box-shadow:
+    0 1px 0 var(--btn-edge),
+    0 2px 4px rgba(0, 0, 0, 0.4);
+  filter: brightness(0.94);
+  transform: translateY(calc(var(--btn-depth, 3px) - 1px));
+}
+
+/* — arcade: hard offset shadow; press snaps the button into the shadow — */
+.card-lab-card[data-btnfx="arcade"] .sandbox-action-bar button,
+.card-lab-card[data-btnfx="arcade"][data-btnfx-links="on"] .sandbox-card-links a {
+  border: 1px solid var(--btn-edge);
+  box-shadow: var(--btn-depth, 3px) var(--btn-depth, 3px) 0 rgba(0, 0, 0, 0.85);
+}
+
+.card-lab-card[data-btnfx="arcade"] .sandbox-action-bar button:hover,
+.card-lab-card[data-btnfx="arcade"][data-btnfx-links="on"] .sandbox-card-links a:hover {
+  box-shadow: calc(var(--btn-depth, 3px) + 1px) calc(var(--btn-depth, 3px) + 1px) 0
+    rgba(0, 0, 0, 0.85);
+  transform: translate(-1px, -1px);
+}
+
+.card-lab-card[data-btnfx="arcade"] .sandbox-action-bar button:active,
+.card-lab-card[data-btnfx="arcade"][data-btnfx-links="on"] .sandbox-card-links a:active {
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.85);
+  filter: brightness(0.94);
+  transform: translate(var(--btn-depth, 3px), var(--btn-depth, 3px));
+}
+
+/* — soft raised: lit from above + drop shadow; press inverts to an inset dish — */
+.card-lab-card[data-btnfx="soft"] .sandbox-action-bar button,
+.card-lab-card[data-btnfx="soft"][data-btnfx-links="on"] .sandbox-card-links a {
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.16),
+    rgba(255, 255, 255, 0) 55%,
+    rgba(0, 0, 0, 0.25)
+  );
+  box-shadow:
+    0 calc(var(--btn-depth, 3px) * 1.5) calc(var(--btn-depth, 3px) * 3) rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.card-lab-card[data-btnfx="soft"] .sandbox-action-bar button:hover,
+.card-lab-card[data-btnfx="soft"][data-btnfx-links="on"] .sandbox-card-links a:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.card-lab-card[data-btnfx="soft"] .sandbox-action-bar button:active,
+.card-lab-card[data-btnfx="soft"][data-btnfx-links="on"] .sandbox-card-links a:active {
+  background-image: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.28),
+    rgba(255, 255, 255, 0.06)
+  );
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.65),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(1px);
+}
+
+/* — gel: glossy highlight over the face; press squashes the shine — */
+.card-lab-card[data-btnfx="gloss"] .sandbox-action-bar button {
+  border-radius: 12px;
+}
+
+.card-lab-card[data-btnfx="gloss"] .sandbox-action-bar button,
+.card-lab-card[data-btnfx="gloss"][data-btnfx-links="on"] .sandbox-card-links a {
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.14) 46%,
+    rgba(0, 0, 0, 0.16) 54%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  box-shadow:
+    0 var(--btn-depth, 3px) calc(var(--btn-depth, 3px) * 2.5) rgba(0, 0, 0, 0.5),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.3),
+    inset 0 2px 2px rgba(255, 255, 255, 0.35);
+}
+
+.card-lab-card[data-btnfx="gloss"] .sandbox-action-bar button:hover,
+.card-lab-card[data-btnfx="gloss"][data-btnfx-links="on"] .sandbox-card-links a:hover {
+  filter: brightness(1.06) saturate(1.1);
+}
+
+.card-lab-card[data-btnfx="gloss"] .sandbox-action-bar button:active,
+.card-lab-card[data-btnfx="gloss"][data-btnfx-links="on"] .sandbox-card-links a:active {
+  background-image: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.18),
+    rgba(255, 255, 255, 0.12)
+  );
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.4),
+    inset 0 2px 5px rgba(0, 0, 0, 0.4);
+  transform: translateY(2px) scaleY(0.96);
+}
+
+/* — bevel: retro chiseled edges; press flips the chisel — */
+.card-lab-card[data-btnfx="bevel"] .sandbox-action-bar button {
+  border-radius: 6px;
+}
+
+.card-lab-card[data-btnfx="bevel"] .sandbox-action-bar button,
+.card-lab-card[data-btnfx="bevel"][data-btnfx-links="on"] .sandbox-card-links a {
+  border: 2px solid;
+  border-color: rgba(255, 255, 255, 0.32) rgba(0, 0, 0, 0.62) rgba(0, 0, 0, 0.62)
+    rgba(255, 255, 255, 0.32);
+  box-shadow: 0 var(--btn-depth, 3px) calc(var(--btn-depth, 3px) * 2) rgba(0, 0, 0, 0.4);
+}
+
+.card-lab-card[data-btnfx="bevel"] .sandbox-action-bar button:hover,
+.card-lab-card[data-btnfx="bevel"][data-btnfx-links="on"] .sandbox-card-links a:hover {
+  filter: brightness(1.08);
+}
+
+.card-lab-card[data-btnfx="bevel"] .sandbox-action-bar button:active,
+.card-lab-card[data-btnfx="bevel"][data-btnfx-links="on"] .sandbox-card-links a:active {
+  border-color: rgba(0, 0, 0, 0.62) rgba(255, 255, 255, 0.22) rgba(255, 255, 255, 0.22)
+    rgba(0, 0, 0, 0.62);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  transform: translateY(1px);
+}
+
+/* — button style picker in the controls column — */
+.card-lab-btnfx-list {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+
+.card-lab-btnfx {
+  align-items: flex-start;
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 9px;
+  padding: 8px 10px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.card-lab-btnfx:hover {
+  background: rgba(39, 39, 42, 0.5);
+}
+
+.card-lab-btnfx.is-active {
+  background: rgba(249, 115, 22, 0.1);
+  border-color: rgba(249, 115, 22, 0.55);
+}
+
+.card-lab-btnfx input {
+  margin-top: 2px;
+}
+
+.card-lab-btnfx span {
+  display: grid;
+  gap: 2px;
+}
+
+.card-lab-btnfx strong {
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.card-lab-btnfx em {
+  color: #a1a1aa;
+  font-size: 0.72rem;
+  font-style: normal;
+  line-height: 1.35;
+}
+
 /* ── Anonymous Spotify tester request (PRD 42 / Phase 17) ─────────────────
    /spotify-access renders inside .auth-recovery-shell, so the dark tokens
    apply; these mirror .curator-apply-field for the request form itself. */
