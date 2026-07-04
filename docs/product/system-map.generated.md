@@ -179,6 +179,7 @@ Persists and reads per-listener behavioral signals (impressions, opens, fire, pl
   - _Param mapping:_ Signal reads bind $1::text[] identity keys and a window via make_interval(days => $2::int); the implicit-signal window is 90 days.
   - _Runtime gotcha:_ Per-dimension unions use explicit casts ('artist'::text as dimension) and tags are unnested via unnest(coalesce(tags, '{}'::text[])) to avoid null-array errors.
   - _Note:_ migrateSessionSignalsToUser re-keys a browser's anonymous rows to the user inside a transaction; per-event state (unique (event_id, identity_key)) merges with GREATEST timestamps; a second run is a no-op.
+  - _Note:_ writePersonEventState has toggle semantics: it reads the merged current state once, then writes the same explicit next value (fire_at / planning_at set or cleared) to every identity row, so a signed-in user's user: and session: rows can never desync into a stuck ON.
 - **Flows to / depends on:**
   - → event_interaction_events (flowsTo) — append log
   - → event_person_event_state (flowsTo) — per-event state
@@ -196,7 +197,7 @@ Validates and stores community contributions, reactions, and ticket/going intent
 - **Ownership:** hybrid
 - **Implementation notes:**
   - _Runtime gotcha:_ Count rollups use `count(*) filter (where ...)::int`; a legacy fallback synthesizes the going/fire/source columns when the newer source column is absent.
-  - _Note:_ Reactions/intents upsert `on conflict (event_id, identity_key) do update`; user_id is nullable so anonymous participation works.
+  - _Note:_ Reactions/intents upsert `on conflict (event_id, identity_key) do update`; user_id is nullable so anonymous participation works. Reactions and Going intents are true toggles: toggleReaction takes an explicit on direction (off deletes the caller's reaction) and removeEventIntent deletes a Going intent — deletes match by session and, for signed-in users, any rows under their user id; external intent sources (spotify / ticket_click) stay set-once.
 - **Flows to / depends on:**
   - → contributions (flowsTo) — songs/notes/voices
   - → reactions (flowsTo) — fire
