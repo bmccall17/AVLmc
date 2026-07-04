@@ -114,6 +114,39 @@ Updated: July 3, 2026
 
 ## Done
 
+* **Card FX round 2 — keycap toggles + ember burst, fire/going server toggle fix, landing hero redesign** —
+  Shipped (July 3, 2026), standalone UI + server bug fix (no PRD/admin cycle; follow-on to the June 30
+  Card FX sprint below).
+  * **Keycap action bar** (`components/EventBoard.tsx`, `app/globals.css`, lab twin in
+    `components/admin/CardFxLabSection.tsx`): Going/Fire/Save are real keycaps — OFF sits depressed in the
+    (now 54px) action tray with a dull face; ON pops up on its full keycap edge, illuminated in each
+    action's identity color (orange fire / green going / indigo save). Details/AVLgo are half-depth
+    momentary keys; shipped default `--btn-depth: 6px`, scoped to `.sandbox-event-card` so production and
+    lab share it. New one-shot `FireBurstFx`: 18 embers leap from the action bar when Fire flips off→on
+    (`prefers-reduced-motion`-aware; un-firing doesn't burst). Clicking Going/Fire freezes the rendered
+    card order until the pointer (or keyboard focus) leaves the card, so the grid never reorders under the
+    cursor mid-action. Remove no longer emits `aria-pressed` (momentary, not a toggle). In the lab,
+    "Keycap (shipped)" inherits production CSS with a live depth slider, "Flush" is relabeled legacy, and
+    the archived reference card is pinned to `data-btnfx="flush"`.
+  * **Fire/Going were never real toggles server-side** — a pre-existing bug the new OFF styling exposed:
+    clicking Fire inserted a reaction row (`on conflict do nothing`) and set `fire_at`, but nothing ever
+    deleted the row or cleared the timestamp, so un-firing returned `fire: true` with an unchanged count.
+    Fixed in three layers: `lib/discovery-memory.ts` `writePersonEventState` reads the merged state once
+    and writes the same explicit next value to every identity row (no `user:`/`session:` desync);
+    `lib/community.ts` `toggleReaction` takes an explicit `on` direction (off deletes → count −1) plus a
+    new `removeEventIntent` for Going; `app/api/discovery/event-action/route.ts` writes state first and
+    drives counts from the post-toggle state so button and count always move together. External intent
+    sources (spotify / ticket-click) keep set-once semantics; shared-song seeding fires only when the
+    toggle lands ON; legacy `/api/community/reactions` (no live callers) unchanged. No schema changes —
+    same tables, new delete/clear paths. Recorded in [PRD 02](prds/prd-02-community-contributions-and-reactions.md)
+    Implementation Status.
+  * **Landing hero** (`app/page.tsx`, `app/globals.css`): the Local Pulse panel now stretches the full
+    hero height with its rows distributed top-to-bottom (`align-content: space-between`), and the search
+    bar + Curators strip share one `nowrap` row (search flexes to fill; wraps again under 680px) — closes
+    the top-right and mid-hero blank gaps.
+  * Admin snapshots refreshed and committed (`docs/product/snapshots/*_07032026.png`) — closes the
+    June 30 entry's manual snapshot follow-up. `typecheck` / `lint` green; `$0`, no new deps.
+
 * **Cross-source duplicate event unification (Phase 18, PRD 06)** — Shipped (July 3, 2026). The dedupe
   pipeline (`lib/event-dedupe.ts`) now fuzzy-buckets start times: cross-source copies of the same show
   within 90 minutes (`FUZZY_START_WINDOW_MINUTES`) at the same date/venue/title-core collapse to one

@@ -35,25 +35,6 @@ import { SPOTIFY_LIMITED_BETA_CODE } from "@/lib/spotify-limited-access";
 // the Neon pool (53300 too_many_connections) during the build.
 export const dynamic = "force-dynamic";
 
-function formatDateParam(date: Date) {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function buildAvlgoSourceUrl(start: Date, end: Date) {
-  const url = new URL("https://www.avlgo.com/events");
-
-  url.searchParams.set("dateFilter", "custom");
-  url.searchParams.set("dateStart", formatDateParam(start));
-  url.searchParams.set("dateEnd", formatDateParam(end));
-  url.searchParams.set("tagsInclude", "Live Music");
-
-  return url.toString();
-}
-
 type HomePageProps = {
   searchParams?: Promise<{
     spotify?: string;
@@ -146,7 +127,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         !connection.tasteOptOutAt
     );
   const { start, end } = getDateWindow();
-  const avlgoSourceUrl = buildAvlgoSourceUrl(start, end);
   const scorePreview = getScorePreview(visibleEvents, discoveryScores);
 
   return (
@@ -159,18 +139,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <small>Asheville Music Companion</small>
           </div>
         </Link>
-        <nav className="sandbox-tabs" aria-label="Discovery views">
-          <a href="#for-you" aria-current="page">For You</a>
-          <a href="#local-pulse">Local Pulse</a>
-          <a href="#curators">Curators</a>
-        </nav>
         <div className="sandbox-topbar-actions">
-          <a className="sandbox-source-link" href={AVLGO_TOP_30_URL} rel="noreferrer" target="_blank">
-            Top 30 source
-          </a>
-          <a className="sandbox-source-link" href={avlgoSourceUrl} rel="noreferrer" target="_blank">
-            AVLgo feed
-          </a>
           <div className="sandbox-identity-actions">
             <ListenerProfileButton
               features={features}

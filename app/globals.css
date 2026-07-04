@@ -705,6 +705,37 @@ body {
   line-height: 1.2;
 }
 
+/* Homepage filter drawer: collapsed to a single row until the toggle opens it. */
+.filter-drawer {
+  display: grid;
+  gap: 12px;
+}
+
+.filter-drawer-toggle {
+  flex: 0 0 auto;
+}
+
+.filter-count-badge {
+  background: #f4f4f5;
+  border-radius: 999px;
+  color: #09090b;
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  min-width: 18px;
+  padding: 3px 6px;
+  text-align: center;
+}
+
+.filter-drawer-chevron {
+  transition: transform 0.18s ease;
+}
+
+.filter-drawer-chevron.is-open {
+  transform: rotate(180deg);
+}
+
 .filter-panel-kicker,
 .filter-section-label,
 .filter-field > span:first-child {
@@ -1314,8 +1345,8 @@ body {
   align-items: center;
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  margin-bottom: 34px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 20px;
 }
 
 .sandbox-profile,
@@ -1981,8 +2012,65 @@ body {
   color: #09090b;
 }
 
+/* Compact curator strip that sits inline with the hero search bar. */
+.sandbox-search-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.sandbox-search-row .sandbox-search {
+  flex: 1 1 auto;
+  margin-top: 0;
+  min-width: 0;
+}
+
+.sandbox-search-row .sandbox-search input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.curator-inline {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 680px) {
+  .sandbox-search-row {
+    flex-wrap: wrap;
+  }
+
+  .curator-inline {
+    flex: 1 1 auto;
+  }
+}
+
+.curator-inline {
+  align-items: center;
+  backdrop-filter: blur(18px);
+  background: rgba(24, 24, 27, 0.44);
+  border: 1px solid rgba(63, 63, 70, 0.78);
+  border-radius: 999px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 48px;
+  padding: 5px 8px 5px 16px;
+}
+
+.curator-inline .curator-status {
+  margin-bottom: 0;
+}
+
+.curator-inline .curator-action {
+  min-height: 34px;
+  padding: 0 11px;
+}
+
 .sandbox-hero {
-  align-items: end;
+  align-items: stretch;
   display: grid;
   gap: 26px;
   grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.85fr);
@@ -2051,6 +2139,8 @@ body {
   background: rgba(24, 24, 27, 0.38);
   border: 1px solid rgba(63, 63, 70, 0.72);
   border-radius: 8px;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   padding: 12px;
 }
@@ -2084,7 +2174,9 @@ body {
 }
 
 .sandbox-beat-list {
+  align-content: space-between;
   display: grid;
+  flex: 1;
   gap: 8px;
 }
 
@@ -2700,7 +2792,8 @@ body {
 .sandbox-event-card.is-revealed .sandbox-card-body,
 .sandbox-event-card:focus-within .sandbox-card-body,
 .sandbox-event-card:focus-visible .sandbox-card-body {
-  transform: translateY(-40px);
+  /* clears the 54px keycap action tray */
+  transform: translateY(-54px);
 }
 
 .sandbox-event-card:hover .sandbox-note,
@@ -3566,7 +3659,7 @@ button.primary-action {
   }
 
   .sandbox-card-body {
-    padding: 0 16px 54px;
+    padding: 0 16px 68px;
   }
 
   .sandbox-action-bar {
@@ -3589,7 +3682,7 @@ button.primary-action {
   }
 
   .sandbox-event-card.is-revealed .sandbox-card-body {
-    transform: translateY(-32px);
+    transform: translateY(-46px);
   }
 
   .sandbox-action-tooltip {
@@ -8025,6 +8118,415 @@ button.primary-action {
   letter-spacing: 0.06em;
   padding: 1px 5px;
   text-transform: uppercase;
+}
+
+/* ── SHIPPED button FX (Card FX Lab winner): keycap · 6px press depth ────────
+   Real actions are extruded keycaps so they read uniquely as pressable, while
+   informational pills stay flat. Going / Fire / Save are TOGGLES: raised and
+   illuminated when ON, depressed into the tray and dull when OFF (Fire is only
+   orange once fired). Remove and the Details / AVLgo links are momentary keys:
+   popped up until pressed. The Card FX Lab overrides these via data-btnfx. */
+
+.sandbox-event-card {
+  --btn-depth: 6px;
+}
+
+/* per-surface extruded-edge colors (a darker shade of each face) */
+.sandbox-event-card .sandbox-action-bar .is-going,
+.sandbox-event-card .sandbox-action-bar .is-save,
+.sandbox-event-card .sandbox-action-bar .save-button--icon {
+  --btn-edge: #0c0c0e;
+}
+
+.sandbox-event-card .sandbox-action-bar .is-fire {
+  --btn-edge: #9a3412;
+}
+
+.sandbox-event-card .sandbox-action-bar .is-remove {
+  --btn-edge: #18181c;
+}
+
+.sandbox-event-card .sandbox-card-links a {
+  --btn-edge: #71717a;
+}
+
+/* the bar becomes a padded tray the keys sit in */
+.sandbox-event-card .sandbox-action-bar {
+  background: rgba(9, 9, 11, 0.92);
+  gap: 8px;
+  height: 54px;
+  padding: 8px 9px 10px;
+}
+
+/* base keycap: raised face over a solid extruded edge (Remove stays momentary) */
+.sandbox-event-card .sandbox-action-bar button {
+  border-radius: 9px;
+  box-shadow:
+    0 var(--btn-depth, 6px) 0 var(--btn-edge, #0c0c0e),
+    0 calc(var(--btn-depth, 6px) + 6px) 12px rgba(0, 0, 0, 0.45);
+  transition:
+    background 140ms ease,
+    box-shadow 120ms ease,
+    color 140ms ease,
+    filter 140ms ease,
+    transform 120ms ease;
+}
+
+.sandbox-event-card .sandbox-action-bar button:hover {
+  box-shadow:
+    0 calc(var(--btn-depth, 6px) + 1px) 0 var(--btn-edge, #0c0c0e),
+    0 calc(var(--btn-depth, 6px) + 9px) 14px rgba(0, 0, 0, 0.5),
+    0 0 12px rgba(250, 250, 250, 0.08);
+  transform: translateY(-1px);
+}
+
+.sandbox-event-card .sandbox-action-bar button:active {
+  box-shadow:
+    0 1px 0 var(--btn-edge, #0c0c0e),
+    0 2px 4px rgba(0, 0, 0, 0.4);
+  filter: brightness(0.94);
+  transform: translateY(calc(var(--btn-depth, 6px) - 1px));
+}
+
+/* toggles OFF (Going / Fire / Save): depressed into the tray + dull */
+.sandbox-event-card .sandbox-action-bar button[aria-pressed="false"] {
+  background: #1b1b1e;
+  box-shadow:
+    0 1px 0 var(--btn-edge, #0c0c0e),
+    inset 0 2px 5px rgba(0, 0, 0, 0.6);
+  color: #71717a;
+  transform: translateY(calc(var(--btn-depth, 6px) - 1px));
+}
+
+.sandbox-event-card .sandbox-action-bar button[aria-pressed="false"]:hover {
+  color: #a1a1aa;
+  filter: brightness(1.2);
+  transform: translateY(calc(var(--btn-depth, 6px) - 2px));
+}
+
+/* toggles ON: popped back up + illuminated */
+.sandbox-event-card .sandbox-action-bar .is-going[aria-pressed="true"] {
+  background: #3f3f46;
+  box-shadow:
+    0 var(--btn-depth, 6px) 0 var(--btn-edge, #0c0c0e),
+    0 calc(var(--btn-depth, 6px) + 6px) 14px rgba(0, 0, 0, 0.5),
+    0 0 16px rgba(74, 222, 128, 0.3);
+  color: #bbf7d0;
+}
+
+.sandbox-event-card .sandbox-action-bar .is-fire[aria-pressed="true"] {
+  background: #f97316;
+  box-shadow:
+    0 var(--btn-depth, 6px) 0 var(--btn-edge, #9a3412),
+    0 calc(var(--btn-depth, 6px) + 6px) 14px rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(249, 115, 22, 0.55);
+  color: #09090b;
+}
+
+.sandbox-event-card .sandbox-action-bar .is-save[aria-pressed="true"],
+.sandbox-event-card .sandbox-action-bar .save-button--icon[aria-pressed="true"] {
+  background: #303036;
+  box-shadow:
+    0 var(--btn-depth, 6px) 0 var(--btn-edge, #0c0c0e),
+    0 calc(var(--btn-depth, 6px) + 6px) 14px rgba(0, 0, 0, 0.5),
+    0 0 16px rgba(129, 140, 248, 0.4);
+  color: #818cf8;
+}
+
+/* pressing a toggle (either direction) always sinks the key */
+.sandbox-event-card .sandbox-action-bar button[aria-pressed="true"]:active,
+.sandbox-event-card .sandbox-action-bar button[aria-pressed="false"]:active {
+  box-shadow:
+    0 1px 0 var(--btn-edge, #0c0c0e),
+    inset 0 2px 5px rgba(0, 0, 0, 0.55);
+  filter: brightness(0.94);
+  transform: translateY(calc(var(--btn-depth, 6px) - 1px));
+}
+
+/* Details / AVLgo links: momentary keycaps at half depth — popped up until pressed */
+.sandbox-event-card .sandbox-card-links a {
+  box-shadow:
+    0 calc(var(--btn-depth, 6px) / 2) 0 var(--btn-edge, #71717a),
+    0 calc(var(--btn-depth, 6px) / 2 + 6px) 10px rgba(0, 0, 0, 0.35);
+  transition:
+    box-shadow 120ms ease,
+    filter 140ms ease,
+    transform 120ms ease;
+}
+
+.sandbox-event-card .sandbox-card-links a:hover {
+  transform: translateY(-1px);
+}
+
+.sandbox-event-card .sandbox-card-links a:active {
+  box-shadow:
+    0 1px 0 var(--btn-edge, #71717a),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+  filter: brightness(0.96);
+  transform: translateY(calc(var(--btn-depth, 6px) / 2 - 1px));
+}
+
+/* one-shot ember burst when FIRE ignites (see FireBurstFx / lab equivalent) */
+.fire-burst {
+  bottom: 48px;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 6;
+}
+
+.fire-burst i {
+  animation: fireBurstRise 0.9s ease-out forwards;
+  border-radius: 50%;
+  bottom: 0;
+  filter: blur(0.3px);
+  mix-blend-mode: screen;
+  opacity: 0;
+  position: absolute;
+}
+
+@keyframes fireBurstRise {
+  0% {
+    opacity: 0;
+    transform: translate(0, 6px) scale(0.5);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(calc(var(--dx, 0px) * 0.25), -12px) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 0px), -140px) scale(0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fire-burst i {
+    animation: none;
+  }
+}
+
+/* ── Card FX Lab: pushable button explorer ──────────────────────────────────
+   data-btnfx on the lab card overrides the shipped keycap so other styles can
+   still be explored. "flush" restores the pre-keycap production look. */
+
+.card-lab-card[data-btnfx="flush"] .sandbox-action-bar {
+  background: none;
+  gap: 1px;
+  height: 40px;
+  padding: 0;
+}
+
+.card-lab-card[data-btnfx="flush"] .sandbox-action-bar button {
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+}
+
+.card-lab-card[data-btnfx="flush"] .sandbox-action-bar button.is-going,
+.card-lab-card[data-btnfx="flush"] .sandbox-action-bar button.is-save {
+  background: rgba(39, 39, 42, 0.96);
+  color: #fafafa;
+}
+
+.card-lab-card[data-btnfx="flush"] .sandbox-action-bar button.is-fire {
+  background: #f97316;
+  color: #09090b;
+}
+
+.card-lab-card[data-btnfx="flush"] .sandbox-action-bar button.is-remove {
+  background: rgba(63, 63, 70, 0.96);
+  color: #fb7185;
+}
+
+.card-lab-card[data-btnfx="flush"] .sandbox-card-links a {
+  box-shadow: none;
+  transform: none;
+}
+
+/* lab: flatten the Details / AVLgo links when the links toggle is off */
+.card-lab-card[data-btnfx-links="off"] .sandbox-card-links a,
+.card-lab-card[data-btnfx-links="off"] .sandbox-card-links a:hover,
+.card-lab-card[data-btnfx-links="off"] .sandbox-card-links a:active {
+  box-shadow: none;
+  filter: none;
+  transform: none;
+}
+
+/* — keycap: no rules needed — data-btnfx="keycap" simply inherits the shipped
+   production treatment above; the lab's depth slider drives --btn-depth inline — */
+
+/* — arcade: hard offset shadow; press snaps the button into the shadow — */
+.card-lab-card[data-btnfx="arcade"] .sandbox-action-bar button,
+.card-lab-card[data-btnfx="arcade"][data-btnfx-links="on"] .sandbox-card-links a {
+  border: 1px solid var(--btn-edge);
+  box-shadow: var(--btn-depth, 3px) var(--btn-depth, 3px) 0 rgba(0, 0, 0, 0.85);
+}
+
+.card-lab-card[data-btnfx="arcade"] .sandbox-action-bar button:hover,
+.card-lab-card[data-btnfx="arcade"][data-btnfx-links="on"] .sandbox-card-links a:hover {
+  box-shadow: calc(var(--btn-depth, 3px) + 1px) calc(var(--btn-depth, 3px) + 1px) 0
+    rgba(0, 0, 0, 0.85);
+  transform: translate(-1px, -1px);
+}
+
+.card-lab-card[data-btnfx="arcade"] .sandbox-action-bar button:active,
+.card-lab-card[data-btnfx="arcade"][data-btnfx-links="on"] .sandbox-card-links a:active {
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.85);
+  filter: brightness(0.94);
+  transform: translate(var(--btn-depth, 3px), var(--btn-depth, 3px));
+}
+
+/* — soft raised: lit from above + drop shadow; press inverts to an inset dish — */
+.card-lab-card[data-btnfx="soft"] .sandbox-action-bar button,
+.card-lab-card[data-btnfx="soft"][data-btnfx-links="on"] .sandbox-card-links a {
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.16),
+    rgba(255, 255, 255, 0) 55%,
+    rgba(0, 0, 0, 0.25)
+  );
+  box-shadow:
+    0 calc(var(--btn-depth, 3px) * 1.5) calc(var(--btn-depth, 3px) * 3) rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.card-lab-card[data-btnfx="soft"] .sandbox-action-bar button:hover,
+.card-lab-card[data-btnfx="soft"][data-btnfx-links="on"] .sandbox-card-links a:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.card-lab-card[data-btnfx="soft"] .sandbox-action-bar button:active,
+.card-lab-card[data-btnfx="soft"][data-btnfx-links="on"] .sandbox-card-links a:active {
+  background-image: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.28),
+    rgba(255, 255, 255, 0.06)
+  );
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.65),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(1px);
+}
+
+/* — gel: glossy highlight over the face; press squashes the shine — */
+.card-lab-card[data-btnfx="gloss"] .sandbox-action-bar button {
+  border-radius: 12px;
+}
+
+.card-lab-card[data-btnfx="gloss"] .sandbox-action-bar button,
+.card-lab-card[data-btnfx="gloss"][data-btnfx-links="on"] .sandbox-card-links a {
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.14) 46%,
+    rgba(0, 0, 0, 0.16) 54%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  box-shadow:
+    0 var(--btn-depth, 3px) calc(var(--btn-depth, 3px) * 2.5) rgba(0, 0, 0, 0.5),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.3),
+    inset 0 2px 2px rgba(255, 255, 255, 0.35);
+}
+
+.card-lab-card[data-btnfx="gloss"] .sandbox-action-bar button:hover,
+.card-lab-card[data-btnfx="gloss"][data-btnfx-links="on"] .sandbox-card-links a:hover {
+  filter: brightness(1.06) saturate(1.1);
+}
+
+.card-lab-card[data-btnfx="gloss"] .sandbox-action-bar button:active,
+.card-lab-card[data-btnfx="gloss"][data-btnfx-links="on"] .sandbox-card-links a:active {
+  background-image: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.18),
+    rgba(255, 255, 255, 0.12)
+  );
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.4),
+    inset 0 2px 5px rgba(0, 0, 0, 0.4);
+  transform: translateY(2px) scaleY(0.96);
+}
+
+/* — bevel: retro chiseled edges; press flips the chisel — */
+.card-lab-card[data-btnfx="bevel"] .sandbox-action-bar button {
+  border-radius: 6px;
+}
+
+.card-lab-card[data-btnfx="bevel"] .sandbox-action-bar button,
+.card-lab-card[data-btnfx="bevel"][data-btnfx-links="on"] .sandbox-card-links a {
+  border: 2px solid;
+  border-color: rgba(255, 255, 255, 0.32) rgba(0, 0, 0, 0.62) rgba(0, 0, 0, 0.62)
+    rgba(255, 255, 255, 0.32);
+  box-shadow: 0 var(--btn-depth, 3px) calc(var(--btn-depth, 3px) * 2) rgba(0, 0, 0, 0.4);
+}
+
+.card-lab-card[data-btnfx="bevel"] .sandbox-action-bar button:hover,
+.card-lab-card[data-btnfx="bevel"][data-btnfx-links="on"] .sandbox-card-links a:hover {
+  filter: brightness(1.08);
+}
+
+.card-lab-card[data-btnfx="bevel"] .sandbox-action-bar button:active,
+.card-lab-card[data-btnfx="bevel"][data-btnfx-links="on"] .sandbox-card-links a:active {
+  border-color: rgba(0, 0, 0, 0.62) rgba(255, 255, 255, 0.22) rgba(255, 255, 255, 0.22)
+    rgba(0, 0, 0, 0.62);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  transform: translateY(1px);
+}
+
+/* — button style picker in the controls column — */
+.card-lab-btnfx-list {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+
+.card-lab-btnfx {
+  align-items: flex-start;
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 9px;
+  padding: 8px 10px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.card-lab-btnfx:hover {
+  background: rgba(39, 39, 42, 0.5);
+}
+
+.card-lab-btnfx.is-active {
+  background: rgba(249, 115, 22, 0.1);
+  border-color: rgba(249, 115, 22, 0.55);
+}
+
+.card-lab-btnfx input {
+  margin-top: 2px;
+}
+
+.card-lab-btnfx span {
+  display: grid;
+  gap: 2px;
+}
+
+.card-lab-btnfx strong {
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.card-lab-btnfx em {
+  color: #a1a1aa;
+  font-size: 0.72rem;
+  font-style: normal;
+  line-height: 1.35;
 }
 
 /* ── Anonymous Spotify tester request (PRD 42 / Phase 17) ─────────────────

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
-import { Bell, CalendarCheck, Check, ChevronRight, ExternalLink, Flame, Headphones, Search, Share2, Star, UserPlus, X } from "lucide-react";
+import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
+import { Bell, CalendarCheck, Check, ChevronDown, ChevronRight, ExternalLink, Flame, Headphones, Search, Share2, SlidersHorizontal, Star, UserPlus, X } from "lucide-react";
 import { useSignInChooser } from "@/components/SignInChooser";
 import { SaveButton } from "@/components/SaveButton";
 import { SharedSongsCard, type SharedSongSummary } from "@/components/SharedSongsCard";
@@ -99,6 +100,8 @@ const SKIP_REMOVE_CONFIRM_KEY = "avlmc:homepage:skip-remove-confirm";
 const SIGNIN_NUDGE_DISMISS_KEY = "avlmc:signin-nudge-dismissed";
 const KEEP_INTENT_PARAM = "keepIntent";
 const NUDGEABLE_ACTIONS = new Set<CardAction>(["fire", "planning", "remove"]);
+// Number of event cards shown above the collapsed filter bar (matches the desktop grid row).
+const FIRST_ROW_COUNT = 3;
 
 const actionHelp: Record<ActionKind, { body: string; impact: string; title: string }> = {
   going: {
@@ -141,6 +144,42 @@ function buildEmbers(count: number) {
     size: 3 + (i % 4),
     color: EMBER_PALETTE[i % EMBER_PALETTE.length],
   }));
+}
+
+// One-shot burst of embers when the user ignites FIRE: sparks leap from the action
+// bar and float up and away while the perimeter glow lights. Mounted with a fresh
+// key per ignition; unmounts itself when the animation is done.
+const BURST_SPARKS = 18;
+
+function FireBurstFx({ onDone }: { onDone: () => void }) {
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  useEffect(() => {
+    const id = window.setTimeout(() => onDoneRef.current(), 1500);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  return (
+    <span className="fire-burst" aria-hidden="true">
+      {Array.from({ length: BURST_SPARKS }, (_, i) => (
+        <i
+          key={i}
+          style={
+            {
+              left: `${34 + ((i * 37) % 46)}%`,
+              width: 3 + (i % 4),
+              height: 3 + (i % 4),
+              background: EMBER_PALETTE[i % EMBER_PALETTE.length],
+              animationDelay: `${((i * 41) % 30) / 100}s`,
+              animationDuration: `${0.75 + ((i * 29) % 55) / 100}s`,
+              "--dx": `${((i * 53) % 96) - 48}px`,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </span>
+  );
 }
 
 // One shared SVG turbulence filter referenced by every card's flame ring + hotspot.
@@ -210,6 +249,8 @@ export function EventBoard({
   const [customDateStart, setCustomDateStart] = useState("");
   const [customDateEnd, setCustomDateEnd] = useState("");
   const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "shared">("idle");
+  // Filter drawer is collapsed by default; the listener opens it deliberately.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [urlStateReady, setUrlStateReady] = useState(false);
   const [eventCounts, setEventCounts] = useState(counts);
   const [eventScores, setEventScores] = useState(discoveryScores);
@@ -222,7 +263,15 @@ export function EventBoard({
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
   const [confirmEvent, setConfirmEvent] = useState<EventRecord | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // First card starts revealed as a "this is how cards open" affordance; clicking a
+  // card now navigates to its details page instead of toggling the disclosure.
   const [revealedEventId, setRevealedEventId] = useState<string | null>(events[0]?.id ?? null);
+  // Going/Fire re-scores the list, but re-sorting the grid under the cursor is
+  // disorienting. Freeze the visible order at click time and release it once the
+  // pointer (or focus) leaves the card that was acted on.
+  const [orderFreeze, setOrderFreeze] = useState<{ eventId: string; order: string[] } | null>(
+    null
+  );
   const [skipConfirm, setSkipConfirm] = useState(false);
   const [skipFutureConfirm, setSkipFutureConfirm] = useState(false);
   const top30EventIdSet = useMemo(() => new Set(top30EventIds), [top30EventIds]);
@@ -286,6 +335,13 @@ export function EventBoard({
     customDateStart !== "" ||
     customDateEnd !== "" ||
     sortMode !== defaultSortMode;
+
+  const activeFilterCount =
+    selectedVenues.length +
+    (tag !== "all" ? 1 : 0) +
+    activeQuickFilters.length +
+    (rangeDays !== 0 || customDateStart || customDateEnd ? 1 : 0) +
+    (sortMode !== defaultSortMode ? 1 : 0);
 
   const effectiveWindowLabel = rangeWindowLabel(
     rangeDays,
@@ -539,6 +595,19 @@ export function EventBoard({
       .sort((a, b) => compareEvents(a, b, eventCounts, eventScores, sortMode));
   }, [activeQuickFilters, customDateEnd, customDateStart, eventCounts, eventGenres, eventScores, query, rangeDays, selectedVenues, sortMode, tag, visibleEvents]);
 
+  // While an order freeze is active, keep rendering the order captured at click time.
+  // Filtering still applies (removed cards drop out); brand-new cards append at the end.
+  const displayedEvents = useMemo(() => {
+    if (!orderFreeze) {
+      return filteredEvents;
+    }
+    const rank = new Map(orderFreeze.order.map((id, index) => [id, index]));
+    return [...filteredEvents].sort(
+      (a, b) =>
+        (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+    );
+  }, [filteredEvents, orderFreeze]);
+
   function clearFilters() {
     setQuery("");
     setSelectedVenues([]);
@@ -783,6 +852,8 @@ export function EventBoard({
   async function togglePositiveAction(event: EventRecord, action: Extract<ActionKind, "fire" | "going">) {
     clearTooltip();
     setToastEvent(null);
+    // Hold the current visible order until the pointer leaves this card (see orderFreeze).
+    setOrderFreeze({ eventId: event.id, order: displayedEvents.map((entry) => entry.id) });
     const cardAction: CardAction = action === "going" ? "planning" : "fire";
     const data = await recordCardAction(event, cardAction);
     if (data?.curatorPickAdded) {
@@ -841,8 +912,46 @@ export function EventBoard({
     }
   }
 
-  function toggleReveal(eventId: string) {
-    setRevealedEventId((current) => (current === eventId ? null : eventId));
+  function renderEventCard(event: EventRecord, index: number) {
+    const score = eventScores[event.id];
+    const reasons = score?.reasons ?? [];
+    const countsForEvent = eventCounts[event.id];
+    const state = discoveryStates[event.id];
+
+    return (
+      <DiscoveryEventCard
+        activeTooltip={activeTooltip}
+        counts={countsForEvent}
+        event={event}
+        index={index}
+        isPending={pendingAction?.startsWith(`${event.id}:`) ?? false}
+        isRevealed={revealedEventId === event.id}
+        isSaved={savedEventKeySet.has(event.id)}
+        isSignedIn={isSignedIn}
+        isTop30={top30EventIdSet.has(event.id)}
+        key={event.id}
+        onClearTooltip={clearTooltip}
+        onQueueTooltip={queueTooltip}
+        onRemove={requestRemove}
+        onSettle={() => {
+          setOrderFreeze((current) => (current?.eventId === event.id ? null : current));
+        }}
+        onScoreChange={(updatedScore) => {
+          setEventScores((current) => ({
+            ...current,
+            [event.id]: updatedScore,
+          }));
+        }}
+        onTogglePositiveAction={togglePositiveAction}
+        onTrackAvlgoClick={trackAvlgoClick}
+        circleActivity={circleActivityByEvent?.[event.id]}
+        curatedBy={curatedByEvent?.[event.id]}
+        reasons={reasons}
+        score={score}
+        sharedSongSummary={sharedSongSummaries[event.id]}
+        state={state}
+      />
+    );
   }
 
   return (
@@ -854,15 +963,18 @@ export function EventBoard({
           <p className="lede">
             A {rangeDays > 0 ? "" : "rolling "}{effectiveWindowLabel} live music board, ranked by your taste, local pulse, and curator signals.
           </p>
-          <label className="sandbox-search">
-            <Search aria-hidden="true" size={17} strokeWidth={2.4} />
-            <input
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search venues, artists, signals"
-              type="search"
-              value={query}
-            />
-          </label>
+          <div className="sandbox-search-row">
+            <label className="sandbox-search">
+              <Search aria-hidden="true" size={17} strokeWidth={2.4} />
+              <input
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search venues, artists, signals"
+                type="search"
+                value={query}
+              />
+            </label>
+            <CuratorInline />
+          </div>
         </div>
 
         <SocialDiscoveryBeats
@@ -874,12 +986,41 @@ export function EventBoard({
         />
       </section>
 
-      <CuratorComingSoon />
+      {errorMessage ? <p className="sandbox-error-message">{errorMessage}</p> : null}
+
+      <FireTurbulenceFilter />
+
+      {filteredEvents.length === 0 ? (
+        <section className="empty-state">
+          <h2>No matching music events</h2>
+          <p>Try clearing a filter or searching for a different artist, venue, or tag.</p>
+        </section>
+      ) : (
+        <section className="sandbox-layout" id="cards" aria-label="Upcoming music events">
+          {displayedEvents.slice(0, FIRST_ROW_COUNT).map((event, index) => renderEventCard(event, index))}
+        </section>
+      )}
 
       <section className="search-panel discovery-filter-panel" aria-label="Discovery controls">
         <div className="filter-panel-head">
+          <button
+            aria-controls="filter-drawer"
+            aria-expanded={filtersOpen}
+            className="filter-reset filter-drawer-toggle"
+            onClick={() => setFiltersOpen((current) => !current)}
+            type="button"
+          >
+            <SlidersHorizontal aria-hidden="true" size={15} strokeWidth={2.6} />
+            Filters
+            {activeFilterCount > 0 ? <em className="filter-count-badge">{activeFilterCount}</em> : null}
+            <ChevronDown
+              aria-hidden="true"
+              className={`filter-drawer-chevron${filtersOpen ? " is-open" : ""}`}
+              size={15}
+              strokeWidth={2.6}
+            />
+          </button>
           <div>
-            <span className="filter-panel-kicker">Filters</span>
             <strong>
               {filteredEvents.length} of {visibleEvents.length} showing
             </strong>
@@ -902,6 +1043,8 @@ export function EventBoard({
           </div>
         </div>
 
+        {filtersOpen ? (
+        <div className="filter-drawer" id="filter-drawer">
         <div className="filter-section">
           <span className="filter-section-label">Dates</span>
           <div className="filter-group" aria-label="Date range filters">
@@ -1093,6 +1236,8 @@ export function EventBoard({
             </datalist>
           </div>
         </details>
+        </div>
+        ) : null}
       </section>
 
       <section className="toolbar" aria-label="Event list summary">
@@ -1112,58 +1257,13 @@ export function EventBoard({
         </div>
       </section>
 
-      {errorMessage ? <p className="sandbox-error-message">{errorMessage}</p> : null}
-
-      <FireTurbulenceFilter />
-
-      {filteredEvents.length === 0 ? (
-        <section className="empty-state">
-          <h2>No matching music events</h2>
-          <p>Try clearing a filter or searching for a different artist, venue, or tag.</p>
+      {displayedEvents.length > FIRST_ROW_COUNT ? (
+        <section className="sandbox-layout" aria-label="More music events">
+          {displayedEvents
+            .slice(FIRST_ROW_COUNT)
+            .map((event, index) => renderEventCard(event, index + FIRST_ROW_COUNT))}
         </section>
-      ) : (
-        <section className="sandbox-layout" id="cards" aria-label="Upcoming music events">
-          {filteredEvents.map((event, index) => {
-            const score = eventScores[event.id];
-            const reasons = score?.reasons ?? [];
-            const countsForEvent = eventCounts[event.id];
-            const state = discoveryStates[event.id];
-
-            return (
-              <DiscoveryEventCard
-                activeTooltip={activeTooltip}
-                counts={countsForEvent}
-                event={event}
-                index={index}
-                isPending={pendingAction?.startsWith(`${event.id}:`) ?? false}
-                isRevealed={revealedEventId === event.id}
-                isSaved={savedEventKeySet.has(event.id)}
-                isSignedIn={isSignedIn}
-                isTop30={top30EventIdSet.has(event.id)}
-                key={event.id}
-                onClearTooltip={clearTooltip}
-                onQueueTooltip={queueTooltip}
-                onRemove={requestRemove}
-                onReveal={toggleReveal}
-                onScoreChange={(updatedScore) => {
-                  setEventScores((current) => ({
-                    ...current,
-                    [event.id]: updatedScore,
-                  }));
-                }}
-                onTogglePositiveAction={togglePositiveAction}
-                onTrackAvlgoClick={trackAvlgoClick}
-                circleActivity={circleActivityByEvent?.[event.id]}
-                curatedBy={curatedByEvent?.[event.id]}
-                reasons={reasons}
-                score={score}
-                sharedSongSummary={sharedSongSummaries[event.id]}
-                state={state}
-              />
-            );
-          })}
-        </section>
-      )}
+      ) : null}
 
       {confirmEvent ? (
         <RemoveConfirmationDialog
@@ -1249,8 +1349,8 @@ function DiscoveryEventCard({
   onClearTooltip,
   onQueueTooltip,
   onRemove,
-  onReveal,
   onScoreChange,
+  onSettle,
   onTogglePositiveAction,
   onTrackAvlgoClick,
   reasons,
@@ -1272,8 +1372,8 @@ function DiscoveryEventCard({
   onClearTooltip: () => void;
   onQueueTooltip: (eventId: string, action: ActionKind) => void;
   onRemove: (event: EventRecord) => void;
-  onReveal: (eventId: string) => void;
   onScoreChange: (score: DiscoveryScore) => void;
+  onSettle: () => void;
   onTogglePositiveAction: (event: EventRecord, action: Extract<ActionKind, "fire" | "going">) => void;
   onTrackAvlgoClick: (event: EventRecord) => void;
   reasons: DiscoveryReason[];
@@ -1296,6 +1396,9 @@ function DiscoveryEventCard({
   const showEmbers = fire > 0;
   const embers = showEmbers ? buildEmbers(fire) : [];
   const cardElRef = useRef<HTMLElement | null>(null);
+  const router = useRouter();
+  // One-shot ember burst, armed each time the user ignites FIRE (off → on).
+  const [burstAt, setBurstAt] = useState(0);
 
   function handleFirePointerMove(pointerEvent: PointerEvent<HTMLElement>) {
     if (!userFired) {
@@ -1321,12 +1424,15 @@ function DiscoveryEventCard({
     cardElRef.current?.style.setProperty("--churn", String(value));
   }
 
+  // Any click on a non-interactive surface (poster, title, pills, empty space)
+  // clicks through to the event details page. Buttons, links, inputs, and labels
+  // keep their own behavior via the isInteractiveTarget guard.
   function handleCardClick(eventClick: MouseEvent<HTMLElement>) {
     if (isInteractiveTarget(eventClick.target)) {
       return;
     }
 
-    onReveal(event.id);
+    router.push(`/event/${event.id}`);
   }
 
   function handleCardKeyDown(keyEvent: KeyboardEvent<HTMLElement>) {
@@ -1339,7 +1445,7 @@ function DiscoveryEventCard({
     }
 
     keyEvent.preventDefault();
-    onReveal(event.id);
+    router.push(`/event/${event.id}`);
   }
 
   return (
@@ -1353,7 +1459,15 @@ function DiscoveryEventCard({
       onPointerMove={handleFirePointerMove}
       onPointerDown={() => setFireChurn(1)}
       onPointerUp={() => setFireChurn(0)}
-      onPointerLeave={() => setFireChurn(0)}
+      onPointerLeave={() => {
+        setFireChurn(0);
+        onSettle();
+      }}
+      onBlur={(blurEvent: FocusEvent<HTMLElement>) => {
+        if (!blurEvent.currentTarget.contains(blurEvent.relatedTarget as Node | null)) {
+          onSettle();
+        }
+      }}
       tabIndex={0}
     >
       {showEmbers || userFired ? (
@@ -1380,6 +1494,8 @@ function DiscoveryEventCard({
           ) : null}
         </div>
       ) : null}
+
+      {burstAt ? <FireBurstFx key={burstAt} onDone={() => setBurstAt(0)} /> : null}
 
       <EventPoster event={event} />
 
@@ -1498,7 +1614,13 @@ function DiscoveryEventCard({
           isDisabled={isPending}
           isPressed={state?.fire ?? false}
           onClearTooltip={onClearTooltip}
-          onClick={() => onTogglePositiveAction(event, "fire")}
+          onClick={() => {
+            if (!userFired) {
+              // Igniting (not un-firing): burst embers up from the action bar.
+              setBurstAt(Date.now());
+            }
+            onTogglePositiveAction(event, "fire");
+          }}
           onQueueTooltip={onQueueTooltip}
         >
           <Flame aria-hidden="true" size={16} strokeWidth={2.5} />
@@ -1578,11 +1700,13 @@ function ActionButton({
   const tooltipId = `event-${eventId}-${action}-tooltip`;
   const isTooltipActive = activeTooltip?.eventId === eventId && activeTooltip.action === action;
 
+  // Remove is a momentary action, not a toggle — it gets no aria-pressed state (which
+  // also keeps it out of the depressed/dull "toggle OFF" keycap styling).
   return (
     <button
       aria-describedby={isTooltipActive ? tooltipId : undefined}
       aria-label={ariaLabel}
-      aria-pressed={isPressed}
+      aria-pressed={action === "remove" ? undefined : isPressed}
       className={`is-${action}`}
       disabled={isDisabled}
       onBlur={onClearTooltip}
@@ -1785,33 +1909,30 @@ function SocialDiscoveryBeats({
   );
 }
 
-function CuratorComingSoon() {
+function CuratorInline() {
   return (
-    <section className="curator-callout" id="curators" aria-label="Curators">
-      <div className="curator-callout-copy">
-        <span className="curator-status">
-          <Bell aria-hidden="true" size={14} strokeWidth={2.6} />
-          Now live
-        </span>
-        <h2>Curators</h2>
-        <p>
-          Follow local tastemakers and music circles so their show picks carry into your discovery feed.
-        </p>
-      </div>
-      <div className="curator-actions">
-        <Link className="curator-action is-playlist" href="/curators">
-          Browse curators
-          <ChevronRight aria-hidden="true" size={16} strokeWidth={2.4} />
-        </Link>
-        <Link className="curator-action" href="/curators/apply">
-          <UserPlus aria-hidden="true" size={14} strokeWidth={2.6} />
-          Sign up
-        </Link>
-        <Link className="curator-action" href="/curators/recommend">
-          Recommend a curator
-        </Link>
-      </div>
-    </section>
+    <div
+      className="curator-inline"
+      id="curators"
+      aria-label="Curators"
+      title="Follow local tastemakers and music circles so their show picks carry into your discovery feed."
+    >
+      <span className="curator-status">
+        <Bell aria-hidden="true" size={13} strokeWidth={2.6} />
+        Curators
+      </span>
+      <Link className="curator-action is-playlist" href="/curators">
+        Browse
+        <ChevronRight aria-hidden="true" size={14} strokeWidth={2.4} />
+      </Link>
+      <Link className="curator-action" href="/curators/apply">
+        <UserPlus aria-hidden="true" size={13} strokeWidth={2.6} />
+        Sign up
+      </Link>
+      <Link className="curator-action" href="/curators/recommend">
+        Recommend
+      </Link>
+    </div>
   );
 }
 

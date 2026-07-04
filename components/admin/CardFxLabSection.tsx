@@ -137,6 +137,47 @@ const DEFAULT_VISIBLE: Record<ElementKey, boolean> = {
 
 const LOCKED = new Set(ELEMENTS.filter((el) => el.locked).map((el) => el.key));
 
+// --- pushable button styles ----------------------------------------------------
+// Explores 3D "pressable" treatments for the real action surfaces (Going / Fire /
+// Remove / Save, optionally Details / AVLgo) so buttons read uniquely as buttons
+// while informational pills (match %, genre, social pulse) stay flat.
+
+type ButtonFx = "flush" | "keycap" | "arcade" | "soft" | "gloss" | "bevel";
+
+const BUTTON_FX: Array<{ key: ButtonFx; label: string; blurb: string }> = [
+  {
+    key: "flush",
+    label: "Flush (legacy)",
+    blurb: "Flat color cells, edge to edge — the pre-keycap production look.",
+  },
+  {
+    key: "keycap",
+    label: "Keycap (shipped)",
+    blurb:
+      "Solid darker edge extruded below the face; pressing sinks the key into it. Shipped to production at 6px.",
+  },
+  {
+    key: "arcade",
+    label: "Arcade",
+    blurb: "Hard offset shadow down-right; pressing snaps the button flush into the shadow.",
+  },
+  {
+    key: "soft",
+    label: "Soft raised",
+    blurb: "Lit from above with a soft drop shadow; pressing inverts it into an inset dish.",
+  },
+  {
+    key: "gloss",
+    label: "Gel",
+    blurb: "Glossy highlight across the top half like a gel key; pressing squashes the shine.",
+  },
+  {
+    key: "bevel",
+    label: "Bevel",
+    blurb: "Retro chiseled edges — light top/left, dark bottom/right; pressing flips the chisel.",
+  },
+];
+
 // --- fire FX settings --------------------------------------------------------
 
 type FxSettings = {
@@ -167,11 +208,19 @@ const DEFAULT_FX: FxSettings = {
 
 const EMBER_PALETTE = ["#ff3d00", "#ff6a00", "#ff9500", "#ffcf33", "#ff2d55"];
 
-const ACTION_BAR_H = 40;
+const ACTION_BAR_H = 54;
 
 export function CardFxLabSection() {
   const [visible, setVisible] = useState<Record<ElementKey, boolean>>(DEFAULT_VISIBLE);
   const [fx, setFx] = useState<FxSettings>(DEFAULT_FX);
+
+  // pushable-button explorer (keycap · 6px shipped as the production default)
+  const [btnFx, setBtnFx] = useState<ButtonFx>("keycap");
+  const [btnDepth, setBtnDepth] = useState(6);
+  const [btnLinks, setBtnLinks] = useState(true);
+
+  // one-shot ember burst, armed when FIRE flips off → on
+  const [burstAt, setBurstAt] = useState(0);
 
   // live pressed state for the action buttons
   const [going, setGoing] = useState(false);
@@ -273,8 +322,9 @@ export function CardFxLabSection() {
         "--fire-speed": `${fx.pulseSpeed}s`,
         "--fire-hotspot": fx.hotspotOn ? fx.hotspotStrength : 0,
         "--churn": dragging ? 1 : 0,
+        "--btn-depth": `${btnDepth}px`,
       }) as CSSProperties,
-    [fx.color, fx.intensity, fx.pulseSpeed, fx.hotspotOn, fx.hotspotStrength, dragging],
+    [fx.color, fx.intensity, fx.pulseSpeed, fx.hotspotOn, fx.hotspotStrength, dragging, btnDepth],
   );
 
   // Embers represent community FIRE traction and show whenever the event has fire —
@@ -342,6 +392,8 @@ export function CardFxLabSection() {
             }${showGlow ? " is-fired" : ""}${showTurb ? " fx-turbulence" : ""}${
               showHotspot ? " fx-hotspot" : ""
             }`}
+            data-btnfx={btnFx}
+            data-btnfx-links={btnLinks ? "on" : "off"}
             style={cardStyle}
             onPointerMove={handlePointerMove}
             onPointerDown={() => setDragging(true)}
@@ -375,6 +427,8 @@ export function CardFxLabSection() {
                 ) : null}
               </div>
             ) : null}
+
+            {burstAt ? <LabFireBurst key={burstAt} onDone={() => setBurstAt(0)} /> : null}
 
             {/* poster */}
             <div
@@ -537,7 +591,13 @@ export function CardFxLabSection() {
                   type="button"
                   className="is-fire"
                   aria-pressed={fired}
-                  onClick={() => setFired((v) => !v)}
+                  onClick={() => {
+                    if (!fired) {
+                      // igniting: burst embers up from the action bar
+                      setBurstAt(Date.now());
+                    }
+                    setFired((v) => !v);
+                  }}
                 >
                   <Flame aria-hidden="true" size={16} strokeWidth={2.5} />
                   <span>Fire</span>
@@ -656,6 +716,57 @@ export function CardFxLabSection() {
               <em className="card-lab-tag is-warn">hidden</em> means the element is on but
               displaced behind another element (clipped, pushed off, or under the action bar).
             </p>
+          </div>
+
+          <div className="card-lab-panel">
+            <div className="card-lab-panel-head">
+              <h3>Pushable Buttons</h3>
+            </div>
+            <p className="card-lab-readout">
+              Only real actions get Z-axis depth — informational pills stay flat, so buttons
+              read uniquely as buttons. Going / Fire / Save are toggles: raised and
+              illuminated when ON, depressed and dull when OFF (Fire is only orange once
+              fired — igniting it bursts embers). Remove and the Details / AVLgo links are
+              momentary keys: popped up until pressed. Press them on the card to feel each
+              style.
+            </p>
+            <div className="card-lab-btnfx-list" role="radiogroup" aria-label="Button style">
+              {BUTTON_FX.map((opt) => (
+                <label
+                  key={opt.key}
+                  className={`card-lab-btnfx${btnFx === opt.key ? " is-active" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="card-lab-btnfx"
+                    checked={btnFx === opt.key}
+                    onChange={() => setBtnFx(opt.key)}
+                  />
+                  <span>
+                    <strong>{opt.label}</strong>
+                    <em>{opt.blurb}</em>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <FxSlider
+              label="Press depth"
+              min={2}
+              max={6}
+              step={1}
+              value={btnDepth}
+              onChange={(v) => setBtnDepth(v)}
+              display={`${btnDepth}px`}
+              disabled={btnFx === "flush"}
+            />
+            <FxRow label="Also style Details / AVLgo links">
+              <input
+                type="checkbox"
+                checked={btnLinks}
+                disabled={btnFx === "flush"}
+                onChange={(e) => setBtnLinks(e.target.checked)}
+              />
+            </FxRow>
           </div>
 
           <div className="card-lab-panel">
@@ -791,6 +902,7 @@ export function CardFxLabSection() {
               <h3>Export</h3>
             </div>
             <pre className="card-lab-export">{exportCss(fx, emberCount)}</pre>
+            <pre className="card-lab-export">{exportButtonCss(btnFx, btnDepth, btnLinks)}</pre>
           </div>
         </div>
       </div>
@@ -817,7 +929,8 @@ function LegacyArchiveCard() {
         </p>
       </div>
       <div className="card-lab-stage">
-        <div className="sandbox-event-card fresh-card is-revealed card-lab-card">
+        {/* data-btnfx="flush" pins the archive to the pre-keycap button treatment */}
+        <div className="sandbox-event-card fresh-card is-revealed card-lab-card" data-btnfx="flush">
           <div className="sandbox-art has-image" aria-hidden="true">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img alt="" decoding="async" loading="lazy" src={MOCK.imageUrl} />
@@ -898,6 +1011,41 @@ function LegacyArchiveCard() {
   );
 }
 
+// One-shot ember burst when FIRE ignites — mirrors FireBurstFx in EventBoard.tsx
+// (same .fire-burst CSS); mounted with a fresh key per ignition.
+const BURST_SPARKS = 18;
+
+function LabFireBurst({ onDone }: { onDone: () => void }) {
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  useEffect(() => {
+    const id = window.setTimeout(() => onDoneRef.current(), 1500);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  return (
+    <span className="fire-burst" aria-hidden="true">
+      {Array.from({ length: BURST_SPARKS }, (_, i) => (
+        <i
+          key={i}
+          style={
+            {
+              left: `${34 + ((i * 37) % 46)}%`,
+              width: 3 + (i % 4),
+              height: 3 + (i % 4),
+              background: EMBER_PALETTE[i % EMBER_PALETTE.length],
+              animationDelay: `${((i * 41) % 30) / 100}s`,
+              animationDuration: `${0.75 + ((i * 29) % 55) / 100}s`,
+              "--dx": `${((i * 53) % 96) - 48}px`,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </span>
+  );
+}
+
 function LabTooltip({ action }: { action: "going" | "fire" | "remove" }) {
   const help = ACTION_HELP[action];
   return (
@@ -954,6 +1102,25 @@ function FxSlider({
       />
     </label>
   );
+}
+
+function exportButtonCss(style: ButtonFx, depth: number, links: boolean) {
+  if (style === "flush") {
+    return "/* buttons: flush — the legacy flat look (pre-keycap) */";
+  }
+  if (style === "keycap" && depth === 6) {
+    return "/* button fx: keycap · 6px — SHIPPED as the production default (see globals.css) */";
+  }
+  return [
+    `/* button fx: ${style} · press depth ${depth}px · details/avlgo links: ${
+      links ? "styled" : "flat"
+    } */`,
+    `.sandbox-event-card { --btn-depth: ${depth}px; }`,
+    `/* to ship: copy the .card-lab-card[data-btnfx="${style}"] rules from globals.css`,
+    `   onto .sandbox-event-card, targeting .sandbox-action-bar button${
+      links ? " + .sandbox-card-links a" : ""
+    } */`,
+  ].join("\n");
 }
 
 function exportCss(fx: FxSettings, emberCount: number) {

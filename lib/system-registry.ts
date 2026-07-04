@@ -419,6 +419,11 @@ const NODES: RegistryNode[] = [
         detail:
           "migrateSessionSignalsToUser re-keys a browser's anonymous rows to the user inside a transaction; per-event state (unique (event_id, identity_key)) merges with GREATEST timestamps; a second run is a no-op.",
       },
+      {
+        kind: "note",
+        detail:
+          "writePersonEventState has toggle semantics: it reads the merged current state once, then writes the same explicit next value (fire_at / planning_at set or cleared) to every identity row, so a signed-in user's user: and session: rows can never desync into a stuck ON.",
+      },
     ],
   },
   {
@@ -440,7 +445,7 @@ const NODES: RegistryNode[] = [
       {
         kind: "note",
         detail:
-          "Reactions/intents upsert `on conflict (event_id, identity_key) do update`; user_id is nullable so anonymous participation works.",
+          "Reactions/intents upsert `on conflict (event_id, identity_key) do update`; user_id is nullable so anonymous participation works. Reactions and Going intents are true toggles: toggleReaction takes an explicit on direction (off deletes the caller's reaction) and removeEventIntent deletes a Going intent — deletes match by session and, for signed-in users, any rows under their user id; external intent sources (spotify / ticket_click) stay set-once.",
       },
     ],
   },
