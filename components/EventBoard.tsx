@@ -924,12 +924,10 @@ export function EventBoard({
     const reasons = score?.reasons ?? [];
     const countsForEvent = eventCounts[event.id];
     const state = discoveryStates[event.id];
-    // Playable songs (PRD 46, Story E): community song contributions + PRD 17 shared songs +
-    // matched-artist top tracks. A count > 0 renders the chip in its "listenable" style.
-    const playableSongs =
-      (countsForEvent?.songs ?? 0) +
-      (sharedSongSummaries[event.id]?.count ?? 0) +
-      (artistTrackCounts[event.id] ?? 0);
+    // The songs chip advertises the matched artist's playable tracks (PRD 46, Story E). It appears
+    // ONLY when the event has a confirmed Spotify artist match WITH playable tracks — those rows
+    // (event_artist_tracks) exist only for published matches — and is hidden entirely otherwise.
+    const playableSongs = artistTrackCounts[event.id] ?? 0;
 
     return (
       <DiscoveryEventCard
@@ -1363,31 +1361,36 @@ function HoverSongsChip({
   hover: HoverPlayer;
   playableSongs: number;
 }) {
-  const listenable = playableSongs > 0;
   const { state } = hover;
   const isThisEvent = state.eventId === event.id;
   const armed = isThisEvent && isArmed(state);
   const playing = isThisEvent && state.phase === "playing";
   const blocked = isThisEvent && state.phase === "blocked";
 
+  // Hidden unless the event has a confirmed artist match WITH playable songs — no empty/"0 songs"
+  // chip ever renders on the board.
+  if (playableSongs <= 0) {
+    return null;
+  }
+
   function onEnter(pointerType: string) {
     // Only a real hovering pointer (mouse/pen) arms — touch keeps plain tap behavior.
-    if (listenable && pointerType !== "touch") {
+    if (pointerType !== "touch") {
       hover.arm(event.id);
     }
   }
 
   return (
     <div
-      className={`sandbox-pulse sandbox-pulse-chip${listenable ? " is-listenable" : ""}${
-        armed ? " is-arming" : ""
-      }${playing ? " is-playing" : ""}`}
-      aria-label={listenable ? `${playableSongs} playable songs — hover to listen` : "No songs yet"}
+      className={`sandbox-pulse sandbox-pulse-chip is-listenable${armed ? " is-arming" : ""}${
+        playing ? " is-playing" : ""
+      }`}
+      aria-label={`${playableSongs} playable songs — hover to listen`}
       onPointerEnter={(pointerEvent) => onEnter(pointerEvent.pointerType)}
       onPointerLeave={() => hover.disarm(event.id)}
-      onFocus={() => (listenable ? hover.arm(event.id) : undefined)}
+      onFocus={() => hover.arm(event.id)}
       onBlur={() => hover.disarm(event.id)}
-      tabIndex={listenable ? 0 : undefined}
+      tabIndex={0}
     >
       <span className="chip-note" aria-hidden="true">
         ♫
