@@ -108,3 +108,23 @@ export function isSafeSpotifyArtistId(artistId: string): boolean {
 export function spotifyArtistEmbedUrl(artistId: string): string {
   return `https://open.spotify.com/embed/artist/${encodeURIComponent(artistId)}?utm_source=generator`;
 }
+
+/**
+ * Sink guard for a Spotify artist/album image before it reaches an `<img>` src (PRD 17 discipline).
+ * Spotify serves cover art over https from its `scdn.co` / `spotifycdn.com` CDNs — anything else is
+ * refused so no fetched, potentially-tainted URL flows into the DOM src sink. Returns the URL only
+ * when safe (a fresh, validated value), otherwise null, so callers assign a provably-safe src.
+ */
+export function safeSpotifyImageUrl(url: string | null | undefined): string | null {
+  if (typeof url !== "string" || url.length === 0) {
+    return null;
+  }
+  try {
+    const parsed = new URL(url);
+    const safeHost =
+      /(^|\.)scdn\.co$/.test(parsed.hostname) || /(^|\.)spotifycdn\.com$/.test(parsed.hostname);
+    return parsed.protocol === "https:" && safeHost ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}

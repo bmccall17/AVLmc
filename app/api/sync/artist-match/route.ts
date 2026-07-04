@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       job: "artist_match",
       status: summary.errors > 0 ? "failure" : "success",
       itemsProcessed: summary.processed,
-      detail: `matched ${summary.matched} · cached ${summary.cached} · review ${summary.needsReview} · rejected ${summary.rejected} · errors ${summary.errors} · remaining ${summary.remaining}${summary.backedOff ? " · backed off" : ""}`,
+      detail: `matched ${summary.matched} · cached ${summary.cached} · review ${summary.needsReview} · rejected ${summary.rejected} · errors ${summary.errors} · tracks +${summary.tracksFilled}/-${summary.tracksFailed} · remaining ${summary.remaining}${summary.lastTrackError ? ` · lastTrackError=${summary.lastTrackError}` : ""}${summary.backedOff ? " · backed off" : ""}`,
       startedAt,
     });
 

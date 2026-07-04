@@ -22,6 +22,9 @@ type BackfillSummary = {
   needsReview: number;
   rejected: number;
   errors: number;
+  tracksFilled: number;
+  tracksFailed: number;
+  lastTrackError?: string;
   remaining: number;
   backedOff: boolean;
 };
@@ -56,7 +59,7 @@ async function main() {
 
     // eslint-disable-next-line no-console
     console.log(
-      `  batch ${i + 1}: processed ${summary.processed}, matched ${summary.matched}, cached ${summary.cached}, review ${summary.needsReview}, rejected ${summary.rejected}, errors ${summary.errors}, remaining ${summary.remaining}${summary.backedOff ? " (backed off)" : ""}`
+      `  batch ${i + 1}: processed ${summary.processed}, matched ${summary.matched}, cached ${summary.cached}, review ${summary.needsReview}, rejected ${summary.rejected}, errors ${summary.errors}, tracks +${summary.tracksFilled}/-${summary.tracksFailed}${summary.lastTrackError ? ` (${summary.lastTrackError})` : ""}, remaining ${summary.remaining}${summary.backedOff ? " (backed off)" : ""}`
     );
 
     if (summary.remaining <= 0 || summary.processed === 0) {

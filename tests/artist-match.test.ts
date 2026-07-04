@@ -7,6 +7,7 @@ import {
   isSafeSpotifyArtistId,
   normalizeArtistName,
   pickBestArtistMatch,
+  safeSpotifyImageUrl,
   spotifyArtistEmbedUrl,
   type SpotifyArtistCandidate,
 } from "../lib/artist-match-core";
@@ -72,6 +73,18 @@ test("isPublishedArtistMatchStatus only publishes auto/confirmed/replaced", () =
   assert.ok(isPublishedArtistMatchStatus("replaced"));
   assert.ok(isPublishedArtistMatchStatus("needs_review") === false);
   assert.ok(isPublishedArtistMatchStatus("rejected") === false);
+});
+
+test("safeSpotifyImageUrl only passes https Spotify CDN URLs", () => {
+  assert.equal(
+    safeSpotifyImageUrl("https://i.scdn.co/image/ab6761610000e5eb"),
+    "https://i.scdn.co/image/ab6761610000e5eb"
+  );
+  assert.equal(safeSpotifyImageUrl("https://mosaic.scdn.co/640/x"), "https://mosaic.scdn.co/640/x");
+  assert.equal(safeSpotifyImageUrl("http://i.scdn.co/image/x"), null);
+  assert.equal(safeSpotifyImageUrl("https://evil.example.com/x.jpg"), null);
+  assert.equal(safeSpotifyImageUrl("javascript:alert(1)"), null);
+  assert.equal(safeSpotifyImageUrl(null), null);
 });
 
 test("spotifyArtistEmbedUrl builds the canonical embed URL from a validated id", () => {

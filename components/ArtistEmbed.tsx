@@ -242,10 +242,6 @@ function ArtistReplaceSearch({
                 onClick={() => onPick(result)}
                 type="button"
               >
-                {result.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img alt="" height={32} src={result.imageUrl} width={32} />
-                ) : null}
                 <span>{result.name}</span>
               </button>
             </li>

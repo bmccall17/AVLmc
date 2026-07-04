@@ -63,10 +63,6 @@ export function ArtistMatchReviewSection({ matches: initial }: { matches: AdminA
             return (
               <li className="admin-artist-match" key={match.id}>
                 <div className="admin-artist-match-main">
-                  {match.spotifyArtistImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img alt="" height={48} src={match.spotifyArtistImageUrl} width={48} />
-                  ) : null}
                   <div>
                     <strong>{match.artistName}</strong>
                     <span className="admin-meta">

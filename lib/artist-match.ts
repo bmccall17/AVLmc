@@ -95,10 +95,40 @@ const MAX_ARTIST_TRACKS = 10;
 export type ResolveOutcome =
   | { result: "exists" }
   | { result: "cached"; status: ArtistMatchStatus }
-  | { result: "matched"; status: ArtistMatchStatus; confidence: ArtistMatchConfidence }
+  | {
+      result: "matched";
+      status: ArtistMatchStatus;
+      confidence: ArtistMatchConfidence;
+      /** Set when the match published but its top-tracks fetch failed (non-fatal). */
+      trackError?: string;
+    }
   | { result: "rejected" }
   | { result: "skipped"; reason: string }
   | { result: "error"; reason: string };
+
+/**
+ * Fetch + store an artist's top tracks, swallowing a Spotify failure (returns the reason string)
+ * instead of throwing — so a top-tracks outage never blocks the embed. The reason is logged so the
+ * actual HTTP status shows up in runtime logs (this is how we learn whether previews/top-tracks are
+ * even available for our app under Development Mode — the Story A spike question).
+ */
+async function safeFetchAndStoreArtistTracks(
+  eventId: string,
+  spotifyArtistId: string
+): Promise<string | undefined> {
+  try {
+    await fetchAndStoreArtistTracks(eventId, spotifyArtistId);
+    return undefined;
+  } catch (error) {
+    if (error instanceof SpotifyAppTokenError) {
+      const reason = error.status ? `spotify ${error.status}` : error.message;
+      // eslint-disable-next-line no-console
+      console.warn(`artist top-tracks fetch failed for event ${eventId} (${spotifyArtistId}): ${reason}`);
+      return reason;
+    }
+    throw error;
+  }
+}
 
 /**
  * Resolve + persist one event's artist match. Idempotent and stable: an event that already has a
@@ -141,7 +171,7 @@ export async function resolveAndStoreArtistMatch(input: {
         const tracks = await copyCachedTracks(cached.sourceEventId, input.eventId);
         if (tracks === 0) {
           // Source had no cached tracks (older row); fetch once so this event still hovers/plays.
-          await fetchAndStoreArtistTracks(input.eventId, cached.spotifyArtistId);
+          await safeFetchAndStoreArtistTracks(input.eventId, cached.spotifyArtistId);
         }
       }
       return { result: "cached", status: cached.status };
@@ -178,11 +208,19 @@ export async function resolveAndStoreArtistMatch(input: {
     });
 
     // Only publish tracks for auto (exact) matches — fuzzy/needs_review stays silent until review.
+    // Track fetch is NON-FATAL: the embed (primary deliverable) publishes regardless; a failed
+    // top-tracks call just means no hover-play previews yet, which a later top-up pass retries.
+    let trackError: string | undefined;
     if (decision.status === "auto") {
-      await fetchAndStoreArtistTracks(input.eventId, decision.artist.id);
+      trackError = await safeFetchAndStoreArtistTracks(input.eventId, decision.artist.id);
     }
 
-    return { result: "matched", status: decision.status, confidence: decision.confidence };
+    return {
+      result: "matched",
+      status: decision.status,
+      confidence: decision.confidence,
+      trackError,
+    };
   } catch (error) {
     if (isMissingRelationError(error)) {
       return { result: "skipped", reason: "table not migrated" };
@@ -279,6 +317,12 @@ export type ArtistMatchBackfillSummary = {
   needsReview: number;
   rejected: number;
   errors: number;
+  /** Published matches whose top-tracks fetch failed this run (non-fatal — embed still works). */
+  tracksFailed: number;
+  /** Published matches that were missing tracks and got them filled by the top-up pass. */
+  tracksFilled: number;
+  /** The most recent track-fetch failure reason (e.g. "spotify 403") for quick diagnosis. */
+  lastTrackError?: string;
   remaining: number;
   /** True when a Spotify 429/5xx made us stop early — the next run resumes where this left off. */
   backedOff: boolean;
@@ -304,6 +348,8 @@ export async function runArtistMatchBackfill(options: {
     needsReview: 0,
     rejected: 0,
     errors: 0,
+    tracksFailed: 0,
+    tracksFilled: 0,
     remaining: 0,
     backedOff: false,
   };
@@ -349,6 +395,10 @@ export async function runArtistMatchBackfill(options: {
         if (outcome.status === "needs_review") {
           summary.needsReview += 1;
         }
+        if (outcome.trackError) {
+          summary.tracksFailed += 1;
+          summary.lastTrackError = outcome.trackError;
+        }
         break;
       case "rejected":
         summary.rejected += 1;
@@ -372,8 +422,83 @@ export async function runArtistMatchBackfill(options: {
     }
   }
 
+  // Top-up: retry top-tracks for already-published matches that still have no tracks (e.g. a
+  // prior top-tracks outage). Independent of the match row, so a fixed root cause fills previews
+  // on the next run without deleting/redoing matches.
+  if (!summary.backedOff) {
+    const topUp = await backfillMissingArtistTracks({ limit, pauseMs });
+    summary.tracksFilled += topUp.filled;
+    summary.tracksFailed += topUp.errors;
+    if (topUp.lastError) {
+      summary.lastTrackError = topUp.lastError;
+    }
+    if (topUp.backedOff) {
+      summary.backedOff = true;
+    }
+  }
+
   summary.remaining = await countUnmatchedEvents();
   return summary;
+}
+
+/**
+ * Retry top-tracks for published matches (auto/confirmed/replaced) that currently have zero cached
+ * tracks. Decoupled from match resolution so hover-play previews can be filled after a transient
+ * top-tracks outage without touching the match rows.
+ */
+export async function backfillMissingArtistTracks(options: {
+  limit?: number;
+  pauseMs?: number;
+} = {}): Promise<{ attempted: number; filled: number; errors: number; lastError?: string; backedOff: boolean }> {
+  const limit = Math.max(1, Math.min(options.limit ?? 50, 500));
+  const pauseMs = options.pauseMs ?? 150;
+  const result = { attempted: 0, filled: 0, errors: 0, lastError: undefined as string | undefined, backedOff: false };
+
+  let rows: Array<{ event_id: string; spotify_artist_id: string }>;
+  try {
+    const query_result = await query<{ event_id: string; spotify_artist_id: string }>(
+      `
+        select m.event_id, m.spotify_artist_id
+        from public.event_artist_matches m
+        left join public.event_artist_tracks t on t.event_id = m.event_id
+        where m.provider = 'spotify'
+          and m.spotify_artist_id is not null
+          and m.status in ('auto', 'confirmed', 'replaced')
+          and t.event_id is null
+        limit $1
+      `,
+      [limit]
+    );
+    rows = query_result.rows;
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      return result;
+    }
+    throw error;
+  }
+
+  for (const row of rows) {
+    if (!isSafeSpotifyArtistId(row.spotify_artist_id)) {
+      continue;
+    }
+    result.attempted += 1;
+    const error = await safeFetchAndStoreArtistTracks(row.event_id, row.spotify_artist_id);
+    if (error) {
+      result.errors += 1;
+      result.lastError = error;
+      if (/\b(429|5\d\d)\b/.test(error)) {
+        result.backedOff = true;
+        break;
+      }
+    } else {
+      result.filled += 1;
+    }
+    if (pauseMs > 0) {
+      await sleep(pauseMs);
+    }
+  }
+
+  return result;
 }
 
 /** Best-effort ingestion hook: match a small batch of freshly-ingested events. Never throws. */
