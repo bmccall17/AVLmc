@@ -180,6 +180,10 @@ type SpotifyArtistTopTracksResponse = {
 };
 
 const SPOTIFY_TIME_RANGE = "medium_term";
+// Imported-from-file taste (seat-free path). Kept in its own time_range so it never collides with the
+// OAuth /me/top sync's `medium_term` rows — each source replaces only its own rows, and discovery's
+// buildProfileTerms reads both and dedupes by artist name.
+const IMPORT_TIME_RANGE = "import";
 
 export async function recordMusicConnection(input: {
   accessToken?: string;
@@ -778,6 +782,60 @@ function normalizeTracks(response: SpotifyTopTracksResponse) {
       },
     ];
   });
+}
+
+/**
+ * Store artists imported from an uploaded Spotify export (seat-free path) as `top_artist` profile
+ * items under the dedicated `import` time_range. Replaces the previous import in full (idempotent
+ * re-import), leaving any OAuth-synced `medium_term` rows untouched. Requires no Spotify connection —
+ * an email-only listener who was never added to the allowlist can import taste this way.
+ */
+export async function replaceImportedProfileItems(
+  userId: string,
+  artists: Array<{ spotifyArtistId: string; name: string; rank: number }>
+): Promise<MusicProfileItem[]> {
+  const databaseUserId = toDatabaseUserId(userId);
+
+  await query(
+    `
+      delete from public.music_profile_items
+      where user_id = $1
+        and provider = 'spotify'
+        and time_range = $2
+    `,
+    [databaseUserId, IMPORT_TIME_RANGE]
+  );
+
+  await Promise.all(
+    artists.map((artist) =>
+      runWithMissingColumnFallback(
+        () =>
+          query(
+            `
+              insert into public.music_profile_items (
+                id, user_id, provider, item_type, provider_item_id, name,
+                artist_names, genres, external_url, image_url, rank, time_range
+              )
+              values ($1, $2, 'spotify', 'top_artist', $3, $4, '{}', '{}', null, null, $5, $6)
+            `,
+            [randomUUID(), databaseUserId, artist.spotifyArtistId, artist.name, artist.rank, IMPORT_TIME_RANGE]
+          ),
+        () =>
+          query(
+            `
+              insert into public.music_profile_items (
+                id, user_id, provider, item_type, provider_item_id, name,
+                artist_names, external_url, image_url, rank, time_range
+              )
+              values ($1, $2, 'spotify', 'top_artist', $3, $4, '{}', null, null, $5, $6)
+            `,
+            [randomUUID(), databaseUserId, artist.spotifyArtistId, artist.name, artist.rank, IMPORT_TIME_RANGE]
+          )
+      )
+    )
+  );
+
+  return listMusicProfileItems(userId);
 }
 
 async function replaceSpotifyProfileItems(

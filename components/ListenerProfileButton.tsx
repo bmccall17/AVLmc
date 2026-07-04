@@ -2,9 +2,10 @@
 
 import { signIn, signOut } from "next-auth/react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Bookmark, Plus, RotateCcw, SlidersHorizontal, Star, Trash2, UserCircle, Users, X } from "lucide-react";
+import { Bookmark, Plus, RotateCcw, SlidersHorizontal, Star, Trash2, Upload, UserCircle, Users, X } from "lucide-react";
 import { MusicConnectionActions } from "@/components/MusicConnectionActions";
 import { SpotifyGateButton } from "@/components/SignInChooser";
 import { SpotifyAccessRequest } from "@/components/SpotifyAccessRequest";
@@ -69,7 +70,11 @@ export function ListenerProfileButton({
   spotifyLimitedBetaNotice,
   user,
 }: ListenerProfileButtonProps) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [importState, setImportState] = useState<ActionState>({ kind: "idle", message: "" });
+  const [isImporting, setIsImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const [savedPreferences, setSavedPreferences] = useState(() =>
     normalizeListenerPreferences(initialPreferences)
   );
@@ -313,6 +318,47 @@ export function ListenerProfileButton({
     setSaveState({ kind: "notice", message: "Defaults ready. Save to apply them." });
   }
 
+  async function importTasteFile(file: File) {
+    setIsImporting(true);
+    setImportState({ kind: "notice", message: `Reading ${file.name}…` });
+
+    try {
+      const csvText = await file.text();
+      const response = await fetch("/api/me/taste-import", {
+        body: csvText,
+        headers: { "Content-Type": "text/csv" },
+        method: "POST",
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        imported?: number;
+        preview?: string[];
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not import that file.");
+      }
+
+      const preview = data.preview?.slice(0, 6).join(", ");
+      setImportState({
+        kind: "success",
+        message: `Imported ${data.imported ?? 0} artists${preview ? ` — ${preview}…` : ""}. Your board is re-ranking.`,
+      });
+      // Re-run the server component so the newly imported taste re-ranks the board immediately.
+      router.refresh();
+    } catch (error) {
+      setImportState({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Could not import that file.",
+      });
+    } finally {
+      setIsImporting(false);
+      if (importInputRef.current) {
+        importInputRef.current.value = "";
+      }
+    }
+  }
+
   async function sendEmailLink(targetEmail?: string) {
     const trimmed = (targetEmail ?? email).trim();
     if (!trimmed) {
@@ -508,6 +554,42 @@ export function ListenerProfileButton({
                         <strong> invite-only beta</strong> — taste import only works for approved accounts;
                         everything else works without it.
                       </small>
+                    </div>
+                  ) : null}
+                  {isSignedIn ? (
+                    <div className="listener-spotify-optional">
+                      <input
+                        accept=".csv,text/csv"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) {
+                            void importTasteFile(file);
+                          }
+                        }}
+                        ref={importInputRef}
+                        style={{ display: "none" }}
+                        type="file"
+                      />
+                      <button
+                        className="ghost-control"
+                        disabled={isImporting}
+                        onClick={() => importInputRef.current?.click()}
+                        type="button"
+                      >
+                        <Upload aria-hidden="true" size={15} strokeWidth={2.4} />
+                        {isImporting ? "Importing…" : "Import Spotify taste (CSV)"}
+                      </button>
+                      <small>
+                        No seat, no waiting: export your playlists at{" "}
+                        <a href="https://exportify.net" rel="noreferrer" target="_blank">
+                          exportify.net
+                        </a>{" "}
+                        (sign in with Spotify, download the CSV), then upload it here to seed your board
+                        from artists you already love.
+                      </small>
+                      {importState.message ? (
+                        <p className={`form-message ${importState.kind}`}>{importState.message}</p>
+                      ) : null}
                     </div>
                   ) : null}
                   {emailSignInEnabled && accountEmail ? (
