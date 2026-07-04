@@ -1,6 +1,6 @@
 # AVL Music Companion Backlog
 
-Updated: July 3, 2026
+Updated: July 4, 2026
 
 ## Urgent
 
@@ -113,6 +113,26 @@ Updated: July 3, 2026
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
 ## Done
+
+* **Event page layout polish — unified source link, save-chip clarity, curated-by in the Community Signal strip** —
+  Shipped (July 4, 2026), standalone event-detail UX polish (no PRD/admin cycle).
+  * **Source unified** (`app/event/[id]/page.tsx`, `components/TicketIntentLink.tsx`): the Source cell in the
+    detail grid is now the single clickable action to the original listing (source name + ↗, hover tooltip) —
+    the "View original AVLgo listing" button and the community strip's "Find tickets / source listing" link are
+    removed. It still records ticket-intent clicks like both old links did (`TicketIntentLink`, which gained an
+    optional `title` tooltip prop); `CommunityPanel` drops its duplicate `recordTicketClick` / `eventUrl` plumbing.
+  * **Save clarity** (`components/SaveButton.tsx`, `components/CommunityPanel.tsx`): the three bookmark chips now
+    say what they save — "Save show" / "Save venue" / "Save artist" ("Show saved" etc. when saved), each with a
+    fuller tooltip pointing at the Saved list. "Save via Spotify" was never a bookmark — it's a thinking-of-going
+    intent tagged with the Spotify connection — so it's renamed **"Going via Spotify"** with a tooltip saying
+    exactly that; the going / fire / remove reaction buttons got explanatory tooltips too.
+  * **Curated by** (`components/CommunityPanel.tsx` `CuratedByLine`, `lib/curators.ts`, `lib/curators-core.ts`,
+    `app/globals.css`): moved from the page bottom into the Community Signal strip under "Who is leaning in?" —
+    1–2 curators render as linked names; 3+ collapse to overlapping avatar chips (hover shows the name,
+    initial-letter fallback when no avatar). `getCuratedByForEvents` now returns `avatar_url`
+    (`CuratedBy.avatarUrl` in the pure core) to support this. Recorded in
+    [PRD 25](prds/prd-25-curator-profiles.md) Implementation Status.
+  * `typecheck` / `test:registry` green; `$0`, no new deps, no schema change.
 
 * **Card FX round 2 — keycap toggles + ember burst, fire/going server toggle fix, landing hero redesign** —
   Shipped (July 3, 2026), standalone UI + server bug fix (no PRD/admin cycle; follow-on to the June 30

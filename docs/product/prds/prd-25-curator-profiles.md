@@ -34,6 +34,8 @@ Admin-promoted curator profiles are live; following a curator reuses the C1 edge
 - **Email-first curator signup.** The apply flow's anonymous CTA now uses the shared `components/EmailSignInPanel.tsx` (email magic-link primary, Spotify optional) instead of Spotify-only, matching the listener profile (PRD 34). The homepage curator callout links `/curators/apply` + `/curators/recommend` directly.
 - **Quality.** `typecheck` / `lint` / `test:registry` / `test:curators` / `test:curator-recommendations` / `next build` green; new code Snyk-clean (an admin nominee-link stored-XSS was caught and fixed by rendering it inert); system map regenerated; `$0`.
 
+**Post-ship polish — July 4, 2026 (event page layout sprint).** The event detail page's "curated by" credit moved from a bottom-of-page section into the Community Signal strip, under "Who is leaning in?" (`CuratedByLine` in `components/CommunityPanel.tsx`): 1–2 curators render as linked names; 3+ collapse to overlapping avatar chips (hover reveals the name, initial-letter fallback when no avatar). To support the compact rendering, `getCuratedByForEvents` (`lib/curators.ts`) now selects `avatar_url` and the pure-core `CuratedBy` type carries an optional `avatarUrl`. Board-card rendering is unchanged. See the backlog Done entry (July 4, 2026).
+
 ## Goals
 
 - An admin can **promote** a listener to curator and **demote/hide** one, via the existing admin-moderation pattern (controlled, $0, spam-resistant).
