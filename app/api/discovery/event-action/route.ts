@@ -7,6 +7,7 @@ import {
   getCommunityCountsForEvent,
   recordEventIntent,
   recordTicketIntent,
+  removeEventIntent,
   toggleReaction,
   type EventIntentSource,
 } from "@/lib/community";
@@ -66,15 +67,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Event not found." }, { status: 404 });
   }
 
-  const counts = await recordCountAction({
-    action,
-    eventId: event.id,
-    eventTitle: event.eventTitle,
-    intentSource,
-    sessionId,
-    userId,
-  });
-
+  // State first: fire/planning from the buttons are TOGGLES (external intent sources
+  // keep set-once semantics). The post-toggle state then drives the public counts so
+  // the button state and the count always move together.
   let recordedState: Awaited<ReturnType<typeof recordDiscoveryEventAction>>;
 
   try {
@@ -83,6 +78,7 @@ export async function POST(request: Request) {
       event,
       sessionId,
       source: surface ?? intentSource,
+      toggle: (action === "fire" || action === "planning") && intentSource === "avlmc",
       userId,
     });
   } catch (error) {
@@ -98,10 +94,26 @@ export async function POST(request: Request) {
     (await listDiscoveryStates([event.id], { sessionId, userId }))[event.id] ??
     emptyDiscoveryState(event.id);
 
+  const counts = await recordCountAction({
+    action,
+    eventId: event.id,
+    eventTitle: event.eventTitle,
+    fireOn: state.fire,
+    intentSource,
+    planningOn: state.planning,
+    sessionId,
+    userId,
+  });
+
   // Shared Listening (PRD 17): a signed-in listener Going/Firing shares the artist's top tracks
   // onto the event page. Awaited so the client's follow-up fetch finds the songs, but fully
   // failure-safe — a Spotify error (incl. limited-beta) must never break the reaction.
-  if ((action === "fire" || action === "planning") && userId) {
+  if (
+    (action === "fire" || action === "planning") &&
+    userId &&
+    // Only seed when the toggle landed ON — un-firing/un-going shouldn't share songs.
+    (action === "fire" ? state.fire : state.planning)
+  ) {
     try {
       await seedSharedSongsForEvent({
         event: { id: event.id, eventTitle: event.eventTitle, artistName: event.artistName },
@@ -142,11 +154,23 @@ async function recordCountAction(input: {
   action: DiscoveryEventAction;
   eventId: string;
   eventTitle: string;
+  fireOn: boolean;
   intentSource: EventIntentSource;
+  planningOn: boolean;
   sessionId: string;
   userId: string | null;
 }) {
   if (input.action === "planning") {
+    // Button toggled OFF (avlmc only): remove the intent so the Going count drops.
+    // External sources never toggle, so they always land on the record path.
+    if (input.intentSource === "avlmc" && !input.planningOn) {
+      return removeEventIntent({
+        eventId: input.eventId,
+        sessionId: input.sessionId,
+        userId: input.userId,
+      });
+    }
+
     return recordEventIntent({
       eventId: input.eventId,
       eventTitle: input.eventTitle,
@@ -160,6 +184,7 @@ async function recordCountAction(input: {
     return toggleReaction({
       eventId: input.eventId,
       eventTitle: input.eventTitle,
+      on: input.fireOn,
       sessionId: input.sessionId,
       type: "fire",
       userId: input.userId,

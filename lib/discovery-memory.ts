@@ -74,6 +74,10 @@ type DiscoveryActionInput = DiscoveryIdentityInput & {
   action: DiscoveryEventAction;
   event: EventRecord;
   source?: string | null;
+  // When true, fire/planning behave as toggles (the Going/Fire buttons): acting on an
+  // already-set state clears it. External intent flows (spotify / ticket_click) leave
+  // this unset and keep the original set-once semantics.
+  toggle?: boolean;
 };
 
 type StateRow = {
@@ -588,6 +592,25 @@ async function writePersonEventState(input: DiscoveryActionInput) {
     return;
   }
 
+  // Fire / planning act as toggles when requested (the Going/Fire buttons). Read the
+  // MERGED current state once and write the same explicit next value to every identity
+  // row — independent per-row toggling could leave the user: and session: rows out of
+  // sync, which reads back (via latest-wins merge) as permanently ON.
+  const toggling =
+    Boolean(input.toggle) && (input.action === "fire" || input.action === "planning");
+  let fireValue = input.action === "fire" ? new Date().toISOString() : null;
+  let planningValue = input.action === "planning" ? new Date().toISOString() : null;
+
+  if (toggling) {
+    const current = (await listDiscoveryStates([input.event.id], input))[input.event.id];
+    if (input.action === "fire" && current?.fire) {
+      fireValue = null;
+    }
+    if (input.action === "planning" && current?.planning) {
+      planningValue = null;
+    }
+  }
+
   await Promise.all(
     identityKeys.map((identityKey) =>
       query(
@@ -608,8 +631,14 @@ async function writePersonEventState(input: DiscoveryActionInput) {
             set event_title = excluded.event_title,
               session_id = excluded.session_id,
               user_id = excluded.user_id,
-              fire_at = coalesce(excluded.fire_at, public.event_person_event_state.fire_at),
-              planning_at = coalesce(excluded.planning_at, public.event_person_event_state.planning_at),
+              fire_at = case
+                when $10 then excluded.fire_at
+                else coalesce(excluded.fire_at, public.event_person_event_state.fire_at)
+              end,
+              planning_at = case
+                when $11 then excluded.planning_at
+                else coalesce(excluded.planning_at, public.event_person_event_state.planning_at)
+              end,
               removed_at = coalesce(excluded.removed_at, public.event_person_event_state.removed_at),
               updated_at = now()
         `,
@@ -620,9 +649,11 @@ async function writePersonEventState(input: DiscoveryActionInput) {
           input.sessionId ?? "",
           toNullableUserId(input.userId),
           identityKey,
-          input.action === "fire" ? new Date().toISOString() : null,
-          input.action === "planning" ? new Date().toISOString() : null,
+          fireValue,
+          planningValue,
           input.action === "remove" ? new Date().toISOString() : null,
+          toggling && input.action === "fire",
+          toggling && input.action === "planning",
         ]
       )
     )

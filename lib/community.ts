@@ -434,12 +434,54 @@ export async function toggleReaction(input: {
   type: ReactionType;
   sessionId: string;
   userId?: string | null;
+  // Explicit direction from the caller's post-toggle state: true adds the reaction,
+  // false removes it (the count -1). Omitted = legacy add-only behavior.
+  on?: boolean;
 }) {
   if (input.type === "going") {
     return recordEventIntent({ ...input, source: "avlmc" });
   }
 
-  await insertLegacyReaction(input);
+  if (input.on === false) {
+    await deleteLegacyReaction(input);
+  } else {
+    await insertLegacyReaction(input);
+  }
+
+  return getCountsForEvent(input.eventId);
+}
+
+// Un-Going: removes this person's intent row so the public count drops. Matches by
+// identity_key and, for signed-in listeners, any stray rows under their user_id.
+export async function removeEventIntent(input: {
+  eventId: string;
+  sessionId: string;
+  userId?: string | null;
+}) {
+  const databaseUserId = toNullableUserId(input.userId);
+  const identityKey = databaseUserId ? `user:${databaseUserId}` : `session:${input.sessionId}`;
+
+  try {
+    await query(
+      `
+        delete from public.event_intents
+        where event_id = $1
+          and (identity_key = $2 or ($3::text is not null and user_id = $3))
+      `,
+      [input.eventId, identityKey, databaseUserId]
+    );
+  } catch (error) {
+    if (!isMissingRelationError(error)) {
+      throw error;
+    }
+    // Intent table missing — mirror recordEventIntent's legacy fallback.
+    await deleteLegacyReaction({
+      eventId: input.eventId,
+      sessionId: input.sessionId,
+      type: "going",
+      userId: input.userId,
+    });
+  }
 
   return getCountsForEvent(input.eventId);
 }
@@ -679,6 +721,25 @@ async function insertLegacyReaction(input: {
       input.sessionId,
       toNullableUserId(input.userId),
     ]
+  );
+}
+
+async function deleteLegacyReaction(input: {
+  eventId: string;
+  type: ReactionType;
+  sessionId: string;
+  userId?: string | null;
+}) {
+  const databaseUserId = toNullableUserId(input.userId);
+
+  await query(
+    `
+      delete from public.reactions
+      where event_id = $1
+        and type = $2
+        and (session_id = $3 or ($4::text is not null and user_id = $4))
+    `,
+    [input.eventId, input.type, input.sessionId, databaseUserId]
   );
 }
 
