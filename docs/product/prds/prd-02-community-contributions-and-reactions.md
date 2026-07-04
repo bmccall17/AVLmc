@@ -10,6 +10,8 @@ This phase turns the event board into a discovery layer.
 
 Built in `components/CommunityPanel.tsx`, `/api/community/contributions`, `/api/community/reactions`, and `lib/community.ts`. Public pages show only visible contributions and homepage cards show counts.
 
+**Toggle fix (July 3, 2026):** Fire and Going are now true toggles end-to-end — previously un-firing/un-going left the reaction row and count in place (`on conflict do nothing` with no delete path), so a second click returned `fire: true` and an unchanged count. `lib/community.ts` `toggleReaction` now takes an explicit `on` direction (off deletes the caller's fire reaction, count −1) and a new `removeEventIntent` deletes the Going intent row; deletes match by session and, for signed-in users, any stray rows under their user id. Button clicks drive this through `POST /api/discovery/event-action` (state written first, counts derived from post-toggle state); external intent sources (spotify / ticket-click) keep their set-once semantics, and the legacy `/api/community/reactions` route (no live callers) keeps its old set-only behavior. No schema changes.
+
 ## Goals
 
 - Let visitors contribute without creating an account.
