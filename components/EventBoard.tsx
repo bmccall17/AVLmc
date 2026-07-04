@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
+import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { Bell, CalendarCheck, Check, ChevronRight, ExternalLink, Flame, Headphones, Search, Share2, Star, UserPlus, X } from "lucide-react";
 import { useSignInChooser } from "@/components/SignInChooser";
 import { SaveButton } from "@/components/SaveButton";
@@ -144,6 +144,42 @@ function buildEmbers(count: number) {
   }));
 }
 
+// One-shot burst of embers when the user ignites FIRE: sparks leap from the action
+// bar and float up and away while the perimeter glow lights. Mounted with a fresh
+// key per ignition; unmounts itself when the animation is done.
+const BURST_SPARKS = 18;
+
+function FireBurstFx({ onDone }: { onDone: () => void }) {
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  useEffect(() => {
+    const id = window.setTimeout(() => onDoneRef.current(), 1500);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  return (
+    <span className="fire-burst" aria-hidden="true">
+      {Array.from({ length: BURST_SPARKS }, (_, i) => (
+        <i
+          key={i}
+          style={
+            {
+              left: `${34 + ((i * 37) % 46)}%`,
+              width: 3 + (i % 4),
+              height: 3 + (i % 4),
+              background: EMBER_PALETTE[i % EMBER_PALETTE.length],
+              animationDelay: `${((i * 41) % 30) / 100}s`,
+              animationDuration: `${0.75 + ((i * 29) % 55) / 100}s`,
+              "--dx": `${((i * 53) % 96) - 48}px`,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </span>
+  );
+}
+
 // One shared SVG turbulence filter referenced by every card's flame ring + hotspot.
 function FireTurbulenceFilter() {
   return (
@@ -226,6 +262,12 @@ export function EventBoard({
   // First card starts revealed as a "this is how cards open" affordance; clicking a
   // card now navigates to its details page instead of toggling the disclosure.
   const [revealedEventId, setRevealedEventId] = useState<string | null>(events[0]?.id ?? null);
+  // Going/Fire re-scores the list, but re-sorting the grid under the cursor is
+  // disorienting. Freeze the visible order at click time and release it once the
+  // pointer (or focus) leaves the card that was acted on.
+  const [orderFreeze, setOrderFreeze] = useState<{ eventId: string; order: string[] } | null>(
+    null
+  );
   const [skipConfirm, setSkipConfirm] = useState(false);
   const [skipFutureConfirm, setSkipFutureConfirm] = useState(false);
   const top30EventIdSet = useMemo(() => new Set(top30EventIds), [top30EventIds]);
@@ -542,6 +584,19 @@ export function EventBoard({
       .sort((a, b) => compareEvents(a, b, eventCounts, eventScores, sortMode));
   }, [activeQuickFilters, customDateEnd, customDateStart, eventCounts, eventGenres, eventScores, query, rangeDays, selectedVenues, sortMode, tag, visibleEvents]);
 
+  // While an order freeze is active, keep rendering the order captured at click time.
+  // Filtering still applies (removed cards drop out); brand-new cards append at the end.
+  const displayedEvents = useMemo(() => {
+    if (!orderFreeze) {
+      return filteredEvents;
+    }
+    const rank = new Map(orderFreeze.order.map((id, index) => [id, index]));
+    return [...filteredEvents].sort(
+      (a, b) =>
+        (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+    );
+  }, [filteredEvents, orderFreeze]);
+
   function clearFilters() {
     setQuery("");
     setSelectedVenues([]);
@@ -786,6 +841,8 @@ export function EventBoard({
   async function togglePositiveAction(event: EventRecord, action: Extract<ActionKind, "fire" | "going">) {
     clearTooltip();
     setToastEvent(null);
+    // Hold the current visible order until the pointer leaves this card (see orderFreeze).
+    setOrderFreeze({ eventId: event.id, order: displayedEvents.map((entry) => entry.id) });
     const cardAction: CardAction = action === "going" ? "planning" : "fire";
     const data = await recordCardAction(event, cardAction);
     if (data?.curatorPickAdded) {
@@ -1122,7 +1179,7 @@ export function EventBoard({
         </section>
       ) : (
         <section className="sandbox-layout" id="cards" aria-label="Upcoming music events">
-          {filteredEvents.map((event, index) => {
+          {displayedEvents.map((event, index) => {
             const score = eventScores[event.id];
             const reasons = score?.reasons ?? [];
             const countsForEvent = eventCounts[event.id];
@@ -1143,6 +1200,9 @@ export function EventBoard({
                 onClearTooltip={clearTooltip}
                 onQueueTooltip={queueTooltip}
                 onRemove={requestRemove}
+                onSettle={() => {
+                  setOrderFreeze((current) => (current?.eventId === event.id ? null : current));
+                }}
                 onScoreChange={(updatedScore) => {
                   setEventScores((current) => ({
                     ...current,
@@ -1248,6 +1308,7 @@ function DiscoveryEventCard({
   onQueueTooltip,
   onRemove,
   onScoreChange,
+  onSettle,
   onTogglePositiveAction,
   onTrackAvlgoClick,
   reasons,
@@ -1270,6 +1331,7 @@ function DiscoveryEventCard({
   onQueueTooltip: (eventId: string, action: ActionKind) => void;
   onRemove: (event: EventRecord) => void;
   onScoreChange: (score: DiscoveryScore) => void;
+  onSettle: () => void;
   onTogglePositiveAction: (event: EventRecord, action: Extract<ActionKind, "fire" | "going">) => void;
   onTrackAvlgoClick: (event: EventRecord) => void;
   reasons: DiscoveryReason[];
@@ -1293,6 +1355,8 @@ function DiscoveryEventCard({
   const embers = showEmbers ? buildEmbers(fire) : [];
   const cardElRef = useRef<HTMLElement | null>(null);
   const router = useRouter();
+  // One-shot ember burst, armed each time the user ignites FIRE (off → on).
+  const [burstAt, setBurstAt] = useState(0);
 
   function handleFirePointerMove(pointerEvent: PointerEvent<HTMLElement>) {
     if (!userFired) {
@@ -1353,7 +1417,15 @@ function DiscoveryEventCard({
       onPointerMove={handleFirePointerMove}
       onPointerDown={() => setFireChurn(1)}
       onPointerUp={() => setFireChurn(0)}
-      onPointerLeave={() => setFireChurn(0)}
+      onPointerLeave={() => {
+        setFireChurn(0);
+        onSettle();
+      }}
+      onBlur={(blurEvent: FocusEvent<HTMLElement>) => {
+        if (!blurEvent.currentTarget.contains(blurEvent.relatedTarget as Node | null)) {
+          onSettle();
+        }
+      }}
       tabIndex={0}
     >
       {showEmbers || userFired ? (
@@ -1380,6 +1452,8 @@ function DiscoveryEventCard({
           ) : null}
         </div>
       ) : null}
+
+      {burstAt ? <FireBurstFx key={burstAt} onDone={() => setBurstAt(0)} /> : null}
 
       <EventPoster event={event} />
 
@@ -1498,7 +1572,13 @@ function DiscoveryEventCard({
           isDisabled={isPending}
           isPressed={state?.fire ?? false}
           onClearTooltip={onClearTooltip}
-          onClick={() => onTogglePositiveAction(event, "fire")}
+          onClick={() => {
+            if (!userFired) {
+              // Igniting (not un-firing): burst embers up from the action bar.
+              setBurstAt(Date.now());
+            }
+            onTogglePositiveAction(event, "fire");
+          }}
           onQueueTooltip={onQueueTooltip}
         >
           <Flame aria-hidden="true" size={16} strokeWidth={2.5} />
@@ -1578,11 +1658,13 @@ function ActionButton({
   const tooltipId = `event-${eventId}-${action}-tooltip`;
   const isTooltipActive = activeTooltip?.eventId === eventId && activeTooltip.action === action;
 
+  // Remove is a momentary action, not a toggle — it gets no aria-pressed state (which
+  // also keeps it out of the depressed/dull "toggle OFF" keycap styling).
   return (
     <button
       aria-describedby={isTooltipActive ? tooltipId : undefined}
       aria-label={ariaLabel}
-      aria-pressed={isPressed}
+      aria-pressed={action === "remove" ? undefined : isPressed}
       className={`is-${action}`}
       disabled={isDisabled}
       onBlur={onClearTooltip}

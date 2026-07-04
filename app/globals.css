@@ -2682,7 +2682,8 @@ body {
 .sandbox-event-card.is-revealed .sandbox-card-body,
 .sandbox-event-card:focus-within .sandbox-card-body,
 .sandbox-event-card:focus-visible .sandbox-card-body {
-  transform: translateY(-40px);
+  /* clears the 54px keycap action tray */
+  transform: translateY(-54px);
 }
 
 .sandbox-event-card:hover .sandbox-note,
@@ -3548,7 +3549,7 @@ button.primary-action {
   }
 
   .sandbox-card-body {
-    padding: 0 16px 54px;
+    padding: 0 16px 68px;
   }
 
   .sandbox-action-bar {
@@ -3571,7 +3572,7 @@ button.primary-action {
   }
 
   .sandbox-event-card.is-revealed .sandbox-card-body {
-    transform: translateY(-32px);
+    transform: translateY(-46px);
   }
 
   .sandbox-action-tooltip {
@@ -7966,82 +7967,243 @@ button.primary-action {
   text-transform: uppercase;
 }
 
-/* ── Card FX Lab: pushable button explorer ──────────────────────────────────
-   Applied via data-btnfx="..." on the lab card ONLY (the legacy archive card has
-   no attribute and is untouched). Real actions gain Z-axis depth so they read as
-   pressable; informational pills stay flat. Press depth comes from --btn-depth,
-   set inline by the lab. data-btnfx-links="on" extends the treatment to the
-   Details / AVLgo pill links. */
+/* ── SHIPPED button FX (Card FX Lab winner): keycap · 6px press depth ────────
+   Real actions are extruded keycaps so they read uniquely as pressable, while
+   informational pills stay flat. Going / Fire / Save are TOGGLES: raised and
+   illuminated when ON, depressed into the tray and dull when OFF (Fire is only
+   orange once fired). Remove and the Details / AVLgo links are momentary keys:
+   popped up until pressed. The Card FX Lab overrides these via data-btnfx. */
+
+.sandbox-event-card {
+  --btn-depth: 6px;
+}
 
 /* per-surface extruded-edge colors (a darker shade of each face) */
-.card-lab-card .sandbox-action-bar .is-going,
-.card-lab-card .sandbox-action-bar .is-save {
+.sandbox-event-card .sandbox-action-bar .is-going,
+.sandbox-event-card .sandbox-action-bar .is-save,
+.sandbox-event-card .sandbox-action-bar .save-button--icon {
   --btn-edge: #0c0c0e;
 }
 
-.card-lab-card .sandbox-action-bar .is-fire {
+.sandbox-event-card .sandbox-action-bar .is-fire {
   --btn-edge: #9a3412;
 }
 
-.card-lab-card .sandbox-action-bar .is-remove {
+.sandbox-event-card .sandbox-action-bar .is-remove {
   --btn-edge: #18181c;
 }
 
-.card-lab-card .sandbox-card-links a {
+.sandbox-event-card .sandbox-card-links a {
   --btn-edge: #71717a;
 }
 
-/* any 3D style: open up the flush bar so depth has room to read */
-.card-lab-card[data-btnfx]:not([data-btnfx="flush"]) .sandbox-action-bar {
+/* the bar becomes a padded tray the keys sit in */
+.sandbox-event-card .sandbox-action-bar {
   background: rgba(9, 9, 11, 0.92);
   gap: 8px;
   height: 54px;
   padding: 8px 9px 10px;
 }
 
-.card-lab-card[data-btnfx]:not([data-btnfx="flush"]) .sandbox-action-bar button {
+/* base keycap: raised face over a solid extruded edge (Remove stays momentary) */
+.sandbox-event-card .sandbox-action-bar button {
   border-radius: 9px;
+  box-shadow:
+    0 var(--btn-depth, 6px) 0 var(--btn-edge, #0c0c0e),
+    0 calc(var(--btn-depth, 6px) + 6px) 12px rgba(0, 0, 0, 0.45);
   transition:
-    border-color 120ms ease,
+    background 140ms ease,
     box-shadow 120ms ease,
+    color 140ms ease,
     filter 140ms ease,
     transform 120ms ease;
 }
 
-.card-lab-card[data-btnfx]:not([data-btnfx="flush"])[data-btnfx-links="on"]
-  .sandbox-card-links
-  a {
-  transition:
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    filter 140ms ease,
-    transform 120ms ease;
-}
-
-/* — keycap: solid extruded edge below the face; press sinks the key into it — */
-.card-lab-card[data-btnfx="keycap"] .sandbox-action-bar button,
-.card-lab-card[data-btnfx="keycap"][data-btnfx-links="on"] .sandbox-card-links a {
+.sandbox-event-card .sandbox-action-bar button:hover {
   box-shadow:
-    0 var(--btn-depth, 3px) 0 var(--btn-edge),
-    0 calc(var(--btn-depth, 3px) + 6px) 12px rgba(0, 0, 0, 0.45);
-}
-
-.card-lab-card[data-btnfx="keycap"] .sandbox-action-bar button:hover,
-.card-lab-card[data-btnfx="keycap"][data-btnfx-links="on"] .sandbox-card-links a:hover {
-  box-shadow:
-    0 calc(var(--btn-depth, 3px) + 1px) 0 var(--btn-edge),
-    0 calc(var(--btn-depth, 3px) + 9px) 14px rgba(0, 0, 0, 0.5);
+    0 calc(var(--btn-depth, 6px) + 1px) 0 var(--btn-edge, #0c0c0e),
+    0 calc(var(--btn-depth, 6px) + 9px) 14px rgba(0, 0, 0, 0.5),
+    0 0 12px rgba(250, 250, 250, 0.08);
   transform: translateY(-1px);
 }
 
-.card-lab-card[data-btnfx="keycap"] .sandbox-action-bar button:active,
-.card-lab-card[data-btnfx="keycap"][data-btnfx-links="on"] .sandbox-card-links a:active {
+.sandbox-event-card .sandbox-action-bar button:active {
   box-shadow:
-    0 1px 0 var(--btn-edge),
+    0 1px 0 var(--btn-edge, #0c0c0e),
     0 2px 4px rgba(0, 0, 0, 0.4);
   filter: brightness(0.94);
-  transform: translateY(calc(var(--btn-depth, 3px) - 1px));
+  transform: translateY(calc(var(--btn-depth, 6px) - 1px));
 }
+
+/* toggles OFF (Going / Fire / Save): depressed into the tray + dull */
+.sandbox-event-card .sandbox-action-bar button[aria-pressed="false"] {
+  background: #1b1b1e;
+  box-shadow:
+    0 1px 0 var(--btn-edge, #0c0c0e),
+    inset 0 2px 5px rgba(0, 0, 0, 0.6);
+  color: #71717a;
+  transform: translateY(calc(var(--btn-depth, 6px) - 1px));
+}
+
+.sandbox-event-card .sandbox-action-bar button[aria-pressed="false"]:hover {
+  color: #a1a1aa;
+  filter: brightness(1.2);
+  transform: translateY(calc(var(--btn-depth, 6px) - 2px));
+}
+
+/* toggles ON: popped back up + illuminated */
+.sandbox-event-card .sandbox-action-bar .is-going[aria-pressed="true"] {
+  background: #3f3f46;
+  box-shadow:
+    0 var(--btn-depth, 6px) 0 var(--btn-edge, #0c0c0e),
+    0 calc(var(--btn-depth, 6px) + 6px) 14px rgba(0, 0, 0, 0.5),
+    0 0 16px rgba(74, 222, 128, 0.3);
+  color: #bbf7d0;
+}
+
+.sandbox-event-card .sandbox-action-bar .is-fire[aria-pressed="true"] {
+  background: #f97316;
+  box-shadow:
+    0 var(--btn-depth, 6px) 0 var(--btn-edge, #9a3412),
+    0 calc(var(--btn-depth, 6px) + 6px) 14px rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(249, 115, 22, 0.55);
+  color: #09090b;
+}
+
+.sandbox-event-card .sandbox-action-bar .is-save[aria-pressed="true"],
+.sandbox-event-card .sandbox-action-bar .save-button--icon[aria-pressed="true"] {
+  background: #303036;
+  box-shadow:
+    0 var(--btn-depth, 6px) 0 var(--btn-edge, #0c0c0e),
+    0 calc(var(--btn-depth, 6px) + 6px) 14px rgba(0, 0, 0, 0.5),
+    0 0 16px rgba(129, 140, 248, 0.4);
+  color: #818cf8;
+}
+
+/* pressing a toggle (either direction) always sinks the key */
+.sandbox-event-card .sandbox-action-bar button[aria-pressed="true"]:active,
+.sandbox-event-card .sandbox-action-bar button[aria-pressed="false"]:active {
+  box-shadow:
+    0 1px 0 var(--btn-edge, #0c0c0e),
+    inset 0 2px 5px rgba(0, 0, 0, 0.55);
+  filter: brightness(0.94);
+  transform: translateY(calc(var(--btn-depth, 6px) - 1px));
+}
+
+/* Details / AVLgo links: momentary keycaps at half depth — popped up until pressed */
+.sandbox-event-card .sandbox-card-links a {
+  box-shadow:
+    0 calc(var(--btn-depth, 6px) / 2) 0 var(--btn-edge, #71717a),
+    0 calc(var(--btn-depth, 6px) / 2 + 6px) 10px rgba(0, 0, 0, 0.35);
+  transition:
+    box-shadow 120ms ease,
+    filter 140ms ease,
+    transform 120ms ease;
+}
+
+.sandbox-event-card .sandbox-card-links a:hover {
+  transform: translateY(-1px);
+}
+
+.sandbox-event-card .sandbox-card-links a:active {
+  box-shadow:
+    0 1px 0 var(--btn-edge, #71717a),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+  filter: brightness(0.96);
+  transform: translateY(calc(var(--btn-depth, 6px) / 2 - 1px));
+}
+
+/* one-shot ember burst when FIRE ignites (see FireBurstFx / lab equivalent) */
+.fire-burst {
+  bottom: 48px;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 6;
+}
+
+.fire-burst i {
+  animation: fireBurstRise 0.9s ease-out forwards;
+  border-radius: 50%;
+  bottom: 0;
+  filter: blur(0.3px);
+  mix-blend-mode: screen;
+  opacity: 0;
+  position: absolute;
+}
+
+@keyframes fireBurstRise {
+  0% {
+    opacity: 0;
+    transform: translate(0, 6px) scale(0.5);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(calc(var(--dx, 0px) * 0.25), -12px) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 0px), -140px) scale(0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fire-burst i {
+    animation: none;
+  }
+}
+
+/* ── Card FX Lab: pushable button explorer ──────────────────────────────────
+   data-btnfx on the lab card overrides the shipped keycap so other styles can
+   still be explored. "flush" restores the pre-keycap production look. */
+
+.card-lab-card[data-btnfx="flush"] .sandbox-action-bar {
+  background: none;
+  gap: 1px;
+  height: 40px;
+  padding: 0;
+}
+
+.card-lab-card[data-btnfx="flush"] .sandbox-action-bar button {
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+}
+
+.card-lab-card[data-btnfx="flush"] .sandbox-action-bar button.is-going,
+.card-lab-card[data-btnfx="flush"] .sandbox-action-bar button.is-save {
+  background: rgba(39, 39, 42, 0.96);
+  color: #fafafa;
+}
+
+.card-lab-card[data-btnfx="flush"] .sandbox-action-bar button.is-fire {
+  background: #f97316;
+  color: #09090b;
+}
+
+.card-lab-card[data-btnfx="flush"] .sandbox-action-bar button.is-remove {
+  background: rgba(63, 63, 70, 0.96);
+  color: #fb7185;
+}
+
+.card-lab-card[data-btnfx="flush"] .sandbox-card-links a {
+  box-shadow: none;
+  transform: none;
+}
+
+/* lab: flatten the Details / AVLgo links when the links toggle is off */
+.card-lab-card[data-btnfx-links="off"] .sandbox-card-links a,
+.card-lab-card[data-btnfx-links="off"] .sandbox-card-links a:hover,
+.card-lab-card[data-btnfx-links="off"] .sandbox-card-links a:active {
+  box-shadow: none;
+  filter: none;
+  transform: none;
+}
+
+/* — keycap: no rules needed — data-btnfx="keycap" simply inherits the shipped
+   production treatment above; the lab's depth slider drives --btn-depth inline — */
 
 /* — arcade: hard offset shadow; press snaps the button into the shadow — */
 .card-lab-card[data-btnfx="arcade"] .sandbox-action-bar button,
