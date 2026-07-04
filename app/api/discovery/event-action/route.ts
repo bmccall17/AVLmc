@@ -94,16 +94,26 @@ export async function POST(request: Request) {
     (await listDiscoveryStates([event.id], { sessionId, userId }))[event.id] ??
     emptyDiscoveryState(event.id);
 
-  const counts = await recordCountAction({
-    action,
-    eventId: event.id,
-    eventTitle: event.eventTitle,
-    fireOn: state.fire,
-    intentSource,
-    planningOn: state.planning,
-    sessionId,
-    userId,
-  });
+  let counts: Awaited<ReturnType<typeof recordCountAction>>;
+
+  try {
+    counts = await recordCountAction({
+      action,
+      eventId: event.id,
+      eventTitle: event.eventTitle,
+      fireOn: state.fire,
+      intentSource,
+      planningOn: state.planning,
+      sessionId,
+      userId,
+    });
+  } catch (error) {
+    console.error("Discovery count write failed:", error);
+    return NextResponse.json(
+      { error: "Could not update community counts. Please try again." },
+      { status: 500 }
+    );
+  }
 
   // Shared Listening (PRD 17): a signed-in listener Going/Firing shares the artist's top tracks
   // onto the event page. Awaited so the client's follow-up fetch finds the songs, but fully

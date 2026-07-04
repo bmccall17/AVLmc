@@ -466,7 +466,7 @@ export async function removeEventIntent(input: {
       `
         delete from public.event_intents
         where event_id = $1
-          and (identity_key = $2 or ($3::text is not null and user_id = $3))
+          and (identity_key = $2 or ($3::int is not null and user_id = $3::int))
       `,
       [input.eventId, identityKey, databaseUserId]
     );
@@ -737,7 +737,7 @@ async function deleteLegacyReaction(input: {
       delete from public.reactions
       where event_id = $1
         and type = $2
-        and (session_id = $3 or ($4::text is not null and user_id = $4))
+        and (session_id = $3 or ($4::int is not null and user_id = $4::int))
     `,
     [input.eventId, input.type, input.sessionId, databaseUserId]
   );
