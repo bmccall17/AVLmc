@@ -45,6 +45,8 @@ export type CuratorTopListEntry = {
 export type CuratedBy = {
   handle: string;
   displayName: string;
+  /** Persona avatar for compact renderings (3+ curators show faces, not names). */
+  avatarUrl?: string | null;
 };
 
 const HANDLE_PATTERN = /^[a-z0-9](?:[a-z0-9_-]{1,38}[a-z0-9])$/;

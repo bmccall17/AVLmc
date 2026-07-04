@@ -171,43 +171,34 @@ export default async function EventPage({ params }: EventPageProps) {
             </div>
             <div>
               <dt>Source</dt>
-              <dd>{event.source}</dd>
+              <dd>
+                <TicketIntentLink
+                  className="source-link"
+                  eventId={event.id}
+                  eventTitle={event.eventTitle}
+                  href={event.eventUrl}
+                  title="Open the original listing — tickets, details, and the source feed"
+                >
+                  <span>{event.source}</span>
+                  <span aria-hidden="true">↗</span>
+                </TicketIntentLink>
+              </dd>
             </div>
           </dl>
-          <TicketIntentLink
-            className="primary-action"
-            eventId={event.id}
-            eventTitle={event.eventTitle}
-            href={event.eventUrl}
-          >
-            View original AVLgo listing
-          </TicketIntentLink>
         </div>
       </article>
 
       <CommunityPanel
+        curatedBy={curatedBy}
         event={{
           id: event.id,
           artistName: event.artistName,
-          eventUrl: event.eventUrl,
           eventTitle: event.eventTitle,
         }}
         initialDiscoveryState={discoveryStates[event.id]}
         initialCommunity={publicCommunity}
         spotifySearchEnabled={spotifySearchEnabled}
       />
-
-      {curatedBy.length > 0 ? (
-        <section className="curated-by-detail" aria-label="Curated by">
-          <span>★ Curated by</span>
-          {curatedBy.map((curator, index) => (
-            <span key={curator.handle}>
-              {index > 0 ? ", " : " "}
-              <Link href={`/curator/${encodeURIComponent(curator.handle)}`}>{curator.displayName}</Link>
-            </span>
-          ))}
-        </section>
-      ) : null}
 
       <CirclePresence activity={circleActivity} />
 

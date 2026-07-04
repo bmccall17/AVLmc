@@ -400,6 +400,24 @@ h1 {
   margin: 0;
 }
 
+/* The Source cell doubles as the single ticket/source-listing action (replaces the old
+   "View original listing" button and the community strip's "Find tickets" link). */
+.source-link {
+  align-items: center;
+  color: var(--ink);
+  display: inline-flex;
+  font-weight: 700;
+  gap: 6px;
+  text-decoration: underline;
+  text-decoration-color: rgba(49, 84, 77, 0.45);
+  text-underline-offset: 3px;
+}
+
+.source-link:hover,
+.source-link:focus-visible {
+  text-decoration-color: currentColor;
+}
+
 .placeholder-grid {
   display: grid;
   gap: 14px;
@@ -6576,15 +6594,58 @@ button.primary-action {
   background: rgba(250, 204, 21, 0.2);
 }
 
-.curated-by-detail {
-  color: #fde68a;
+/* "Curated by" credit inside the Community Signal strip (names for 1–2, avatars for 3+). */
+.curated-by-inline {
+  align-items: center;
+  color: #b45309;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   font-size: 0.86rem;
   font-weight: 700;
-  margin: 12px 0;
+  margin: 8px 0 0;
 }
 
-.curated-by-detail a {
-  color: #fcd34d;
+.curated-by-inline a {
+  color: #92400e;
+}
+
+.curated-by-avatars {
+  align-items: center;
+  display: inline-flex;
+}
+
+.curated-by-avatar {
+  align-items: center;
+  background: #fde68a;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  color: #92400e;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 900;
+  height: 28px;
+  justify-content: center;
+  overflow: hidden;
+  text-decoration: none;
+  width: 28px;
+}
+
+.curated-by-avatar + .curated-by-avatar {
+  margin-left: -8px;
+}
+
+.curated-by-avatar:hover,
+.curated-by-avatar:focus-visible {
+  position: relative;
+  transform: translateY(-1px);
+  z-index: 1;
+}
+
+.curated-by-avatar img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }
 
 .curator-hero {

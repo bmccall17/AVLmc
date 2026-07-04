@@ -32,6 +32,10 @@ const TYPE_NOUN: Record<SavedItemType, string> = {
   artist: "artist",
 };
 
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 /**
  * Save / un-save control for events, venues, and artists (PRD 12 / C1). Distinct from the
  * planning/fire/remove controls — a bookmark, not a flame. Optimistic toggle with rollback on
@@ -94,12 +98,12 @@ export function SaveButton({
   }
 
   const title = !isSignedIn
-    ? `Sign in to save this ${noun}`
+    ? `Sign in to save this ${noun} to your Saved list`
     : saved
-      ? `Saved — tap to remove this ${noun}`
-      : `Save this ${noun}`;
+      ? `This ${noun} is on your Saved list — tap to remove it`
+      : `Bookmark this ${noun} to your Saved list so you can find it again`;
 
-  const labelText = saved ? "Saved" : "Save";
+  const labelText = saved ? `${capitalize(noun)} saved` : `Save ${noun}`;
 
   return (
     <>

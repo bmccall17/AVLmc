@@ -8,6 +8,8 @@ type TicketIntentLinkProps = {
   eventId: string;
   eventTitle: string;
   href: string;
+  /** Hover tooltip explaining where the link goes. */
+  title?: string;
 };
 
 export function TicketIntentLink({
@@ -16,6 +18,7 @@ export function TicketIntentLink({
   eventId,
   eventTitle,
   href,
+  title,
 }: TicketIntentLinkProps) {
   function recordTicketClick() {
     void fetch("/api/community/ticket-intents", {
@@ -26,7 +29,7 @@ export function TicketIntentLink({
   }
 
   return (
-    <a className={className} href={href} onClick={recordTicketClick} target="_blank">
+    <a className={className} href={href} onClick={recordTicketClick} target="_blank" title={title}>
       {children}
     </a>
   );

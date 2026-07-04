@@ -297,9 +297,14 @@ export async function getCuratedByForEvents(eventIds: string[]): Promise<Record<
   }
 
   try {
-    const result = await query<{ event_id: string; handle: string; display_name: string }>(
+    const result = await query<{
+      event_id: string;
+      handle: string;
+      display_name: string;
+      avatar_url: string | null;
+    }>(
       `
-        select p.event_id, c.handle, c.display_name
+        select p.event_id, c.handle, c.display_name, c.avatar_url
         from public.curator_picks p
         join public.curators c on c.id = p.curator_id and c.status = 'active'
         where p.event_id = any($1::text[]) and p.status = 'visible'
@@ -310,7 +315,11 @@ export async function getCuratedByForEvents(eventIds: string[]): Promise<Record<
 
     const byEvent: Record<string, CuratedBy[]> = {};
     for (const row of result.rows) {
-      (byEvent[row.event_id] ??= []).push({ handle: row.handle, displayName: row.display_name });
+      (byEvent[row.event_id] ??= []).push({
+        handle: row.handle,
+        displayName: row.display_name,
+        avatarUrl: row.avatar_url,
+      });
     }
     return byEvent;
   } catch (error) {

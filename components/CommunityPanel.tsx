@@ -10,6 +10,7 @@ import type {
   PublicEventCommunity,
   ReactionType,
 } from "@/lib/community";
+import type { CuratedBy } from "@/lib/curators-core";
 import type { DiscoveryPersonEventState } from "@/lib/discovery-memory";
 import type { SpotifyTrackSearchResult } from "@/lib/music";
 import { SHARED_SONGS_REFRESH_EVENT } from "@/lib/shared-songs-core";
@@ -18,10 +19,11 @@ type EventSummary = {
   id: string;
   eventTitle: string;
   artistName: string;
-  eventUrl: string;
 };
 
 type CommunityPanelProps = {
+  /** Active curators who picked this show — rendered inside the Community Signal strip. */
+  curatedBy?: CuratedBy[];
   event: EventSummary;
   initialDiscoveryState?: DiscoveryPersonEventState;
   initialCommunity: PublicEventCommunity;
@@ -44,6 +46,7 @@ type EventActionResponse = {
 };
 
 export function CommunityPanel({
+  curatedBy = [],
   event,
   initialDiscoveryState,
   initialCommunity,
@@ -173,24 +176,6 @@ export function CommunityPanel({
     } finally {
       setReactionPending(null);
     }
-  }
-
-  function recordTicketClick() {
-    void fetch("/api/community/ticket-intents", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        eventId: event.id,
-        eventTitle: event.eventTitle,
-      }),
-    })
-      .then(async (response) => {
-        const data = (await response.json()) as { counts?: CommunityCounts };
-        if (response.ok && data.counts) {
-          setCommunity((current) => ({ ...current, ...data.counts }));
-        }
-      })
-      .catch(() => undefined);
   }
 
   async function submitSong(formEvent: FormEvent<HTMLFormElement>) {
@@ -324,11 +309,13 @@ export function CommunityPanel({
         <div>
           <p className="eyebrow">Community signal</p>
           <h2>Who is leaning in?</h2>
+          <CuratedByLine curators={curatedBy} />
         </div>
         <button
           className="reaction-button"
           disabled={reactionPending === "going"}
           onClick={() => react("going")}
+          title="Count yourself in — adds you to the thinking-of-going tally"
           type="button"
         >
           {community.going} thinking of going
@@ -338,15 +325,17 @@ export function CommunityPanel({
             className="reaction-button spotify-intent"
             disabled={reactionPending === "spotify"}
             onClick={() => react("going", "spotify")}
+            title="Counts you as thinking of going, tagged with your Spotify connection — different from bookmarking the show"
             type="button"
           >
-            Save via Spotify
+            Going via Spotify
           </button>
         ) : null}
         <button
           className="reaction-button hot"
           disabled={reactionPending === "fire"}
           onClick={() => react("fire")}
+          title="Hype this show — adds a fire reaction"
           type="button"
         >
           {community.fire} fire
@@ -355,6 +344,11 @@ export function CommunityPanel({
           className={`reaction-button remove ${discoveryState.removed ? "is-active" : ""}`}
           disabled={reactionPending === "remove" || reactionPending === "unremove"}
           onClick={toggleRemoved}
+          title={
+            discoveryState.removed
+              ? "Bring this show back onto your homepage"
+              : "Hide this show from your homepage"
+          }
           type="button"
         >
           {discoveryState.removed ? "Show on my list" : "Remove from my list"}
@@ -369,9 +363,6 @@ export function CommunityPanel({
         {community.goingSources.ticket_click > 0 ? (
           <span>{community.goingSources.ticket_click} ticket clicks</span>
         ) : null}
-        <a className="intent-ticket-link" href={event.eventUrl} onClick={recordTicketClick} target="_blank">
-          Find tickets / source listing
-        </a>
       </div>
 
       <FormMessage state={reactionState} />
@@ -485,6 +476,48 @@ export function CommunityPanel({
         </form>
       </div>
     </section>
+  );
+}
+
+/**
+ * "Curated by" credit inside the Community Signal strip. With 1–2 curators, show linked names;
+ * with 3+, collapse to avatar chips (hover for the name) to keep the strip compact.
+ */
+function CuratedByLine({ curators }: { curators: CuratedBy[] }) {
+  if (curators.length === 0) {
+    return null;
+  }
+
+  return (
+    <p className="curated-by-inline" aria-label="Curated by">
+      <span className="curated-by-inline-label">★ Curated by</span>
+      {curators.length > 2 ? (
+        <span className="curated-by-avatars">
+          {curators.map((curator) => (
+            <Link
+              className="curated-by-avatar"
+              href={`/curator/${encodeURIComponent(curator.handle)}`}
+              key={curator.handle}
+              title={curator.displayName}
+            >
+              {curator.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- remote persona avatars have no size/domain guarantees.
+                <img alt={curator.displayName} src={curator.avatarUrl} />
+              ) : (
+                <span aria-hidden="true">{curator.displayName.charAt(0).toUpperCase()}</span>
+              )}
+            </Link>
+          ))}
+        </span>
+      ) : (
+        curators.map((curator, index) => (
+          <span key={curator.handle}>
+            {index > 0 ? ", " : null}
+            <Link href={`/curator/${encodeURIComponent(curator.handle)}`}>{curator.displayName}</Link>
+          </span>
+        ))
+      )}
+    </p>
   );
 }
 
