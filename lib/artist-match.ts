@@ -140,6 +140,8 @@ async function safeFetchAndStoreArtistTracks(
 export async function resolveAndStoreArtistMatch(input: {
   eventId: string;
   artistName: string;
+  /** When true, skip the top-tracks fetch (caller already learned it's forbidden this run). */
+  skipTracks?: boolean;
 }): Promise<ResolveOutcome> {
   const artistName = input.artistName?.trim() ?? "";
   const normalizedName = normalizeArtistName(artistName);
@@ -169,7 +171,7 @@ export async function resolveAndStoreArtistMatch(input: {
       });
       if (cached.status === "auto" && cached.spotifyArtistId) {
         const tracks = await copyCachedTracks(cached.sourceEventId, input.eventId);
-        if (tracks === 0) {
+        if (tracks === 0 && !input.skipTracks) {
           // Source had no cached tracks (older row); fetch once so this event still hovers/plays.
           await safeFetchAndStoreArtistTracks(input.eventId, cached.spotifyArtistId);
         }
@@ -211,7 +213,7 @@ export async function resolveAndStoreArtistMatch(input: {
     // Track fetch is NON-FATAL: the embed (primary deliverable) publishes regardless; a failed
     // top-tracks call just means no hover-play previews yet, which a later top-up pass retries.
     let trackError: string | undefined;
-    if (decision.status === "auto") {
+    if (decision.status === "auto" && !input.skipTracks) {
       trackError = await safeFetchAndStoreArtistTracks(input.eventId, decision.artist.id);
     }
 
@@ -376,10 +378,15 @@ export async function runArtistMatchBackfill(options: {
     throw error;
   }
 
+  // Once top-tracks returns 403 (Spotify's app-wide Dev-Mode restriction), stop attempting it for
+  // the rest of the run — retrying every artist just burns quota on the same 403.
+  let tracksForbidden = false;
+
   for (const event of pending) {
     const outcome = await resolveAndStoreArtistMatch({
       eventId: event.id,
       artistName: event.artist_name,
+      skipTracks: tracksForbidden,
     });
     summary.processed += 1;
 
@@ -398,6 +405,9 @@ export async function runArtistMatchBackfill(options: {
         if (outcome.trackError) {
           summary.tracksFailed += 1;
           summary.lastTrackError = outcome.trackError;
+          if (/\b403\b/.test(outcome.trackError)) {
+            tracksForbidden = true;
+          }
         }
         break;
       case "rejected":
@@ -424,8 +434,9 @@ export async function runArtistMatchBackfill(options: {
 
   // Top-up: retry top-tracks for already-published matches that still have no tracks (e.g. a
   // prior top-tracks outage). Independent of the match row, so a fixed root cause fills previews
-  // on the next run without deleting/redoing matches.
-  if (!summary.backedOff) {
+  // on the next run without deleting/redoing matches. Skipped when top-tracks is 403 this run —
+  // no point re-hammering an app-wide restriction.
+  if (!summary.backedOff && !tracksForbidden) {
     const topUp = await backfillMissingArtistTracks({ limit, pauseMs });
     summary.tracksFilled += topUp.filled;
     summary.tracksFailed += topUp.errors;
@@ -486,8 +497,12 @@ export async function backfillMissingArtistTracks(options: {
     if (error) {
       result.errors += 1;
       result.lastError = error;
+      // 429/5xx = back off and resume; 403 = app-wide top-tracks restriction, stop hammering it.
       if (/\b(429|5\d\d)\b/.test(error)) {
         result.backedOff = true;
+        break;
+      }
+      if (/\b403\b/.test(error)) {
         break;
       }
     } else {
