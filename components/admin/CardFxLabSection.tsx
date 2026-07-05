@@ -231,11 +231,11 @@ const SPOTIFY_SIZES: Array<{ value: SpotifyEmbedSize; label: string }> = [
 // Spotify IDs are 22-char base62. Validate before it ever reaches the iframe src.
 const SPOTIFY_ID_RE = /^[A-Za-z0-9]{22}$/;
 
-// Seeded from a real auto-match in the prod DB (event_artist_matches) so the preview
-// loads actual Asheville-relevant music out of the box rather than a guessed ID.
+// Seeded with a real track so the compact chip expands to a playable player out of the
+// box. Swap via the paste field, or reseed here from a prod `event_artist_matches` id.
 const DEFAULT_SPOTIFY = {
-  type: "artist" as SpotifyEmbedType,
-  id: "5FwydyGVcsQllnM4xM6jw4", // American Football
+  type: "track" as SpotifyEmbedType,
+  id: "2xjQblBaDbzMDdCRvRzKc3",
 };
 
 function isValidSpotifyId(id: string): boolean {
