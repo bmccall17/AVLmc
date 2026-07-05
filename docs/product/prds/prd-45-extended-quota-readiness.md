@@ -13,9 +13,44 @@ Spotify's Extension Request review checks that the app is a real, publicly-descr
 ## Implementation Status
 
 **Code shipped; submission prepared — awaiting the owner's dashboard filing (July 2, 2026;
-parallel passes merged July 3).**
+parallel passes merged July 3). Seat-free taste import shipped as the practical exit ramp
+(July 4, 2026), because Extended Quota is now effectively out of reach for this app (see below).**
 
-Delivered in code:
+### Seat-free taste import — shipped July 4, 2026 (the exit ramp that doesn't need Spotify's review)
+
+The premise of this cycle — that Extended Quota Mode is the *permanent fix* — no longer holds.
+Spotify's **April 15, 2025** criteria change reserves extended access for **legally-registered
+businesses** operating a launched service at a **minimum ~250,000 monthly active users**; individuals
+are no longer accepted. For a free, local, private-beta app that path is realistically closed, and the
+dev-mode cap itself tightened (now **5** test users, Premium required). So we shipped a workaround that
+**sidesteps the quota entirely** rather than waiting on a review that won't come.
+
+The insight (spiked before building — app-token playlist *track* reads 403 under dev mode, but a
+user-created public playlist's **metadata** is readable and `search?type=artist` is 200): AVLmc never
+needs to call the Spotify API for a listener's private data. The listener **exports their playlists
+themselves** (Exportify runs on *its* quota, or Spotify's own "Download your data"), and uploads the
+CSV. We parse the artists off the file and store them as taste — **no OAuth, no allowlist seat, works
+for every listener including email-only accounts never added to the allowlist.**
+
+Delivered:
+
+- **`lib/taste-import-core.ts`** — pure RFC-4180 CSV parser + artist extraction: header auto-detection,
+  semicolon-separated multi-artist splitting (current Exportify), comma-split-by-URI for legacy exports,
+  genre capture, frequency→rank. Unit-tested (`tests/taste-import.test.ts`, 6 cases) against the real
+  Exportify format.
+- **`lib/music.ts`** `replaceImportedProfileItems()` — writes `music_profile_items` (`top_artist`,
+  `time_range: "import"`), the SAME store the OAuth `/me/top` sync uses, so discovery's
+  `buildProfileTerms` feeds imported artists into `artistAffinity` with zero scoring changes and no
+  schema change; the distinct `time_range` means import and OAuth sync never clobber each other.
+- **`app/api/me/taste-import/route.ts`** (registered `api-me-taste-import`) — signed-in CSV upload → parse
+  → store → summary + preview.
+- **`components/ListenerProfileButton.tsx`** — "Import Spotify taste (CSV)" upload with an Exportify
+  how-to link; `router.refresh()` re-ranks the board on success.
+- Verified: 6/6 parser tests pass and the real 115-track export resolves to 15 correctly-split artists;
+  typecheck/lint clean; Snyk 0 issues. End-to-end (upload → DB → re-rank) to be confirmed on a preview
+  deploy (no local `DATABASE_URL`).
+
+Delivered in code (original Extended-Quota-readiness track):
 
 - **`/privacy` page** (`app/privacy/page.tsx`, registered `ui-privacy-page`): dated, listener-first
   house voice (two parallel July 2 drafts merged July 3 — structure + code-verified claims from
@@ -84,10 +119,15 @@ In [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) �
 
 ### Fallback stance (if declined or stalled)
 
-The C1–C3 loop is the operating model at 25 seats indefinitely: the chooser catches every
-would-be tester, the owner triages with the cross-store seat counter, and seats are recycled by
-removing inactive entries in the dashboard's User Management (then declining/re-opening the
-matching request rows). Nothing else in the epic depends on the grant.
+**Updated July 4, 2026:** treat "stalled" as the base case. Spotify's April 15, 2025 criteria change
+(registered business + ~250k MAU, no individuals) makes Extended Quota effectively unreachable for this
+app, and dev mode tightened to **5** Premium test users. The operating model is therefore: (1) the
+seat-free **taste import** above gives *unlimited* listeners taste-personalized ranking with no seat, and
+(2) the C1–C3 loop still handles the handful who want full OAuth `/me/top` sync at ≤5 seats — the chooser
+catches every would-be tester, the owner triages with the cross-store seat counter, and seats are
+recycled by removing inactive entries in the dashboard's User Management (then declining/re-opening the
+matching request rows). Nothing in the epic depends on the grant. The submission text above stays filed
+for the record, but the product no longer waits on it.
 
 ## Goals
 

@@ -2,9 +2,14 @@
 
 Created: July 2, 2026
 
-**Status: C1–C4 shipped (July 2, 2026).** The gate, capture loop, auto-link convergence, and
-privacy/runbook prerequisites are all in `main`, and `.env.example` now carries the auth envs +
-`SPOTIFY_OPEN_ACCESS=false`. The linking-stance decision this status once awaited is resolved:
+**Status: C1–C4 shipped (July 2, 2026); seat-free taste import shipped (July 4, 2026).** The gate,
+capture loop, auto-link convergence, and privacy/runbook prerequisites are all in `main`, and
+`.env.example` now carries the auth envs + `SPOTIFY_OPEN_ACCESS=false`. **The epic's central promise —
+"a listener's taste feeds discovery" — is now met without the Extended Quota grant:** a seat-free CSV
+**taste import** (upload a Spotify/Exportify playlist export → parsed into `music_profile_items` →
+`artistAffinity`) gives unlimited listeners taste-ranked boards with no allowlist seat, since Extended
+Quota turned out to be effectively closed for this app (Spotify's April 2025 registered-business /
+~250k-MAU rule). Details in [PRD 45](prds/prd-45-extended-quota-readiness.md). The linking-stance decision this status once awaited is resolved:
 the product owner's audit (July 3, 2026) endorsed proceeding with PRD 44 **narrowly** — signed-in
 linking was already native, the `user_emails` spine already resolves recorded emails, and the one
 remaining dead-end (a signed-out Spotify sign-in on an existing email) hit exactly the
@@ -62,7 +67,7 @@ Decided with product owner July 2, 2026:
 3. **The loop closes** ✅ (C1/PRD 42): approve (dashboard-first order enforced by copy) sends the "you're in" invite (`approved → invited`); the gate then passes that email straight to Spotify.
 4. **One person, one account, no dead ends** ✅ (C3/PRD 44): `allowDangerousEmailAccountLinking` on Spotify; both convergence directions proven in real SQL (`test:one-identity` against a throwaway Neon branch, 9/9); `OAuthAccountNotLinked` remains only for the documented email-mismatch edge with working recovery copy.
 5. **Every auth surface is the product's own** ✅ (C2/PRD 43): custom `pages.signIn` (`/auth/signin`) + existing `pages.error`; no NextAuth default reachable in the funnel.
-6. **The permanent fix is filed** ◐ (C4/PRD 45): `/privacy` live + footer-linked, submission text + dashboard checklist + one-flag go-live runbook recorded in the PRD; the dashboard filing itself is the owner's action (external) — PRD 45 parks in "prepared — awaiting filing."
+6. **The permanent fix is filed** ◐→✅-in-practice (C4/PRD 45): `/privacy` live + footer-linked, submission text + dashboard checklist + one-flag go-live runbook recorded in the PRD; the dashboard filing itself is the owner's action (external). **Superseded as the primary fix (July 4, 2026):** Extended Quota is effectively closed for this app (Spotify's Apr-2025 registered-business / ~250k-MAU rule), so the *actual* permanent fix is the **seat-free taste import** — unlimited taste-personalized listeners with no allowlist seat, no Spotify review required. Submission stays filed for the record.
 
 ## Outcome → PRD Map
 

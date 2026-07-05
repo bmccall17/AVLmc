@@ -7691,6 +7691,40 @@ button.primary-action {
   height: 0;
 }
 
+/* Card FX Lab — Spotify oEmbed player preview. The production disclosure clamps to
+   11rem; expand it here so the embedded player (up to 352px) is fully visible instead
+   of clipped. Lab-scoped only — live cards are untouched. */
+.card-lab-card.has-spotify.is-revealed .sandbox-card-disclosure {
+  max-height: 34rem;
+}
+
+.card-lab-spotify {
+  margin: 2px 0 12px;
+}
+
+.card-lab-spotify iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+}
+
+.card-lab-text-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.card-lab-text-input:focus-visible {
+  outline: 2px solid rgba(120, 170, 255, 0.6);
+  outline-offset: 1px;
+}
+
 /* ================================================================
    Shared "on fire" effect — used by both the Card FX Lab mock and
    the live event cards. Embers ride on any card with FIRE traction;

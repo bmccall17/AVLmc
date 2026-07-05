@@ -1052,6 +1052,17 @@ Signed-in-only, idempotent, best-effort endpoint to share a show/song-list with 
 - **Flows to / depends on:**
   - → Social Activity (Inner-Circle) (dependsOn) — share with circle
 
+#### Taste Import API  `api-me-taste-import`
+
+Signed-in-only, seat-free taste import (PRD 45): accepts an uploaded Spotify/Exportify playlist export CSV, parses the artists off the file, and stores them as top_artist music_profile_items feeding artistAffinity — no Spotify API call and no Development-Mode allowlist seat. Works for email-only accounts never allowlisted.
+
+- **Kind:** Surface
+- **Source of truth:** `app/api/me/taste-import/route.ts`
+- **Access:** public
+- **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Gated by requireUserId(); pure parsing in lib/taste-import-core.ts (semicolon multi-artist split, comma-split-by-URI for legacy exports, genre capture, frequency→rank); replaceImportedProfileItems (lib/music.ts) writes provider='spotify' top_artist rows under a dedicated time_range='import' so it never clobbers the OAuth /me/top medium_term sync.
+
 #### Account Links API  `api-me-account-links`
 
 Signed-in-only, self-scoped (PRD 35): returns the caller's linked sign-in providers (tokens stripped) and the emails associated with their one account. Backs the profile UI's "sign in with magic link AND Spotify, one account" view. Resolves the id from the session, never the body; 401 when anonymous.
@@ -1515,4 +1526,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_83 nodes, 114 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_84 nodes, 114 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

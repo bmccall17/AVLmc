@@ -88,6 +88,7 @@ type ElementKey =
   | "venue"
   | "title"
   | "meta"
+  | "spotify"
   | "pulse"
   | "note"
   | "reasons"
@@ -109,6 +110,7 @@ const ELEMENTS: Array<{ key: ElementKey; label: string; locked?: boolean }> = [
   { key: "venue", label: "Venue (kicker)", locked: true },
   { key: "title", label: "Title", locked: true },
   { key: "meta", label: "Time + artist (meta)" },
+  { key: "spotify", label: "Spotify player" },
   { key: "pulse", label: "Social pulse" },
   { key: "note", label: "Recommendation note" },
   { key: "reasons", label: "Reason badges" },
@@ -210,6 +212,64 @@ const EMBER_PALETTE = ["#ff3d00", "#ff6a00", "#ff9500", "#ffcf33", "#ff2d55"];
 
 const ACTION_BAR_H = 54;
 
+// --- Spotify oEmbed player ----------------------------------------------------
+// Spotify's iframe embed replaces the deprecated 30s `preview_url` MP3s (removed for
+// apps created after 2024-11-27). The embed plays full tracks for logged-in Spotify
+// users and 30s previews for everyone else, entirely client-side — no Web API access
+// to preview URLs required. This lab surfaces it on the mock card so we can judge fit.
+
+type SpotifyEmbedType = "artist" | "track" | "album" | "playlist";
+type SpotifyEmbedSize = 80 | 152 | 352;
+
+const SPOTIFY_TYPES: SpotifyEmbedType[] = ["artist", "track", "album", "playlist"];
+const SPOTIFY_SIZES: Array<{ value: SpotifyEmbedSize; label: string }> = [
+  { value: 80, label: "80 · minimal" },
+  { value: 152, label: "152 · compact" },
+  { value: 352, label: "352 · full" },
+];
+
+// Spotify IDs are 22-char base62. Validate before it ever reaches the iframe src.
+const SPOTIFY_ID_RE = /^[A-Za-z0-9]{22}$/;
+
+// Seeded from a real auto-match in the prod DB (event_artist_matches) so the preview
+// loads actual Asheville-relevant music out of the box rather than a guessed ID.
+const DEFAULT_SPOTIFY = {
+  type: "artist" as SpotifyEmbedType,
+  id: "5FwydyGVcsQllnM4xM6jw4", // American Football
+};
+
+function isValidSpotifyId(id: string): boolean {
+  return SPOTIFY_ID_RE.test(id);
+}
+
+/** Parse a Spotify share URL (`https://open.spotify.com/…`) or URI (`spotify:…`) into type + id. */
+function parseSpotifyRef(input: string): { type: SpotifyEmbedType; id: string } | null {
+  const raw = input.trim();
+  if (!raw) return null;
+  const uri = raw.match(/^spotify:(artist|track|album|playlist):([A-Za-z0-9]{22})$/);
+  if (uri) return { type: uri[1] as SpotifyEmbedType, id: uri[2] };
+  try {
+    const url = new URL(raw);
+    if (!/(^|\.)spotify\.com$/.test(url.hostname)) return null;
+    const parts = url.pathname.split("/").filter(Boolean);
+    // Drop an optional locale segment like `intl-de`.
+    const [type, id] = parts[0]?.startsWith("intl-") ? parts.slice(1) : parts;
+    if (SPOTIFY_TYPES.includes(type as SpotifyEmbedType) && isValidSpotifyId(id)) {
+      return { type: type as SpotifyEmbedType, id };
+    }
+  } catch {
+    // not a URL — fall through
+  }
+  return null;
+}
+
+/** Build the (validated) embed src. Every segment is a known-safe enum/base62 id — no raw input. */
+function spotifyEmbedSrc(type: SpotifyEmbedType, id: string, light: boolean): string {
+  const params = new URLSearchParams({ utm_source: "generator" });
+  if (light) params.set("theme", "0");
+  return `https://open.spotify.com/embed/${type}/${encodeURIComponent(id)}?${params.toString()}`;
+}
+
 export function CardFxLabSection() {
   const [visible, setVisible] = useState<Record<ElementKey, boolean>>(DEFAULT_VISIBLE);
   const [fx, setFx] = useState<FxSettings>(DEFAULT_FX);
@@ -221,6 +281,14 @@ export function CardFxLabSection() {
 
   // one-shot ember burst, armed when FIRE flips off → on
   const [burstAt, setBurstAt] = useState(0);
+
+  // Spotify oEmbed player explorer
+  const [spotifyType, setSpotifyType] = useState<SpotifyEmbedType>(DEFAULT_SPOTIFY.type);
+  const [spotifyId, setSpotifyId] = useState(DEFAULT_SPOTIFY.id);
+  const [spotifySize, setSpotifySize] = useState<SpotifyEmbedSize>(152);
+  const [spotifyLight, setSpotifyLight] = useState(false);
+  const [spotifyInput, setSpotifyInput] = useState("");
+  const [spotifyError, setSpotifyError] = useState<string | null>(null);
 
   // live pressed state for the action buttons
   const [going, setGoing] = useState(false);
@@ -351,6 +419,32 @@ export function CardFxLabSection() {
     [emberCount, fx.pulseSpeed],
   );
 
+  const spotifyValid = isValidSpotifyId(spotifyId);
+  const spotifySrc = spotifyValid ? spotifyEmbedSrc(spotifyType, spotifyId, spotifyLight) : null;
+
+  // Accept a pasted share link, URI, or bare 22-char id. A bare id keeps the current type.
+  function applySpotifyInput(value: string) {
+    setSpotifyInput(value);
+    const raw = value.trim();
+    if (!raw) {
+      setSpotifyError(null);
+      return;
+    }
+    const ref = parseSpotifyRef(raw);
+    if (ref) {
+      setSpotifyType(ref.type);
+      setSpotifyId(ref.id);
+      setSpotifyError(null);
+      return;
+    }
+    if (isValidSpotifyId(raw)) {
+      setSpotifyId(raw);
+      setSpotifyError(null);
+      return;
+    }
+    setSpotifyError("No Spotify artist / track / album / playlist ID found in that.");
+  }
+
   return (
     <section className="admin-section card-lab">
       <header className="card-lab-head">
@@ -391,7 +485,7 @@ export function CardFxLabSection() {
               preview === "hover" ? " is-revealed" : ""
             }${showGlow ? " is-fired" : ""}${showTurb ? " fx-turbulence" : ""}${
               showHotspot ? " fx-hotspot" : ""
-            }`}
+            }${shows("spotify") ? " has-spotify" : ""}`}
             data-btnfx={btnFx}
             data-btnfx-links={btnLinks ? "on" : "off"}
             style={cardStyle}
@@ -499,6 +593,24 @@ export function CardFxLabSection() {
               ) : null}
 
               <div className="sandbox-card-disclosure" data-disclosure>
+                {shows("spotify") ? (
+                  <div className="card-lab-spotify">
+                    {spotifySrc ? (
+                      <iframe
+                        title={`Spotify ${spotifyType} player`}
+                        src={spotifySrc}
+                        height={spotifySize}
+                        loading="lazy"
+                        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <p className="card-lab-readout">
+                        Paste a valid Spotify link in the Spotify Player panel to preview.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
                 {shows("note") ? (
                   <p className="sandbox-note" data-el="note" data-in-disclosure>
                     {MOCK.note}
@@ -716,6 +828,81 @@ export function CardFxLabSection() {
               <em className="card-lab-tag is-warn">hidden</em> means the element is on but
               displaced behind another element (clipped, pushed off, or under the action bar).
             </p>
+          </div>
+
+          <div className="card-lab-panel">
+            <div className="card-lab-panel-head">
+              <h3>Spotify Player 🎧</h3>
+            </div>
+            <p className="card-lab-readout">
+              Spotify’s oEmbed iframe — the replacement for the deprecated 30-second{" "}
+              <code>preview_url</code> hover audio. Plays full tracks for logged-in Spotify
+              listeners, 30s previews for everyone else, all client-side (no Web API preview
+              access needed). Seeded with a real matched Asheville artist. Toggle{" "}
+              <em>Spotify player</em> above to show/hide it on the card.
+            </p>
+
+            <div className="card-lab-statebar" role="group" aria-label="Embed type">
+              {SPOTIFY_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className={spotifyType === t ? "is-active" : ""}
+                  aria-pressed={spotifyType === t}
+                  onClick={() => setSpotifyType(t)}
+                >
+                  {t[0].toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            <div className="card-lab-statebar" role="group" aria-label="Embed height">
+              {SPOTIFY_SIZES.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  className={spotifySize === s.value ? "is-active" : ""}
+                  aria-pressed={spotifySize === s.value}
+                  onClick={() => setSpotifySize(s.value)}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            <FxRow label="Light background (theme=0)">
+              <input
+                type="checkbox"
+                checked={spotifyLight}
+                onChange={(e) => setSpotifyLight(e.target.checked)}
+              />
+            </FxRow>
+
+            <label className="card-lab-slider">
+              <span className="card-lab-slider-label">
+                Paste Spotify link / URI / ID
+                <em>{spotifyValid ? `${spotifyType}:${spotifyId.slice(0, 6)}…` : "invalid"}</em>
+              </span>
+              <input
+                type="text"
+                className="card-lab-text-input"
+                placeholder="https://open.spotify.com/artist/…"
+                value={spotifyInput}
+                onChange={(e) => applySpotifyInput(e.target.value)}
+                spellCheck={false}
+              />
+            </label>
+            {spotifyError ? (
+              <p className="card-lab-hint">
+                <em className="card-lab-tag is-warn">error</em> {spotifyError}
+              </p>
+            ) : null}
+
+            <pre className="card-lab-export">
+              {spotifyValid
+                ? spotifyEmbedSnippet(spotifyType, spotifyId, spotifySize, spotifyLight)
+                : "/* enter a valid Spotify reference to generate the embed */"}
+            </pre>
           </div>
 
           <div className="card-lab-panel">
@@ -1120,6 +1307,22 @@ function exportButtonCss(style: ButtonFx, depth: number, links: boolean) {
     `   onto .sandbox-event-card, targeting .sandbox-action-bar button${
       links ? " + .sandbox-card-links a" : ""
     } */`,
+  ].join("\n");
+}
+
+function spotifyEmbedSnippet(
+  type: SpotifyEmbedType,
+  id: string,
+  size: SpotifyEmbedSize,
+  light: boolean,
+) {
+  return [
+    `<iframe`,
+    `  src="${spotifyEmbedSrc(type, id, light)}"`,
+    `  width="100%" height="${size}" style="border:0;border-radius:12px"`,
+    `  loading="lazy" allowfullscreen`,
+    `  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture">`,
+    `</iframe>`,
   ].join("\n");
 }
 

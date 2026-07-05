@@ -1,5 +1,15 @@
 # Spotify Extended Quota Mode — request draft & submission runbook
 
+> **⚠️ Outdated as the primary strategy (annotated July 4, 2026).** Spotify's **April 15, 2025**
+> criteria change reserves Extended Quota for **legally-registered businesses** running a launched
+> service at **~250,000 MAU** (individuals no longer accepted), and Development Mode tightened to **5**
+> Premium test users. For this free, local, private-beta app the grant is effectively unreachable, so
+> the shipped answer is the **seat-free taste import** (upload a playlist export → parsed to
+> `music_profile_items` → `artistAffinity`; no API call, no seat) — see
+> [PRD 45](prds/prd-45-extended-quota-readiness.md) and `lib/taste-import-core.ts`. This runbook is kept
+> for the record and in case Spotify's criteria change again; do not treat it as the path to unblock
+> taste personalization.
+
 **Why:** AVLmc's app-only (Client Credentials) token can call `GET /v1/search?type=artist` but
 `GET /v1/artists/{id}/top-tracks` returns **HTTP 403** under Spotify **Development Mode**. That 403
 is Spotify's post-2024 restriction on apps that don't have **Extended Quota Mode**. It blocks the

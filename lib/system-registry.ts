@@ -1402,6 +1402,24 @@ const NODES: RegistryNode[] = [
     ],
   },
   {
+    id: "api-me-taste-import",
+    kind: "surface",
+    layer: "identity",
+    label: "Taste Import API",
+    description:
+      "Signed-in-only, seat-free taste import (PRD 45): accepts an uploaded Spotify/Exportify playlist export CSV, parses the artists off the file, and stores them as top_artist music_profile_items feeding artistAffinity — no Spotify API call and no Development-Mode allowlist seat. Works for email-only accounts never allowlisted.",
+    sourceOfTruth: "app/api/me/taste-import/route.ts",
+    access: "public",
+    ownership: "automated",
+    implementationNotes: [
+      {
+        kind: "note",
+        detail:
+          "Gated by requireUserId(); pure parsing in lib/taste-import-core.ts (semicolon multi-artist split, comma-split-by-URI for legacy exports, genre capture, frequency→rank); replaceImportedProfileItems (lib/music.ts) writes provider='spotify' top_artist rows under a dedicated time_range='import' so it never clobbers the OAuth /me/top medium_term sync.",
+      },
+    ],
+  },
+  {
     id: "api-me-account-links",
     kind: "surface",
     layer: "identity",
