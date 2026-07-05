@@ -7709,6 +7709,57 @@ button.primary-action {
   border-radius: 12px;
 }
 
+/* Compact play chip — the dense, opt-in alternative to an always-mounted player. */
+.card-lab-spotify-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 5px 8px;
+  border: 1px solid rgba(30, 215, 96, 0.45);
+  border-radius: 999px;
+  background: rgba(30, 215, 96, 0.12);
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    transform 120ms ease;
+}
+
+.card-lab-spotify-chip:hover {
+  background: rgba(30, 215, 96, 0.22);
+}
+
+.card-lab-spotify-chip:active {
+  transform: translateY(1px);
+}
+
+.card-lab-spotify-chip-play {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #1ed760;
+  color: #05100a;
+  font-size: 0.6rem;
+  padding-left: 1px;
+}
+
+.card-lab-spotify-collapse {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.55);
+  font: inherit;
+  font-size: 0.72rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .card-lab-text-input {
   width: 100%;
   padding: 8px 10px;

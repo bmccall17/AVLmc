@@ -285,10 +285,14 @@ export function CardFxLabSection() {
   // Spotify oEmbed player explorer
   const [spotifyType, setSpotifyType] = useState<SpotifyEmbedType>(DEFAULT_SPOTIFY.type);
   const [spotifyId, setSpotifyId] = useState(DEFAULT_SPOTIFY.id);
-  const [spotifySize, setSpotifySize] = useState<SpotifyEmbedSize>(152);
+  const [spotifySize, setSpotifySize] = useState<SpotifyEmbedSize>(80);
   const [spotifyLight, setSpotifyLight] = useState(false);
   const [spotifyInput, setSpotifyInput] = useState("");
   const [spotifyError, setSpotifyError] = useState<string | null>(null);
+  // Compact mode: show a small play chip that expands the player on click, so the
+  // card stays dense until the listener opts in (the least space-hungry option).
+  const [spotifyCompact, setSpotifyCompact] = useState(true);
+  const [spotifyOpen, setSpotifyOpen] = useState(false);
 
   // live pressed state for the action buttons
   const [going, setGoing] = useState(false);
@@ -595,19 +599,41 @@ export function CardFxLabSection() {
               <div className="sandbox-card-disclosure" data-disclosure>
                 {shows("spotify") ? (
                   <div className="card-lab-spotify">
-                    {spotifySrc ? (
-                      <iframe
-                        title={`Spotify ${spotifyType} player`}
-                        src={spotifySrc}
-                        height={spotifySize}
-                        loading="lazy"
-                        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                        allowFullScreen
-                      />
-                    ) : (
+                    {!spotifySrc ? (
                       <p className="card-lab-readout">
                         Paste a valid Spotify link in the Spotify Player panel to preview.
                       </p>
+                    ) : spotifyCompact && !spotifyOpen ? (
+                      <button
+                        type="button"
+                        className="card-lab-spotify-chip"
+                        onClick={() => setSpotifyOpen(true)}
+                      >
+                        <span className="card-lab-spotify-chip-play" aria-hidden="true">
+                          ▶
+                        </span>
+                        Preview on Spotify
+                      </button>
+                    ) : (
+                      <>
+                        <iframe
+                          title={`Spotify ${spotifyType} player`}
+                          src={spotifySrc}
+                          height={spotifySize}
+                          loading="lazy"
+                          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                          allowFullScreen
+                        />
+                        {spotifyCompact ? (
+                          <button
+                            type="button"
+                            className="card-lab-spotify-collapse"
+                            onClick={() => setSpotifyOpen(false)}
+                          >
+                            Hide player
+                          </button>
+                        ) : null}
+                      </>
                     )}
                   </div>
                 ) : null}
@@ -840,6 +866,23 @@ export function CardFxLabSection() {
               listeners, 30s previews for everyone else, all client-side (no Web API preview
               access needed). Seeded with a real matched Asheville artist. Toggle{" "}
               <em>Spotify player</em> above to show/hide it on the card.
+            </p>
+
+            <FxRow label="Compact — play chip, expands on click">
+              <input
+                type="checkbox"
+                checked={spotifyCompact}
+                onChange={(e) => {
+                  setSpotifyCompact(e.target.checked);
+                  setSpotifyOpen(false);
+                }}
+              />
+            </FxRow>
+            <p className="card-lab-readout">
+              Compact keeps the card dense — a small “▶ Preview on Spotify” chip sits in the
+              reveal and only mounts the {spotifySize}px player when clicked. Turn it off to
+              pin the player open. For the smallest always-on player, use a <em>Track</em>{" "}
+              embed at <em>80px</em> (artist embeds force a taller layout).
             </p>
 
             <div className="card-lab-statebar" role="group" aria-label="Embed type">
