@@ -792,7 +792,7 @@ function normalizeTracks(response: SpotifyTopTracksResponse) {
  */
 export async function replaceImportedProfileItems(
   userId: string,
-  artists: Array<{ spotifyArtistId: string; name: string; rank: number }>
+  artists: Array<{ spotifyArtistId: string; name: string; rank: number; genres?: string[] }>
 ): Promise<MusicProfileItem[]> {
   const databaseUserId = toDatabaseUserId(userId);
 
@@ -816,9 +816,17 @@ export async function replaceImportedProfileItems(
                 id, user_id, provider, item_type, provider_item_id, name,
                 artist_names, genres, external_url, image_url, rank, time_range
               )
-              values ($1, $2, 'spotify', 'top_artist', $3, $4, '{}', '{}', null, null, $5, $6)
+              values ($1, $2, 'spotify', 'top_artist', $3, $4, '{}', $7, null, null, $5, $6)
             `,
-            [randomUUID(), databaseUserId, artist.spotifyArtistId, artist.name, artist.rank, IMPORT_TIME_RANGE]
+            [
+              randomUUID(),
+              databaseUserId,
+              artist.spotifyArtistId,
+              artist.name,
+              artist.rank,
+              IMPORT_TIME_RANGE,
+              artist.genres ?? [],
+            ]
           ),
         () =>
           query(

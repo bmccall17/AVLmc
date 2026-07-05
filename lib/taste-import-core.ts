@@ -21,6 +21,8 @@ export type ImportedArtist = {
   count: number;
   /** 1-based, most-frequent first. Drives the profile-term weight in discovery. */
   rank: number;
+  /** Artist genres pulled from the export's Genres column, if present — feeds genreAffinity. */
+  genres: string[];
 };
 
 export type TasteImportResult = {
@@ -35,7 +37,11 @@ export type TasteImportResult = {
 // deep-rank artists anyway (max(18, 46 - rank)), so beyond a couple hundred adds no signal.
 const MAX_ARTISTS = 300;
 const MAX_ROWS = 100_000;
-const ARTIST_MULTI_SEPARATOR = /\s*,\s*/;
+const MAX_GENRES_PER_ARTIST = 12;
+// Current Exportify joins multiple artists with a semicolon — unambiguous, since artist names never
+// contain ";" (they DO contain commas: "Tyler, the Creator"). Commas separate genres, and only
+// separate artists in older exports that also carry an Artist URI(s) column to confirm the count.
+const COMMA_SEPARATOR = /\s*,\s*/;
 const SPOTIFY_ARTIST_URI = /spotify:artist:([A-Za-z0-9]+)/;
 
 /**
@@ -156,13 +162,17 @@ export function parseExportedArtists(csvText: string): TasteImportResult {
     ? findColumn(header, /^artist name/i)
     : findColumn(header, /^artist$/i);
   const uriCol = findColumn(header, /^artist uri/i);
+  const genreCol = findColumn(header, /^genres?$/i);
 
   if (nameCol < 0) {
     return { artists: [], trackRows: 0, recognized: false };
   }
 
-  // Aggregate by a stable key: prefer the canonical Spotify id, else a name slug.
-  const tally = new Map<string, { spotifyArtistId: string; name: string; count: number }>();
+  // Aggregate by a stable key: the canonical Spotify id when present, else a name slug.
+  const tally = new Map<
+    string,
+    { spotifyArtistId: string; name: string; count: number; genres: Set<string> }
+  >();
   let trackRows = 0;
 
   for (let r = 1; r < rows.length; r += 1) {
@@ -173,35 +183,26 @@ export function parseExportedArtists(csvText: string): TasteImportResult {
     }
     trackRows += 1;
 
-    // URIs are the reliable source of artist COUNT — they never contain commas, unlike names
-    // ("Tyler, the Creator", "Earth, Wind & Fire"). Names only split safely when their token count
-    // matches the URI count; otherwise a name contains a comma and we keep the cell whole.
     const uriIds = uriCol >= 0
       ? (cells[uriCol] ?? "")
-          .split(ARTIST_MULTI_SEPARATOR)
+          .split(COMMA_SEPARATOR)
           .map((v) => v.trim().match(SPOTIFY_ARTIST_URI)?.[1])
           .filter((v): v is string => Boolean(v))
       : [];
-    const nameTokens = rawNames.split(ARTIST_MULTI_SEPARATOR).map((v) => v.trim()).filter(Boolean);
+    const rowGenres = genreCol >= 0
+      ? (cells[genreCol] ?? "").split(COMMA_SEPARATOR).map((v) => v.trim()).filter(Boolean)
+      : [];
 
-    let pairs: Array<{ name: string; id: string }>;
-    if (uriIds.length >= 1 && uriIds.length === nameTokens.length) {
-      pairs = nameTokens.map((name, index) => ({ name, id: uriIds[index] }));
-    } else if (uriIds.length >= 1) {
-      // Count mismatch (comma inside a name). Trust the URIs: the whole name cell is one artist when
-      // there's a single URI; on the rarer multi-URI mismatch we collapse to one combined label.
-      pairs = [{ name: rawNames.trim(), id: uriIds[0] }];
-    } else {
-      // No URI column (generic CSV export): best-effort comma split, keyed by a name slug.
-      pairs = nameTokens.map((name) => ({ name, id: `import:${slugify(name)}` }));
-    }
-
-    for (const { name, id } of pairs) {
+    const entries = resolveRowArtists(rawNames, uriIds);
+    for (const { name, id } of entries) {
       const existing = tally.get(id);
       if (existing) {
         existing.count += 1;
+        for (const genre of rowGenres) {
+          existing.genres.add(genre);
+        }
       } else {
-        tally.set(id, { spotifyArtistId: id, name, count: 1 });
+        tally.set(id, { spotifyArtistId: id, name, count: 1, genres: new Set(rowGenres) });
       }
     }
   }
@@ -209,7 +210,38 @@ export function parseExportedArtists(csvText: string): TasteImportResult {
   const artists = Array.from(tally.values())
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
     .slice(0, MAX_ARTISTS)
-    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+    .map((entry, index) => ({
+      spotifyArtistId: entry.spotifyArtistId,
+      name: entry.name,
+      count: entry.count,
+      rank: index + 1,
+      genres: Array.from(entry.genres).slice(0, MAX_GENRES_PER_ARTIST),
+    }));
 
   return { artists, trackRows, recognized: true };
+}
+
+/**
+ * Split one track's artist cell into individual artists, pairing each with a canonical id when the
+ * export carries URIs. Semicolons are the unambiguous multi-artist separator (current Exportify);
+ * commas only split when a parallel URI list confirms the count — otherwise the cell is one artist
+ * whose name happens to contain a comma.
+ */
+function resolveRowArtists(rawNames: string, uriIds: string[]): Array<{ name: string; id: string }> {
+  if (rawNames.includes(";")) {
+    const tokens = rawNames.split(";").map((v) => v.trim()).filter(Boolean);
+    return tokens.map((name, index) => ({ name, id: uriIds[index] ?? `import:${slugify(name)}` }));
+  }
+
+  if (uriIds.length > 1) {
+    const tokens = rawNames.split(COMMA_SEPARATOR).map((v) => v.trim()).filter(Boolean);
+    if (tokens.length === uriIds.length) {
+      return tokens.map((name, index) => ({ name, id: uriIds[index] }));
+    }
+    // Count disagrees — a name contains a comma; trust the URIs and keep the cell as one label.
+    return [{ name: rawNames, id: uriIds[0] }];
+  }
+
+  // Single artist (or a comma-in-name we won't risk splitting without URIs to confirm).
+  return [{ name: rawNames, id: uriIds[0] ?? `import:${slugify(rawNames)}` }];
 }
