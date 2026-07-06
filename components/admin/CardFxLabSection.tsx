@@ -19,6 +19,8 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { useAudiusPreview, type AudiusPreview } from "@/components/useAudiusPreview";
+import { audiusConfidenceLabel, isConfidentAudiusMatch } from "@/lib/audius-core";
 
 /**
  * Card FX Lab — an admin-only prototyping surface for tuning the look of discovery
@@ -110,7 +112,7 @@ const ELEMENTS: Array<{ key: ElementKey; label: string; locked?: boolean }> = [
   { key: "venue", label: "Venue (kicker)", locked: true },
   { key: "title", label: "Title", locked: true },
   { key: "meta", label: "Time + artist (meta)" },
-  { key: "spotify", label: "Spotify player" },
+  { key: "spotify", label: "Spotify player (deprecated)" },
   { key: "pulse", label: "Social pulse" },
   { key: "note", label: "Recommendation note" },
   { key: "reasons", label: "Reason badges" },
@@ -135,6 +137,9 @@ const DEFAULT_VISIBLE: Record<ElementKey, boolean> = {
   shared: false,
   circle: false,
   curated: false,
+  // Deprecated exploration — kept toggleable in the lab, but off by default (see the
+  // Spotify Player panel). The on-card embed was rejected; direction changed.
+  spotify: false,
 };
 
 const LOCKED = new Set(ELEMENTS.filter((el) => el.locked).map((el) => el.key));
@@ -212,11 +217,13 @@ const EMBER_PALETTE = ["#ff3d00", "#ff6a00", "#ff9500", "#ffcf33", "#ff2d55"];
 
 const ACTION_BAR_H = 54;
 
-// --- Spotify oEmbed player ----------------------------------------------------
-// Spotify's iframe embed replaces the deprecated 30s `preview_url` MP3s (removed for
-// apps created after 2024-11-27). The embed plays full tracks for logged-in Spotify
-// users and 30s previews for everyone else, entirely client-side — no Web API access
-// to preview URLs required. This lab surfaces it on the mock card so we can judge fit.
+// --- Spotify oEmbed player (DEPRECATED exploration) ---------------------------
+// Explored as a replacement for the dead 30s `preview_url` hover audio. The on-card
+// embed was rejected — too heavy for a dense discovery card even in compact mode — so
+// this is OFF by default and changing direction. Kept here (toggleable) purely as a
+// reference for how Spotify's iframe embed looks/behaves on the card; do not treat it
+// as the sanctioned listening surface. The embed itself works: full tracks for logged-in
+// Spotify users, 30s previews otherwise, all client-side (no Web API preview access).
 
 type SpotifyEmbedType = "artist" | "track" | "album" | "playlist";
 type SpotifyEmbedSize = 80 | 152 | 352;
@@ -231,11 +238,11 @@ const SPOTIFY_SIZES: Array<{ value: SpotifyEmbedSize; label: string }> = [
 // Spotify IDs are 22-char base62. Validate before it ever reaches the iframe src.
 const SPOTIFY_ID_RE = /^[A-Za-z0-9]{22}$/;
 
-// Seeded with a real track so the compact chip expands to a playable player out of the
-// box. Swap via the paste field, or reseed here from a prod `event_artist_matches` id.
+// Seeded from a real auto-match in the prod DB (event_artist_matches) so the archived
+// preview loads representative music. Swap live via the paste field in the panel.
 const DEFAULT_SPOTIFY = {
-  type: "track" as SpotifyEmbedType,
-  id: "2xjQblBaDbzMDdCRvRzKc3",
+  type: "artist" as SpotifyEmbedType,
+  id: "5FwydyGVcsQllnM4xM6jw4", // American Football
 };
 
 function isValidSpotifyId(id: string): boolean {
@@ -285,7 +292,7 @@ export function CardFxLabSection() {
   // Spotify oEmbed player explorer
   const [spotifyType, setSpotifyType] = useState<SpotifyEmbedType>(DEFAULT_SPOTIFY.type);
   const [spotifyId, setSpotifyId] = useState(DEFAULT_SPOTIFY.id);
-  const [spotifySize, setSpotifySize] = useState<SpotifyEmbedSize>(80);
+  const [spotifySize, setSpotifySize] = useState<SpotifyEmbedSize>(152);
   const [spotifyLight, setSpotifyLight] = useState(false);
   const [spotifyInput, setSpotifyInput] = useState("");
   const [spotifyError, setSpotifyError] = useState<string | null>(null);
@@ -293,6 +300,11 @@ export function CardFxLabSection() {
   // card stays dense until the listener opts in (the least space-hungry option).
   const [spotifyCompact, setSpotifyCompact] = useState(true);
   const [spotifyOpen, setSpotifyOpen] = useState(false);
+
+  // Audius preview provider explorer — searches the mock event's artist name, resolves a playable
+  // stream, and drives the same hover-listening behavior the production board uses.
+  const audius = useAudiusPreview();
+  const [audiusQuery, setAudiusQuery] = useState(MOCK.artistName);
 
   // live pressed state for the action buttons
   const [going, setGoing] = useState(false);
@@ -496,7 +508,11 @@ export function CardFxLabSection() {
             onPointerMove={handlePointerMove}
             onPointerDown={() => setDragging(true)}
             onPointerUp={() => setDragging(false)}
-            onPointerLeave={() => setDragging(false)}
+            onPointerEnter={() => audius.arm()}
+            onPointerLeave={() => {
+              setDragging(false);
+              audius.disarm();
+            }}
           >
             {/* fire effect layers (pointer-events: none) */}
             {showFx ? (
@@ -595,6 +611,8 @@ export function CardFxLabSection() {
                   {MOCK.eventTime} · {MOCK.artistName}
                 </p>
               ) : null}
+
+              <AudiusListenChip audius={audius} />
 
               <div className="sandbox-card-disclosure" data-disclosure>
                 {shows("spotify") ? (
@@ -856,16 +874,19 @@ export function CardFxLabSection() {
             </p>
           </div>
 
+          <AudiusPanel audius={audius} query={audiusQuery} setQuery={setAudiusQuery} />
+
           <div className="card-lab-panel">
             <div className="card-lab-panel-head">
               <h3>Spotify Player 🎧</h3>
+              <em className="card-lab-tag is-warn">deprecated</em>
             </div>
             <p className="card-lab-readout">
-              Spotify’s oEmbed iframe — the replacement for the deprecated 30-second{" "}
-              <code>preview_url</code> hover audio. Plays full tracks for logged-in Spotify
-              listeners, 30s previews for everyone else, all client-side (no Web API preview
-              access needed). Seeded with a real matched Asheville artist. Toggle{" "}
-              <em>Spotify player</em> above to show/hide it on the card.
+              <strong>Archived exploration — not the chosen direction.</strong> The on-card
+              Spotify oEmbed was rejected as too heavy for a discovery card, so it’s off by
+              default. Kept here (toggle <em>Spotify player (deprecated)</em> above) only as a
+              reference for how the iframe embed looks/plays. It does work: full tracks for
+              logged-in Spotify listeners, 30s previews otherwise, all client-side.
             </p>
 
             <FxRow label="Compact — play chip, expands on click">
@@ -1284,6 +1305,203 @@ function LabTooltip({ action }: { action: "going" | "fire" | "remove" }) {
       <span>{help.body}</span>
       <em>{help.impact}</em>
     </span>
+  );
+}
+
+// --- Audius preview provider ---------------------------------------------------
+
+const AUDIUS_PLAYBACK_COPY: Record<string, string> = {
+  idle: "Hover the card to preview via Audius",
+  arming: "Hold to listen… (dwell)",
+  loading: "Resolving Audius stream…",
+  playing: "Now previewing — Audius",
+  blocked: "Autoplay blocked",
+};
+
+/**
+ * On-card listening indicator — only appears once a playable Audius match is resolved. Mirrors the
+ * production board: a passive "hover to preview" cue at rest, a live state while arming/playing, and
+ * a click-to-listen affordance when the browser blocks autoplay before any gesture.
+ */
+function AudiusListenChip({ audius }: { audius: AudiusPreview }) {
+  const { result, playback } = audius;
+  if (!result || result.status !== "ok") {
+    return null;
+  }
+  if (playback === "blocked") {
+    return (
+      <button
+        type="button"
+        className="card-lab-audius-listen is-blocked"
+        onClick={() => audius.unlock()}
+      >
+        <span aria-hidden="true">♫</span> Click to listen (autoplay blocked)
+      </button>
+    );
+  }
+  return (
+    <p
+      className={`card-lab-audius-listen${playback === "idle" ? "" : " is-live"}`}
+      data-phase={playback}
+    >
+      <span aria-hidden="true">♫</span> {AUDIUS_PLAYBACK_COPY[playback] ?? "Audius"}
+    </p>
+  );
+}
+
+/**
+ * Audius provider trial panel: search the event's artist name, then judge the result. Surfaces
+ * everything the team needs to decide viability — match confidence + score, the chosen track, artist
+ * attribution, the public source link, the resolving discovery host, live playback status, and a
+ * clear fallback when there's no confident match or no stream.
+ */
+function AudiusPanel({
+  audius,
+  query,
+  setQuery,
+}: {
+  audius: AudiusPreview;
+  query: string;
+  setQuery: (value: string) => void;
+}) {
+  const { searchPhase, result, playback } = audius;
+  const busy = searchPhase === "searching";
+
+  return (
+    <div className="card-lab-panel">
+      <div className="card-lab-panel-head">
+        <h3>Audius Preview 🎵</h3>
+        <em className="card-lab-tag">provider trial</em>
+      </div>
+      <p className="card-lab-readout">
+        Evaluate Audius as a live event-card preview source. Search the artist name, then hover the
+        card to hear the resolved stream with the shipped board behavior — a ~0.7s dwell, a 2–3s
+        fade-in, a clean fade-out on leave, and only one preview at a time. A wrong artist is worse
+        than none, so weak matches are flagged rather than auto-trusted.
+      </p>
+
+      <form
+        className="card-lab-audius-search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void audius.search(query);
+        }}
+      >
+        <input
+          type="text"
+          className="card-lab-text-input"
+          value={query}
+          placeholder="Artist name"
+          spellCheck={false}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <button type="submit" disabled={busy || query.trim().length === 0}>
+          {busy ? "Searching…" : "Search Audius"}
+        </button>
+      </form>
+
+      {searchPhase === "idle" ? (
+        <p className="card-lab-hint">
+          Run a search to resolve a preview. Defaults to the mock event artist ({MOCK.artistName}).
+        </p>
+      ) : null}
+
+      {busy ? (
+        <p className="card-lab-hint">Searching Audius for “{query.trim()}”…</p>
+      ) : null}
+
+      {result && result.status === "error" ? (
+        <p className="card-lab-hint">
+          <em className="card-lab-tag is-warn">error</em> {result.message}
+        </p>
+      ) : null}
+
+      {result && result.status === "no_match" ? (
+        <div className="card-lab-audius-fallback">
+          <strong>No confident Audius match for “{result.query}”.</strong> {result.candidatesConsidered}{" "}
+          candidate{result.candidatesConsidered === 1 ? "" : "s"} considered — a live card would show
+          no preview (fallback state).
+        </div>
+      ) : null}
+
+      {result && result.status === "ok" ? (
+        <AudiusMatchReadout result={result} playback={playback} />
+      ) : null}
+    </div>
+  );
+}
+
+function AudiusMatchReadout({
+  result,
+  playback,
+}: {
+  result: Extract<AudiusPreview["result"], { status: "ok" }>;
+  playback: string;
+}) {
+  // streamUrl is resolved + guarded server-side and drives the on-card <audio>; the readout reports
+  // it as "resolved" rather than printing the long node URL.
+  const { match, sourceUrl, host, candidatesConsidered } = result;
+  const confident = isConfidentAudiusMatch(match);
+
+  return (
+    <div className="card-lab-audius-match">
+      <div className="card-lab-audius-confidence">
+        <em className={`card-lab-tag ${confident ? "is-ok" : "is-warn"}`}>
+          {audiusConfidenceLabel(match.confidence)} · {Math.round(match.score * 100)}%
+        </em>
+        {confident ? null : (
+          <span className="card-lab-audius-caution">
+            Below the trust bar — a live card would fall back to no preview.
+          </span>
+        )}
+      </div>
+
+      <dl className="card-lab-audius-grid">
+        <div>
+          <dt>Track</dt>
+          <dd>{match.track.title}</dd>
+        </div>
+        <div>
+          <dt>Artist</dt>
+          <dd>
+            {match.track.artistName}
+            {match.track.artistHandle ? <em> @{match.track.artistHandle}</em> : null}
+          </dd>
+        </div>
+        <div>
+          <dt>Popularity</dt>
+          <dd>
+            {match.track.playCount.toLocaleString()} plays ·{" "}
+            {match.track.favoriteCount.toLocaleString()} favs
+          </dd>
+        </div>
+        <div>
+          <dt>Source</dt>
+          <dd>
+            {sourceUrl ? (
+              <a href={sourceUrl} target="_blank" rel="noreferrer noopener">
+                Open on Audius <ExternalLink aria-hidden="true" size={12} strokeWidth={2.4} />
+              </a>
+            ) : (
+              "—"
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Stream</dt>
+          <dd>resolved · {host.replace(/^https?:\/\//, "")}</dd>
+        </div>
+        <div>
+          <dt>Playback</dt>
+          <dd data-phase={playback}>{AUDIUS_PLAYBACK_COPY[playback] ?? playback}</dd>
+        </div>
+      </dl>
+
+      <p className="card-lab-hint">
+        {candidatesConsidered} candidate{candidatesConsidered === 1 ? "" : "s"} considered. Hover the
+        card (real mouse-over) to trigger the preview; press Escape to stop.
+      </p>
+    </div>
   );
 }
 

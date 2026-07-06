@@ -8205,6 +8205,181 @@ button.primary-action {
   text-transform: uppercase;
 }
 
+/* --- Audius preview provider (Card FX Lab) ------------------------------------ */
+
+.card-lab-audius-search {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+
+.card-lab-audius-search .card-lab-text-input {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.card-lab-audius-search button {
+  flex: 0 0 auto;
+  background: rgba(204, 15, 224, 0.18);
+  border: 1px solid rgba(204, 15, 224, 0.5);
+  border-radius: 8px;
+  color: #f0abfc;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0 12px;
+  text-transform: uppercase;
+  transition: background 140ms ease;
+}
+
+.card-lab-audius-search button:hover:not(:disabled) {
+  background: rgba(204, 15, 224, 0.3);
+}
+
+.card-lab-audius-search button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.card-lab-audius-fallback {
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  background: rgba(248, 113, 113, 0.08);
+  border-radius: 8px;
+  color: #cbd5e1;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  margin-top: 10px;
+  padding: 9px 11px;
+}
+
+.card-lab-audius-fallback strong {
+  color: #fb7185;
+}
+
+.card-lab-audius-match {
+  margin-top: 10px;
+}
+
+.card-lab-audius-confidence {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.card-lab-audius-confidence .card-lab-tag {
+  background: rgba(63, 63, 70, 0.6);
+  border-radius: 5px;
+  color: #a1a1aa;
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+}
+
+.card-lab-audius-confidence .card-lab-tag.is-ok {
+  background: rgba(74, 222, 128, 0.16);
+  color: #4ade80;
+}
+
+.card-lab-audius-confidence .card-lab-tag.is-warn {
+  background: rgba(250, 204, 21, 0.16);
+  color: #facc15;
+}
+
+.card-lab-audius-caution {
+  color: #facc15;
+  font-size: 0.72rem;
+}
+
+.card-lab-audius-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+  margin: 12px 0 0;
+}
+
+.card-lab-audius-grid > div {
+  min-width: 0;
+}
+
+.card-lab-audius-grid dt {
+  color: #71717a;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card-lab-audius-grid dd {
+  color: #e4e4e7;
+  font-size: 0.78rem;
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.card-lab-audius-grid dd em {
+  color: #a1a1aa;
+  font-style: normal;
+}
+
+.card-lab-audius-grid a {
+  align-items: center;
+  color: #f0abfc;
+  display: inline-flex;
+  gap: 4px;
+  text-decoration: none;
+}
+
+.card-lab-audius-grid a:hover {
+  text-decoration: underline;
+}
+
+/* On-card listening indicator */
+.card-lab-audius-listen {
+  align-items: center;
+  color: rgba(240, 171, 252, 0.85);
+  display: inline-flex;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  margin: 6px 0 2px;
+}
+
+.card-lab-audius-listen.is-live {
+  color: #f0abfc;
+}
+
+.card-lab-audius-listen.is-live > span[aria-hidden] {
+  animation: card-lab-audius-pulse 1.1s ease-in-out infinite;
+}
+
+button.card-lab-audius-listen {
+  background: rgba(204, 15, 224, 0.18);
+  border: 1px solid rgba(204, 15, 224, 0.5);
+  border-radius: 999px;
+  cursor: pointer;
+  padding: 4px 12px;
+}
+
+button.card-lab-audius-listen:hover {
+  background: rgba(204, 15, 224, 0.3);
+}
+
+@keyframes card-lab-audius-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
 /* ── SHIPPED button FX (Card FX Lab winner): keycap · 6px press depth ────────
    Real actions are extruded keycaps so they read uniquely as pressable, while
    informational pills stay flat. Going / Fire / Save are TOGGLES: raised and

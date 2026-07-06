@@ -33,6 +33,7 @@
     "test:spotify-gate": "node --import tsx --test tests/spotify-gate.test.ts",
     "test:artist-match": "rm -rf /tmp/avlmc-artist-match-tests && tsc -p tests/tsconfig.artist-match.json && node --test /tmp/avlmc-artist-match-tests/tests/artist-match.test.js",
     "test:hover-player": "rm -rf /tmp/avlmc-hover-player-tests && tsc -p tests/tsconfig.hover-player.json && node --test /tmp/avlmc-hover-player-tests/tests/hover-player.test.js",
+    "test:audius-core": "rm -rf /tmp/avlmc-audius-core-tests && tsc -p tests/tsconfig.audius-core.json && node --test /tmp/avlmc-audius-core-tests/tests/audius-core.test.js",
     "generate:system-map": "tsx scripts/generate-system-map.ts",
     "db:apply": "tsx scripts/apply-schema.ts",
     "backfill:artist-matches": "tsx scripts/backfill-artist-matches.ts",

@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "/tmp/avlmc-audius-core-tests",
+    "rootDir": "..",
+    "target": "es2022"
+  },
+  "include": [
+    "../next-env.d.ts",
+    "audius-core.test.ts",
+    "../lib/audius-core.ts",
+    "../lib/artist-match-core.ts"
+  ]
+}
