@@ -25,6 +25,7 @@
     "test:feedback": "rm -rf /tmp/avlmc-feedback-tests && tsc -p tests/tsconfig.feedback.json && node --test /tmp/avlmc-feedback-tests/tests/feedback.test.js",
     "test:account-integrity": "rm -rf /tmp/avlmc-account-integrity-tests && tsc -p tests/tsconfig.account-integrity.json && node --test /tmp/avlmc-account-integrity-tests/tests/account-integrity.test.js",
     "test:e2e": "playwright test",
+    "test:readability": "playwright test --config playwright.smoke.config.ts",
     "test:account-loop": "TSX_TSCONFIG_PATH=tests/tsconfig.account-loop.json node --import tsx --test tests/account-loop.integration.mts",
     "test:one-identity": "TSX_TSCONFIG_PATH=tests/tsconfig.account-loop.json node --import tsx --test tests/one-identity.integration.mts",
     "test:social-guardrails": "rm -rf /tmp/avlmc-social-guardrails-tests && tsc -p tests/tsconfig.social-guardrails.json && node --test /tmp/avlmc-social-guardrails-tests/tests/social-guardrails.test.js",
