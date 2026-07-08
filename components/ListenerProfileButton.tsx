@@ -885,11 +885,20 @@ export function ListenerProfileButton({
 }
 
 function ProfileAvatar({ imageUrl, name }: { imageUrl: string | null; name: string }) {
-  if (imageUrl) {
+  // Provider avatars can be signed, expiring URLs (e.g. Spotify serves Facebook `lookaside` CDN
+  // links whose `ext` param is an expiry) — once they 403, fall back to the initials avatar instead
+  // of showing a broken-image icon. Reset on URL change so a refreshed image gets another chance.
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [imageUrl]);
+
+  if (imageUrl && !failed) {
     return (
       <span className="listener-avatar has-image">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img alt="" src={imageUrl} />
+        <img alt="" onError={() => setFailed(true)} src={imageUrl} />
       </span>
     );
   }

@@ -8,7 +8,7 @@ import {
   getAnonymousSessionIdFromCookieValue,
 } from "@/lib/anonymous-session";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
-import { getPool } from "@/lib/db";
+import { getPool, query } from "@/lib/db";
 import { migrateSessionSignalsToUser } from "@/lib/discovery-memory";
 import { recordProviderEmail } from "@/lib/account-emails";
 import { withMultiEmailResolution } from "@/lib/auth-adapter";
@@ -84,7 +84,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
       },
     },
     events: {
-      async signIn({ user, account }) {
+      async signIn({ user, account, profile }) {
         if (!user.id || !account?.provider) {
           return;
         }
@@ -101,6 +101,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
             tokenType: account.token_type,
             userId: String(user.id),
           });
+
+          // Refresh the stored avatar from the fresh profile. Spotify avatars are often signed,
+          // expiring `platform-lookaside.fbsbx.com` (Facebook CDN) URLs — the adapter writes
+          // `users.image` only on first sign-in, so without this the stored URL eventually expires
+          // and renders as a broken image. Best-effort: a failure must never block sign-in.
+          try {
+            const freshImage = extractSpotifyImage(profile);
+            if (freshImage && freshImage !== user.image) {
+              await query(`update public.users set image = $1 where id = $2`, [
+                freshImage,
+                user.id,
+              ]);
+            }
+          } catch (error) {
+            console.error("Failed to refresh profile image on sign-in.", error);
+          }
         }
 
         // Multi-email identity (PRD 35 / Phase 15): record the email this provider returned against
@@ -129,6 +145,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
 
 function splitScopes(scope: string | undefined) {
   return scope?.split(" ").filter(Boolean) ?? [];
+}
+
+/**
+ * Pull the current avatar URL from a raw Spotify profile (`images: [{ url }]`, largest first).
+ * Returns undefined when the profile has no usable image so callers leave the stored value alone.
+ */
+function extractSpotifyImage(profile: unknown): string | undefined {
+  if (!profile || typeof profile !== "object") {
+    return undefined;
+  }
+  const images = (profile as { images?: unknown }).images;
+  if (!Array.isArray(images)) {
+    return undefined;
+  }
+  for (const entry of images) {
+    const url = (entry as { url?: unknown })?.url;
+    if (typeof url === "string" && url.length > 0) {
+      return url;
+    }
+  }
+  return undefined;
 }
 
 /**
