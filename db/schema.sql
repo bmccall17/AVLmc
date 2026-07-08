@@ -127,9 +127,9 @@ where u.email is not null
   );
 
 -- ---- Spotify tester-slot access requests (PRD 36 / Phase 15) --------------------
--- While Spotify is in Development Mode (a hard 25-user allowlist), a not-yet-approved listener can
--- request access: we capture their Spotify account email + a status the admin works through. The
--- 25-slot add itself is an external Spotify Developer Dashboard action (User Management / Extended
+-- While Spotify is in Development Mode (the app owner plus a hard 5-user allowlist), a not-yet-approved
+-- listener can request access: we capture their Spotify account email + a status the admin works through.
+-- The slot add itself is an external Spotify Developer Dashboard action (User Management / Extended
 -- Quota); this table only tracks the request so the admin sees who is waiting and the listener sees
 -- honest "pending" / "added — retry now" status. The Spotify email is private to the listener +
 -- admin (never public). Additive + 42P01-tolerant per db/schema.sql being the single source of truth.

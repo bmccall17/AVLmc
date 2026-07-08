@@ -12,13 +12,18 @@
 
 export type TesterRequestStatus = "pending" | "approved" | "declined" | "invited";
 
-/** Spotify Development Mode's hard allowlist budget (User Management, Spotify Developer Dashboard). */
-export const TESTER_SEAT_BUDGET = 25;
+/**
+ * Spotify Development Mode's hard allowlist budget (User Management, Spotify Developer Dashboard).
+ * As of Spotify's February 2026 Development Mode changes this is the app owner (who must have Spotify
+ * Premium) plus up to 5 authenticated users — the dashboard shows "maximum of 5 users". The old
+ * 25-user cap is gone; seat-free CSV taste import is the path for everyone beyond the 5 (PRD 45).
+ */
+export const TESTER_SEAT_BUDGET = 5;
 
 /** Show a "seats are nearly full" warning in the admin panel from this many seated testers. */
-export const TESTER_SEAT_WARNING_AT = 22;
+export const TESTER_SEAT_WARNING_AT = 4;
 
-/** Statuses that hold (or held) a Development Mode seat — counted against the 25-seat budget. */
+/** Statuses that hold (or held) a Development Mode seat — counted against the seat budget. */
 export const SEATED_TESTER_STATUSES: readonly TesterRequestStatus[] = ["approved", "invited"];
 
 export function isSeatedTesterStatus(status: string): status is TesterRequestStatus {

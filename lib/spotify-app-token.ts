@@ -9,7 +9,7 @@ import {
  *
  * Uses the Client Credentials flow against the existing AUTH_SPOTIFY_ID / AUTH_SPOTIFY_SECRET to
  * mint an app token — NO user, NO allowlist seat, NO new scopes. This is the unlock the whole
- * feature rests on: Development Mode's 25-user allowlist gates *user authorization*, not app-token
+ * feature rests on: Development Mode's user allowlist (owner + up to 5) gates *user authorization*, not app-token
  * catalog reads, so `GET /v1/search?type=artist` and `GET /v1/artists/{id}/top-tracks` work today
  * for every event with zero user involvement.
  *

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SPOTIFY_LIMITED_BETA_CODE } from "@/lib/spotify-limited-access";
+import { SPOTIFY_RECONNECT_CODE } from "@/lib/spotify-reconnect";
 
 type ActionState = {
   kind: "idle" | "success" | "notice" | "error";
@@ -32,10 +33,18 @@ export function MusicConnectionActions({ tasteOptedOut }: MusicConnectionActions
       const data = (await response.json()) as { code?: string; error?: string };
 
       if (!response.ok) {
+        // Limited-beta (invite-only) and reconnect-required are expected, actionable states — show
+        // them as a calm notice with their guidance, not a red error. A reconnect also refreshes so
+        // the panel reflects the now-disconnected connection and offers Connect Spotify.
+        const isNotice =
+          data.code === SPOTIFY_LIMITED_BETA_CODE || data.code === SPOTIFY_RECONNECT_CODE;
         setState({
-          kind: data.code === SPOTIFY_LIMITED_BETA_CODE ? "notice" : "error",
+          kind: isNotice ? "notice" : "error",
           message: data.error ?? "Could not sync Spotify.",
         });
+        if (data.code === SPOTIFY_RECONNECT_CODE) {
+          router.refresh();
+        }
         return;
       }
 

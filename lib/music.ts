@@ -3,6 +3,10 @@ import { pickBestArtistMatch } from "@/lib/artist-match-core";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { query } from "@/lib/db";
 import { SpotifyLimitedBetaAccessError } from "@/lib/spotify-limited-access";
+import {
+  SpotifyReconnectRequiredError,
+  isUnrecoverableRefreshResponse,
+} from "@/lib/spotify-reconnect";
 
 export type MusicProvider = "spotify" | "google_youtube" | "apple_music";
 export type MusicProfileItemType = "top_artist" | "top_track";
@@ -610,6 +614,32 @@ async function updateStoredProviderTokens(input: {
   );
 }
 
+/**
+ * Refresh failed unrecoverably: discard the dead tokens and stamp the connection disconnected so the
+ * Health probe's freshness/drift view and the profile UI both reflect "needs reconnect" rather than
+ * silently keeping a connection that can no longer sync. Tolerates the pre-`disconnected_at` schema.
+ */
+async function markSpotifyConnectionNeedsReconnect(userId: string) {
+  const databaseUserId = toDatabaseUserId(userId);
+  await clearProviderTokens(databaseUserId, "spotify");
+  await updateMusicConnectionWithLegacyFallback(
+    `
+      update public.music_connections
+      set disconnected_at = now(),
+        taste_opt_out_at = null
+      where user_id = $1
+        and provider = 'spotify'
+    `,
+    `
+      update public.music_connections
+      set disconnected_at = now()
+      where user_id = $1
+        and provider = 'spotify'
+    `,
+    [databaseUserId]
+  );
+}
+
 async function clearProviderTokens(databaseUserId: number, provider: MusicProvider) {
   await query(
     `
@@ -678,6 +708,15 @@ async function refreshSpotifyAccessToken(userId: string, refreshToken: string) {
   });
 
   if (!response.ok) {
+    // A dead refresh token (Spotify's 6-month lifetime, revocation, or a rotated app secret) comes
+    // back as `invalid_grant`. That is unrecoverable without re-auth, so clear the unusable tokens,
+    // mark the connection needing reconnect, and throw a typed error the UI turns into "Reconnect
+    // Spotify" — instead of a dead-end generic sync failure that reads as "broken again".
+    const errorBody = await response.text().catch(() => "");
+    if (isUnrecoverableRefreshResponse(response.status, errorBody)) {
+      await markSpotifyConnectionNeedsReconnect(userId).catch(() => {});
+      throw new SpotifyReconnectRequiredError();
+    }
     throw new Error("Could not refresh Spotify access.");
   }
 

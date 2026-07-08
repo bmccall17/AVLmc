@@ -200,7 +200,7 @@ export async function countPendingTesterRequests(): Promise<number> {
 }
 
 /**
- * Seated testers against the 25-seat Development Mode budget, counted as DISTINCT emails across
+ * Seated testers against the owner + 5-user Development Mode budget, counted as DISTINCT emails across
  * BOTH request stores — this table's `approved`/`invited` and PRD 36's signed-in
  * `spotify_access_requests` `slot_added`/`approved` — since both mirror the same dashboard
  * allowlist. An email that asked through both paths holds one seat, not two.

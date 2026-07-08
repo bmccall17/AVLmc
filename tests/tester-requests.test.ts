@@ -80,9 +80,9 @@ test("owner is notified exactly once per genuine new interest (created rows only
   assert.equal(shouldNotifyOwner(false), false);
 });
 
-test("seat budget constants match Spotify Development Mode (25, warn at 22)", () => {
-  assert.equal(TESTER_SEAT_BUDGET, 25);
-  assert.equal(TESTER_SEAT_WARNING_AT, 22);
+test("seat budget constants match Spotify Development Mode (5, warn at 4)", () => {
+  assert.equal(TESTER_SEAT_BUDGET, 5);
+  assert.equal(TESTER_SEAT_WARNING_AT, 4);
 });
 
 test("rate window: prunes stale attempts, limits inside the window, records new attempts", () => {

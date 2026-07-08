@@ -11,6 +11,11 @@ import {
   SPOTIFY_LIMITED_BETA_MESSAGE,
   isSpotifyLimitedBetaAccessError,
 } from "@/lib/spotify-limited-access";
+import {
+  SPOTIFY_RECONNECT_CODE,
+  SPOTIFY_RECONNECT_MESSAGE,
+  isSpotifyReconnectRequiredError,
+} from "@/lib/spotify-reconnect";
 
 export const runtime = "nodejs";
 
@@ -45,6 +50,16 @@ export async function POST(request: Request) {
       musicProfile: await syncSpotifyMusicProfile(userId),
     });
   } catch (error) {
+    if (isSpotifyReconnectRequiredError(error)) {
+      return NextResponse.json(
+        {
+          code: SPOTIFY_RECONNECT_CODE,
+          error: SPOTIFY_RECONNECT_MESSAGE,
+        },
+        { status: 409 }
+      );
+    }
+
     if (isSpotifyLimitedBetaAccessError(error)) {
       return NextResponse.json(
         {

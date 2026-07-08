@@ -860,7 +860,7 @@ const NODES: RegistryNode[] = [
     layer: "data",
     label: "spotify_access_requests",
     description:
-      "Spotify tester-slot access requests (PRD 36): a not-yet-approved listener's Spotify email + status (pending/slot_added/approved/rejected) while Spotify is in Development Mode (25-user allowlist). One open request per user; the slot add is an external dashboard action this only tracks. The Spotify email is private to listener + admin — never exposed publicly.",
+      "Spotify tester-slot access requests (PRD 36): a not-yet-approved listener's Spotify email + status (pending/slot_added/approved/rejected) while Spotify is in Development Mode (owner + up to 5 users). One open request per user; the slot add is an external dashboard action this only tracks. The Spotify email is private to listener + admin — never exposed publicly.",
     sourceOfTruth: "spotify_access_requests",
     access: "internal",
     ownership: "automated",
@@ -1552,7 +1552,7 @@ const NODES: RegistryNode[] = [
     layer: "operations",
     label: "Admin Tester Requests API",
     description:
-      "Admin-cookie-gated review of the anonymous tester-request queue (PRD 42 / Phase 17): list with the seat budget (distinct seated emails across both request stores vs. Spotify's 25-seat Development Mode cap), approve (sends the 'you're in' invite email; approved → invited once it sends), decline, re-open. Approval order is enforced by panel copy: allowlist in the Spotify dashboard FIRST.",
+      "Admin-cookie-gated review of the anonymous tester-request queue (PRD 42 / Phase 17): list with the seat budget (distinct seated emails across both request stores vs. Spotify's owner + 5-user Development Mode cap), approve (sends the 'you're in' invite email; approved → invited once it sends), decline, re-open. Approval order is enforced by panel copy: allowlist in the Spotify dashboard FIRST.",
     sourceOfTruth: "app/api/admin/tester-requests/route.ts",
     access: "internal",
     ownership: "automated",
@@ -1570,7 +1570,7 @@ const NODES: RegistryNode[] = [
     layer: "operations",
     label: "Admin Spotify Access API",
     description:
-      "Admin-cookie-gated Spotify tester-slot review (PRD 36): list the open request queue with each listener's Spotify email and mark slot_added/approved/rejected after adding them in the Spotify Developer Dashboard (≤25 users / Extended Quota). The slot add is an external action this only tracks. Admin-only — no self-serve.",
+      "Admin-cookie-gated Spotify tester-slot review (PRD 36): list the open request queue with each listener's Spotify email and mark slot_added/approved/rejected after adding them in the Spotify Developer Dashboard (owner + up to 5 users / Extended Quota). The slot add is an external action this only tracks. Admin-only — no self-serve.",
     sourceOfTruth: "app/api/admin/spotify-access/route.ts",
     access: "internal",
     ownership: "automated",
@@ -1578,7 +1578,7 @@ const NODES: RegistryNode[] = [
       {
         kind: "note",
         detail:
-          "Admin-cookie-gated (ADMIN_SESSION_TOKEN); the actual ≤25-slot add is an external Spotify Dashboard action this only tracks (status → slot_added/approved/rejected). No self-serve.",
+          "Admin-cookie-gated (ADMIN_SESSION_TOKEN); the actual seat add (owner + up to 5) is an external Spotify Dashboard action this only tracks (status → slot_added/approved/rejected). No self-serve.",
       },
     ],
   },

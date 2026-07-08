@@ -536,7 +536,7 @@ Multiple verified emails per account (PRD 35): the magic-link email plus the ema
 
 #### spotify_access_requests  `db-spotify-access-requests`
 
-Spotify tester-slot access requests (PRD 36): a not-yet-approved listener's Spotify email + status (pending/slot_added/approved/rejected) while Spotify is in Development Mode (25-user allowlist). One open request per user; the slot add is an external dashboard action this only tracks. The Spotify email is private to listener + admin — never exposed publicly.
+Spotify tester-slot access requests (PRD 36): a not-yet-approved listener's Spotify email + status (pending/slot_added/approved/rejected) while Spotify is in Development Mode (owner + up to 5 users). One open request per user; the slot add is an external dashboard action this only tracks. The Spotify email is private to listener + admin — never exposed publicly.
 
 - **Kind:** Data store
 - **Source of truth:** `spotify_access_requests`
@@ -1221,7 +1221,7 @@ _Jobs, admin, observability._
 
 #### Admin Tester Requests API  `api-admin-tester-requests`
 
-Admin-cookie-gated review of the anonymous tester-request queue (PRD 42 / Phase 17): list with the seat budget (distinct seated emails across both request stores vs. Spotify's 25-seat Development Mode cap), approve (sends the 'you're in' invite email; approved → invited once it sends), decline, re-open. Approval order is enforced by panel copy: allowlist in the Spotify dashboard FIRST.
+Admin-cookie-gated review of the anonymous tester-request queue (PRD 42 / Phase 17): list with the seat budget (distinct seated emails across both request stores vs. Spotify's owner + 5-user Development Mode cap), approve (sends the 'you're in' invite email; approved → invited once it sends), decline, re-open. Approval order is enforced by panel copy: allowlist in the Spotify dashboard FIRST.
 
 - **Kind:** Surface
 - **Source of truth:** `app/api/admin/tester-requests/route.ts`
@@ -1235,14 +1235,14 @@ Admin-cookie-gated review of the anonymous tester-request queue (PRD 42 / Phase 
 
 #### Admin Spotify Access API  `api-admin-spotify-access`
 
-Admin-cookie-gated Spotify tester-slot review (PRD 36): list the open request queue with each listener's Spotify email and mark slot_added/approved/rejected after adding them in the Spotify Developer Dashboard (≤25 users / Extended Quota). The slot add is an external action this only tracks. Admin-only — no self-serve.
+Admin-cookie-gated Spotify tester-slot review (PRD 36): list the open request queue with each listener's Spotify email and mark slot_added/approved/rejected after adding them in the Spotify Developer Dashboard (owner + up to 5 users / Extended Quota). The slot add is an external action this only tracks. Admin-only — no self-serve.
 
 - **Kind:** Surface
 - **Source of truth:** `app/api/admin/spotify-access/route.ts`
 - **Access:** internal
 - **Ownership:** automated
 - **Implementation notes:**
-  - _Note:_ Admin-cookie-gated (ADMIN_SESSION_TOKEN); the actual ≤25-slot add is an external Spotify Dashboard action this only tracks (status → slot_added/approved/rejected). No self-serve.
+  - _Note:_ Admin-cookie-gated (ADMIN_SESSION_TOKEN); the actual seat add (owner + up to 5) is an external Spotify Dashboard action this only tracks (status → slot_added/approved/rejected). No self-serve.
 - **Flows to / depends on:**
   - → spotify_access_requests (dependsOn) — review queue + slot-added
 

@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 /**
  * Admin-gated Spotify tester-slot access review (PRD 36 / Phase 15). Surfaces the open request queue
  * with each listener's Spotify email so the admin can add them in the Spotify Developer Dashboard
- * (User Management, ≤25) and then mark the request `slot_added` / `approved` / `rejected`. The slot
+ * (User Management, owner + up to 5) and then mark the request `slot_added` / `approved` / `rejected`. The slot
  * add itself is an external dashboard action — this only tracks it. Admin-cookie gated; no
  * self-serve, no pay-to-play. Mirrors app/api/admin/curators.
  */

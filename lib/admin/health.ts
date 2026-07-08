@@ -347,32 +347,46 @@ async function probeSpotify(): Promise<HealthProbe> {
     });
   }
 
-  // Enabled & configured — report connection + profile-freshness METADATA only.
+  // 1) LIVE credential check — a real round-trip to Spotify's token endpoint, not env presence.
+  //    This is the difference between "config looks set" and "sign-in can actually work".
+  const cred = await checkSpotifyAppCredentials();
+  if (cred.state === "rejected") {
+    return base("spotify-api", label, {
+      status: "down",
+      severity: "critical",
+      detail: cred.detail,
+      remediation:
+        "The client ID/secret is wrong, was rotated, or the app was revoked. Re-check them in the Spotify Developer Dashboard and update AUTH_SPOTIFY_ID / AUTH_SPOTIFY_SECRET.",
+    });
+  }
+  if (cred.state === "unreachable") {
+    return base("spotify-api", label, {
+      status: "degraded",
+      severity: "warning",
+      detail: cred.detail,
+      remediation: "Usually transient on Spotify's side; if it persists, Spotify auth is unavailable and no one can connect.",
+    });
+  }
+
+  // 2) MIRROR-DRIFT + connection freshness. The gate is a hand-kept mirror of Spotify's dashboard
+  //    allowlist, so its worst failure is silent: a listener who successfully authorized Spotify
+  //    (therefore was on the dashboard) but has no seat row here — the gate will block them on their
+  //    next sign-in while Spotify would allow them. That is the "broken again" class; surface it.
   try {
-    const result = await withTimeout(
-      query<{ active: number; stale: number }>(
-        `
-          select
-            count(*)::int as active,
-            count(*) filter (
-              where last_synced_at is null or last_synced_at < now() - interval '30 days'
-            )::int as stale
-          from public.music_connections
-          where provider = 'spotify' and disconnected_at is null
-        `
-      ),
-      8000,
-      "spotify"
-    );
+    const drift = await withTimeout(query<SpotifyDriftRow>(SPOTIFY_DRIFT_SQL), 8000, "spotify");
+    const connected = Number(drift.rows[0]?.connected_users ?? 0);
+    const unseated = Number(drift.rows[0]?.unseated_users ?? 0);
+    const active = Number(drift.rows[0]?.active_connections ?? 0);
+    const stale = Number(drift.rows[0]?.stale_connections ?? 0);
 
-    const active = Number(result.rows[0]?.active ?? 0);
-    const stale = Number(result.rows[0]?.stale ?? 0);
-
-    if (active === 0) {
+    // Open access collapses the gate — drift can't block anyone, so it isn't an issue then.
+    if (!flags.spotifyOpenAccess && unseated > 0) {
       return base("spotify-api", label, {
-        status: "ok",
-        severity: "ok",
-        detail: "Configured and ready — no active Spotify connections yet.",
+        status: "degraded",
+        severity: "warning",
+        detail: `Credentials live, but ${unseated} Spotify-connected listener(s) are NOT seated in the allowlist mirror — the pre-redirect gate will block them on next sign-in even though Spotify allows them (mirror drift vs the Developer Dashboard).`,
+        remediation:
+          "Reconcile the mirror: seat those listeners in Admin → Spotify tester access (or set SPOTIFY_OPEN_ACCESS=true to let the dashboard be the sole gate).",
       });
     }
 
@@ -380,22 +394,123 @@ async function probeSpotify(): Promise<HealthProbe> {
       return base("spotify-api", label, {
         status: "stale",
         severity: "warning",
-        detail: `${stale} of ${active} active Spotify connection(s) have profile data older than 30 days.`,
+        detail: `Credentials live; ${stale} of ${active} active connection(s) have profile data older than 30 days.`,
         remediation: "Affected listeners refresh on next sign-in; no action usually required.",
       });
     }
 
+    const seatNote = connected > 0 ? `${connected} connected listener(s), all seated in the mirror` : "no connected listeners yet";
     return base("spotify-api", label, {
       status: "ok",
       severity: "ok",
-      detail: `${active} active Spotify connection(s); profile data current.`,
+      detail: `Credentials live (client-credentials token issued); ${active} active connection(s); ${seatNote}.`,
     });
   } catch (error) {
+    // Creds are proven live above; only the drift/metadata read failed. Say exactly that — don't
+    // claim a blanket "Healthy" when we couldn't verify the gate mirror.
     return base("spotify-api", label, {
-      status: "unknown",
-      severity: "info",
-      detail: messageFrom(error, "Configured; connection tables unavailable."),
+      status: "degraded",
+      severity: "warning",
+      detail: `Credentials live, but the allowlist-mirror check could not run (${messageFrom(error, "connection tables unavailable")}), so gate drift can't be verified.`,
+      remediation: "Check the tester_requests / spotify_access_requests tables and the DB connection.",
     });
+  }
+}
+
+type SpotifyDriftRow = {
+  connected_users: number;
+  unseated_users: number;
+  active_connections: number;
+  stale_connections: number;
+};
+
+/**
+ * One query, four counts:
+ *  - connected_users: distinct users who have ever authorized Spotify (an `accounts` row exists) —
+ *    under Development Mode, authorizing at all means they were on the dashboard allowlist.
+ *  - unseated_users: of those, how many hold NO seat in either gate mirror table (by any of their
+ *    emails). These are exactly who the gate will wrongly block — the drift signal.
+ *  - active_connections / stale_connections: live connection freshness, as before.
+ */
+const SPOTIFY_DRIFT_SQL = `
+  with spotify_users as (
+    select distinct a."userId" as user_id from public.accounts a where a.provider = 'spotify'
+  ),
+  emails as (
+    select su.user_id, lower(u.email) as email
+      from spotify_users su join public.users u on u.id = su.user_id
+    union
+    select su.user_id, lower(ue.email) as email
+      from spotify_users su join public.user_emails ue on ue.user_id = su.user_id
+  ),
+  seated as (
+    select distinct e.user_id
+      from emails e
+     where exists (
+             select 1 from public.tester_requests tr
+              where lower(tr.email) = e.email and tr.status in ('approved', 'invited')
+           )
+        or exists (
+             select 1 from public.spotify_access_requests sar
+              where (sar.user_id = e.user_id or lower(sar.spotify_email) = e.email)
+                and sar.status in ('slot_added', 'approved')
+           )
+  )
+  select
+    (select count(*) from spotify_users)::int as connected_users,
+    (select count(*) from spotify_users su
+       where not exists (select 1 from seated s where s.user_id = su.user_id))::int as unseated_users,
+    (select count(*) from public.music_connections
+       where provider = 'spotify' and disconnected_at is null)::int as active_connections,
+    (select count(*) from public.music_connections
+       where provider = 'spotify' and disconnected_at is null
+         and (last_synced_at is null or last_synced_at < now() - interval '30 days'))::int as stale_connections
+`;
+
+/**
+ * Live client-credentials token fetch — proves AVLmc's Spotify app ID/secret are actually valid,
+ * not merely present. HTTP 400/401 means Spotify rejected the credentials (the app is broken);
+ * a network/timeout error is treated as transient/unreachable, not a credential fault. Never logs
+ * or returns the token or the secret.
+ */
+async function checkSpotifyAppCredentials(): Promise<{
+  state: "ok" | "rejected" | "unreachable";
+  detail: string;
+}> {
+  const clientId = process.env.AUTH_SPOTIFY_ID as string;
+  const clientSecret = process.env.AUTH_SPOTIFY_SECRET as string;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const response = await fetch("https://accounts.spotify.com/api/token", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ grant_type: "client_credentials" }),
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (response.ok) {
+      void response.body?.cancel().catch(() => {});
+      return { state: "ok", detail: "Spotify issued a live client-credentials token." };
+    }
+    void response.body?.cancel().catch(() => {});
+    return {
+      state: "rejected",
+      detail: `Spotify rejected the app credentials — HTTP ${response.status} from the token endpoint.`,
+    };
+  } catch (error) {
+    const aborted = error instanceof Error && /abort|timed out/i.test(error.message);
+    return {
+      state: "unreachable",
+      detail: aborted
+        ? "Spotify's token endpoint did not respond within 6s — could not verify credentials."
+        : `Could not reach Spotify's token endpoint (${messageFrom(error, "network error")}).`,
+    };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

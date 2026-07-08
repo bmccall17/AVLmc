@@ -58,8 +58,9 @@ export function SpotifyAccessSection() {
     <section className="admin-curators">
       <h2>Spotify tester access</h2>
       <p>
-        Spotify is in Development Mode — a hard 25-user allowlist. To approve a request, add the
-        listener&apos;s Spotify email under <strong>User Management</strong> in the{" "}
+        Spotify is in Development Mode — the app owner (Spotify Premium) plus a hard{" "}
+        <strong>5-user</strong> allowlist. To approve a request, add the listener&apos;s Spotify
+        email under <strong>User Management</strong> in the{" "}
         <a
           href="https://developer.spotify.com/dashboard"
           rel="noreferrer noopener"
@@ -67,8 +68,10 @@ export function SpotifyAccessSection() {
         >
           Spotify Developer Dashboard
         </a>{" "}
-        (≤25 users), or apply for <strong>Extended Quota</strong> to lift the cap. Then mark it
-        slot-added so the listener knows to retry.
+        (max 5 users), or apply for <strong>Extended Quota</strong> to lift the cap. Then mark it
+        slot-added so the listener knows to retry. Everyone beyond the 5 can still import taste by
+        file (no seat needed). This queue is a <em>mirror</em> of that dashboard allowlist — if they
+        drift apart, Admin → Health flags it.
       </p>
       {message ? <p className="admin-curators-message">{message}</p> : null}
       {loadError ? (

@@ -32,6 +32,7 @@
     "test:personalization-benchmark": "rm -rf /tmp/avlmc-personalization-benchmark-tests && tsc -p tests/tsconfig.personalization-benchmark.json && node --test /tmp/avlmc-personalization-benchmark-tests/tests/personalization-benchmark.test.js",
     "test:registry": "node --import tsx --test tests/system-registry.test.ts",
     "test:spotify-gate": "node --import tsx --test tests/spotify-gate.test.ts",
+    "test:spotify-reconnect": "node --import tsx --test tests/spotify-reconnect.test.ts",
     "test:artist-match": "rm -rf /tmp/avlmc-artist-match-tests && tsc -p tests/tsconfig.artist-match.json && node --test /tmp/avlmc-artist-match-tests/tests/artist-match.test.js",
     "test:hover-player": "rm -rf /tmp/avlmc-hover-player-tests && tsc -p tests/tsconfig.hover-player.json && node --test /tmp/avlmc-hover-player-tests/tests/hover-player.test.js",
     "test:audius-core": "rm -rf /tmp/avlmc-audius-core-tests && tsc -p tests/tsconfig.audius-core.json && node --test /tmp/avlmc-audius-core-tests/tests/audius-core.test.js",
