@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+import { ExternalLink } from "lucide-react";
 import { ArtistEmbed } from "@/components/ArtistEmbed";
 import { CirclePresence } from "@/components/CirclePresence";
 import { CommunityPanel } from "@/components/CommunityPanel";
@@ -107,6 +108,8 @@ export default async function EventPage({ params }: EventPageProps) {
   const eventSaved = savedKeySet.has(`event:${event.id}`);
   const venueSaved = savedKeySet.has(`venue:${normalizeText(event.venueName)}`);
   const artistSaved = savedKeySet.has(`artist:${normalizeText(event.artistName)}`);
+  const sourceHost = getSourceHost(event.eventUrl);
+  const sourceTooltipId = `source-tooltip-${event.id}`;
   const publicCommunity = {
     ...community,
     contributions: community.contributions.map((c) => publicContribution(c, userId)),
@@ -175,17 +178,27 @@ export default async function EventPage({ params }: EventPageProps) {
             </div>
             <div>
               <dt>Source</dt>
-              <dd>
+              <dd className="source-cell">
                 <TicketIntentLink
                   className="source-link"
+                  ariaDescribedBy={sourceTooltipId}
+                  ariaLabel={`Open original listing. Source: ${event.source}${
+                    sourceHost ? ` at ${sourceHost}` : ""
+                  }.`}
                   eventId={event.id}
                   eventTitle={event.eventTitle}
                   href={event.eventUrl}
-                  title="Open the original listing — tickets, details, and the source feed"
                 >
-                  <span>{event.source}</span>
-                  <span aria-hidden="true">↗</span>
+                  <span>Source</span>
+                  <ExternalLink aria-hidden="true" size={15} strokeWidth={2.4} />
                 </TicketIntentLink>
+                <span className="source-tooltip" id={sourceTooltipId} role="tooltip">
+                  <strong>{sourceHost ? `Original listing on ${sourceHost}` : "Original listing"}</strong>
+                  <span>
+                    Pulled from {event.source}. Opens external tickets and listing details in a
+                    new tab.
+                  </span>
+                </span>
               </dd>
             </div>
           </dl>
@@ -226,4 +239,13 @@ export default async function EventPage({ params }: EventPageProps) {
       />
     </main>
   );
+}
+
+function getSourceHost(href: string) {
+  try {
+    const host = new URL(href).hostname.replace(/^www\./, "");
+    return host || null;
+  } catch {
+    return null;
+  }
 }

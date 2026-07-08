@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { Bell, CalendarCheck, Check, ChevronDown, ChevronRight, ExternalLink, Flame, Headphones, Search, Share2, SlidersHorizontal, Star, UserPlus, X } from "lucide-react";
@@ -1497,7 +1496,7 @@ function DiscoveryEventCard({
   const showEmbers = fire > 0;
   const embers = showEmbers ? buildEmbers(fire) : [];
   const cardElRef = useRef<HTMLElement | null>(null);
-  const router = useRouter();
+  const eventDetailHref = `/event/${encodeURIComponent(event.id)}`;
   // One-shot ember burst, armed each time the user ignites FIRE (off → on).
   const [burstAt, setBurstAt] = useState(0);
 
@@ -1533,7 +1532,7 @@ function DiscoveryEventCard({
       return;
     }
 
-    router.push(`/event/${event.id}`);
+    window.location.assign(eventDetailHref);
   }
 
   function handleCardKeyDown(keyEvent: KeyboardEvent<HTMLElement>) {
@@ -1546,7 +1545,7 @@ function DiscoveryEventCard({
     }
 
     keyEvent.preventDefault();
-    router.push(`/event/${event.id}`);
+    window.location.assign(eventDetailHref);
   }
 
   return (
@@ -1648,7 +1647,9 @@ function DiscoveryEventCard({
             </div>
           ) : null}
           <div className="sandbox-card-links" aria-label="Event links">
-            <Link href={`/event/${event.id}`}>Details</Link>
+            <Link href={eventDetailHref} prefetch={false}>
+              Details
+            </Link>
             <a
               href={event.eventUrl}
               onClick={() => {
@@ -1969,7 +1970,12 @@ function SocialDiscoveryBeats({
           const isTop30 = top30EventIds.has(event.id);
 
           return (
-            <Link className="sandbox-beat-tile" href={`/event/${event.id}`} key={event.id}>
+            <Link
+              className="sandbox-beat-tile"
+              href={`/event/${encodeURIComponent(event.id)}`}
+              key={event.id}
+              prefetch={false}
+            >
               <span className={`sandbox-beat-thumb ${event.imageUrl ? "" : "is-fallback"}`} aria-hidden="true">
                 {event.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element

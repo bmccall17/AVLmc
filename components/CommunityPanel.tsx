@@ -80,6 +80,8 @@ export function CommunityPanel({
     }),
     [community.contributions]
   );
+  const showGoingSourceBreakdown =
+    community.goingSources.spotify > 0 || community.goingSources.ticket_click > 0;
 
   useEffect(() => {
     if (detailTracked.current) {
@@ -315,13 +317,24 @@ export function CommunityPanel({
           <CuratedByLine curators={curatedBy} />
         </div>
         <button
-          className="reaction-button"
+          aria-label={
+            discoveryState.planning
+              ? `You are marked as going. Going count ${community.going}.`
+              : `Mark yourself as going. Going count ${community.going}.`
+          }
+          aria-pressed={discoveryState.planning}
+          className={`reaction-button going ${discoveryState.planning ? "is-active" : ""}`}
           disabled={reactionPending === "going"}
           onClick={() => react("going")}
-          title="Count yourself in — adds you to the thinking-of-going tally"
+          title={
+            discoveryState.planning
+              ? "You are counted in — click again to clear your Going signal"
+              : "Count yourself in — adds you to the Going tally"
+          }
           type="button"
         >
-          {community.going} thinking of going
+          <span>{discoveryState.planning ? "You're going" : "Going"}</span>
+          <strong>{community.going}</strong>
         </button>
         {spotifySearchEnabled ? (
           <button
@@ -335,13 +348,24 @@ export function CommunityPanel({
           </button>
         ) : null}
         <button
-          className="reaction-button hot"
+          aria-label={
+            discoveryState.fire
+              ? `You fired this show. Fire count ${community.fire}.`
+              : `Add fire to this show. Fire count ${community.fire}.`
+          }
+          aria-pressed={discoveryState.fire}
+          className={`reaction-button hot ${discoveryState.fire ? "is-active" : ""}`}
           disabled={reactionPending === "fire"}
           onClick={() => react("fire")}
-          title="Hype this show — adds a fire reaction"
+          title={
+            discoveryState.fire
+              ? "Your Fire is counted — click again to clear it"
+              : "Hype this show — adds a Fire reaction"
+          }
           type="button"
         >
-          {community.fire} fire
+          <span>{discoveryState.fire ? "Fired" : "Fire"}</span>
+          <strong>{community.fire}</strong>
         </button>
         <button
           className={`reaction-button remove ${discoveryState.removed ? "is-active" : ""}`}
@@ -358,15 +382,20 @@ export function CommunityPanel({
         </button>
       </div>
 
-      <div className="intent-source-row" aria-label="Saved signal sources">
-        <span>{community.goingSources.avlmc} AVLmc</span>
-        {community.goingSources.spotify > 0 ? (
-          <span className="spotify-source">{community.goingSources.spotify} Spotify</span>
-        ) : null}
-        {community.goingSources.ticket_click > 0 ? (
-          <span>{community.goingSources.ticket_click} ticket clicks</span>
-        ) : null}
-      </div>
+      {showGoingSourceBreakdown ? (
+        <div className="intent-source-row" aria-label="Going source breakdown">
+          <span className="intent-source-label">Going sources</span>
+          {community.goingSources.avlmc > 0 ? (
+            <span>{community.goingSources.avlmc} from Going button</span>
+          ) : null}
+          {community.goingSources.spotify > 0 ? (
+            <span className="spotify-source">{community.goingSources.spotify} via Spotify</span>
+          ) : null}
+          {community.goingSources.ticket_click > 0 ? (
+            <span>{community.goingSources.ticket_click} from source clicks</span>
+          ) : null}
+        </div>
+      ) : null}
 
       <FormMessage state={reactionState} />
 

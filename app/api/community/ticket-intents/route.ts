@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { recordTicketIntent } from "@/lib/community";
 import { recordDiscoveryEventAction } from "@/lib/discovery-memory";
 import { getEventById } from "@/lib/events";
@@ -38,6 +39,8 @@ export async function POST(request: Request) {
   }
 
   const response = NextResponse.json({ counts });
+  revalidatePath("/");
+  revalidatePath(`/event/${encodeURIComponent(eventId)}`);
   setAnonymousSessionCookie(response, sessionId);
   return response;
 }

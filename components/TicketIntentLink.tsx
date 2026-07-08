@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 
 type TicketIntentLinkProps = {
+  ariaDescribedBy?: string;
+  ariaLabel?: string;
   children: ReactNode;
   className?: string;
   eventId: string;
@@ -13,6 +15,8 @@ type TicketIntentLinkProps = {
 };
 
 export function TicketIntentLink({
+  ariaDescribedBy,
+  ariaLabel,
   children,
   className,
   eventId,
@@ -29,7 +33,16 @@ export function TicketIntentLink({
   }
 
   return (
-    <a className={className} href={href} onClick={recordTicketClick} target="_blank" title={title}>
+    <a
+      aria-describedby={ariaDescribedBy}
+      aria-label={ariaLabel}
+      className={className}
+      href={href}
+      onClick={recordTicketClick}
+      rel="noreferrer noopener"
+      target="_blank"
+      title={title}
+    >
       {children}
     </a>
   );

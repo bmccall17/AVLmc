@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import {
   getOrCreateAnonymousSessionId,
   setAnonymousSessionCookie,
@@ -154,6 +155,10 @@ export async function POST(request: Request) {
     }
   }
 
+  if (shouldRevalidateAfterAction(action)) {
+    revalidateEventSurfaces(event.id);
+  }
+
   const response = NextResponse.json({ counts, state, curatorPickAdded });
   setAnonymousSessionCookie(response, sessionId);
   return response;
@@ -211,6 +216,21 @@ async function recordCountAction(input: {
   }
 
   return getCommunityCountsForEvent(input.eventId);
+}
+
+function shouldRevalidateAfterAction(action: DiscoveryEventAction) {
+  return (
+    action === "planning" ||
+    action === "fire" ||
+    action === "remove" ||
+    action === "unremove" ||
+    action === "avlgo_click"
+  );
+}
+
+function revalidateEventSurfaces(eventId: string) {
+  revalidatePath("/");
+  revalidatePath(`/event/${encodeURIComponent(eventId)}`);
 }
 
 function getString(body: object, key: string) {

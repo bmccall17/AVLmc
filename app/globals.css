@@ -402,20 +402,80 @@ h1 {
 
 /* The Source cell doubles as the single ticket/source-listing action (replaces the old
    "View original listing" button and the community strip's "Find tickets" link). */
+.source-cell {
+  display: inline-flex;
+  max-width: 100%;
+  position: relative;
+}
+
 .source-link {
   align-items: center;
-  color: var(--ink);
+  background: var(--teal);
+  border-radius: 999px;
+  color: white;
   display: inline-flex;
-  font-weight: 700;
-  gap: 6px;
-  text-decoration: underline;
-  text-decoration-color: rgba(49, 84, 77, 0.45);
-  text-underline-offset: 3px;
+  font-weight: 900;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .source-link:hover,
 .source-link:focus-visible {
-  text-decoration-color: currentColor;
+  background: var(--teal-dark);
+  color: white;
+  outline: 2px solid rgba(49, 84, 77, 0.28);
+  outline-offset: 2px;
+}
+
+.source-link svg {
+  flex: 0 0 auto;
+}
+
+.source-tooltip {
+  background: #111827;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(12, 20, 18, 0.26);
+  color: white;
+  display: grid;
+  font-size: 0.84rem;
+  gap: 4px;
+  left: 0;
+  line-height: 1.35;
+  max-width: min(320px, calc(100vw - 32px));
+  opacity: 0;
+  overflow-wrap: anywhere;
+  padding: 10px 12px;
+  pointer-events: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  transform: translateY(-4px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    visibility 0s linear 120ms;
+  visibility: hidden;
+  width: max-content;
+  z-index: 30;
+}
+
+.source-tooltip strong {
+  font-size: 0.8rem;
+}
+
+.source-tooltip span {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.source-cell:hover .source-tooltip,
+.source-cell:focus-within .source-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 500ms, 500ms, 0s;
+  visibility: visible;
 }
 
 .placeholder-grid {
@@ -460,10 +520,6 @@ h1 {
 
   .site-header {
     display: block;
-  }
-
-  .source-link {
-    margin-top: 18px;
   }
 
   .toolbar {
@@ -1206,10 +1262,38 @@ body {
   padding: 9px 12px;
 }
 
+.reaction-button {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.reaction-button strong {
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  flex: 0 0 auto;
+  min-width: 24px;
+  padding: 2px 7px;
+}
+
+.reaction-button.going.is-active {
+  background: #e5f6f8;
+  border-color: #72cbd5;
+  color: #035c68;
+}
+
 .reaction-button.hot {
   background: #fff3df;
   border-color: #f0c47d;
   color: #8a4f00;
+}
+
+.reaction-button.hot.is-active {
+  background: #f0a93a;
+  border-color: #d88b11;
+  color: #231400;
 }
 
 .reaction-button.spotify-intent {
@@ -1248,6 +1332,13 @@ body {
   background: #eaf8ee;
   border-color: #9fd9ad;
   color: #17622f;
+}
+
+.intent-source-row .intent-source-label {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  padding-left: 0;
 }
 
 .intent-ticket-link {
