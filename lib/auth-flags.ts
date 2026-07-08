@@ -2,6 +2,8 @@ export type AuthFeatureFlags = {
   auth: boolean;
   email: boolean;
   spotify: boolean;
+  /** "Sign in with Google" (Auth.js Google OAuth). Persistent account + a durable profile photo. */
+  google: boolean;
   googleYouTube: boolean;
   appleMusic: boolean;
   /**
@@ -27,6 +29,11 @@ export function getAuthFeatureFlags(): AuthFeatureFlags {
       auth &&
       isEnabled(process.env.AUTH_SPOTIFY_ENABLED) &&
       Boolean(process.env.AUTH_SPOTIFY_ID && process.env.AUTH_SPOTIFY_SECRET),
+    // Google sign-in stays off until OAuth creds are present, so the UI hides the button gracefully.
+    google:
+      auth &&
+      isEnabled(process.env.AUTH_GOOGLE_ENABLED) &&
+      Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET),
     googleYouTube: auth && isEnabled(process.env.AUTH_GOOGLE_YOUTUBE_ENABLED),
     appleMusic: auth && isEnabled(process.env.AUTH_APPLE_MUSIC_ENABLED),
     spotifyOpenAccess: isEnabled(process.env.SPOTIFY_OPEN_ACCESS),

@@ -1557,6 +1557,11 @@ body {
   background: #09090b;
 }
 
+.listener-avatar.has-initials {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
 .listener-avatar img {
   height: 100%;
   object-fit: cover;
@@ -1564,10 +1569,47 @@ body {
 }
 
 .listener-avatar i {
-  font-size: 0.64rem;
+  font-size: 0.82rem;
   font-style: normal;
-  font-weight: 950;
-  position: absolute;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.listener-identity .listener-avatar i {
+  font-size: 1.2rem;
+}
+
+.listener-avatar-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.listener-avatar-control {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(113, 113, 122, 0.55);
+  border-radius: 999px;
+  color: #e4e4e7;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 650;
+  gap: 5px;
+  padding: 4px 11px;
+}
+
+.listener-avatar-control:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.listener-avatar-control:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .sandbox-topbar-actions {

@@ -1,5 +1,6 @@
 import PostgresAdapter from "@auth/pg-adapter";
 import NextAuth from "next-auth";
+import Google from "next-auth/providers/google";
 import Spotify from "next-auth/providers/spotify";
 import Resend from "next-auth/providers/resend";
 import { cookies } from "next/headers";
@@ -8,12 +9,13 @@ import {
   getAnonymousSessionIdFromCookieValue,
 } from "@/lib/anonymous-session";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
-import { getPool, query } from "@/lib/db";
+import { getPool } from "@/lib/db";
 import { migrateSessionSignalsToUser } from "@/lib/discovery-memory";
 import { recordProviderEmail } from "@/lib/account-emails";
 import { withMultiEmailResolution } from "@/lib/auth-adapter";
 import { sendMagicLinkEmail } from "@/lib/auth-email";
 import { recordMusicConnection } from "@/lib/music";
+import { isCustomAvatarUrl, setUserImage } from "@/lib/user-image";
 
 const SPOTIFY_SCOPES = ["user-read-private", "user-read-email", "user-top-read"];
 
@@ -43,6 +45,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
                   from: String(provider.from),
                 });
               },
+            }),
+          ]
+        : []),
+      ...(flags.google
+        ? [
+            Google({
+              clientId: process.env.AUTH_GOOGLE_ID,
+              clientSecret: process.env.AUTH_GOOGLE_SECRET,
+              // Same justification as Spotify below: Google verifies its emails, so a Google sign-in
+              // whose email matches an existing account links onto it (one identity per person, PRD 44)
+              // instead of raising OAuthAccountNotLinked. Any future provider must re-justify this.
+              allowDangerousEmailAccountLinking: true,
             }),
           ]
         : []),
@@ -101,22 +115,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
             tokenType: account.token_type,
             userId: String(user.id),
           });
+        }
 
-          // Refresh the stored avatar from the fresh profile. Spotify avatars are often signed,
-          // expiring `platform-lookaside.fbsbx.com` (Facebook CDN) URLs — the adapter writes
-          // `users.image` only on first sign-in, so without this the stored URL eventually expires
-          // and renders as a broken image. Best-effort: a failure must never block sign-in.
-          try {
-            const freshImage = extractSpotifyImage(profile);
-            if (freshImage && freshImage !== user.image) {
-              await query(`update public.users set image = $1 where id = $2`, [
-                freshImage,
-                user.id,
-              ]);
-            }
-          } catch (error) {
-            console.error("Failed to refresh profile image on sign-in.", error);
+        // Refresh the stored avatar from the fresh provider profile. Provider avatars can be signed,
+        // expiring URLs (Spotify serves `platform-lookaside.fbsbx.com` Facebook links whose `ext` is
+        // an expiry); the adapter writes `users.image` only on first sign-in, so without this a
+        // stored URL eventually expires and renders broken. We skip this when the listener has set
+        // their own uploaded photo (a Blob URL) so a provider sign-in never clobbers it. Best-effort:
+        // a failure must never block sign-in.
+        try {
+          const freshImage = extractProfileImage(account.provider, profile);
+          if (freshImage && freshImage !== user.image && !isCustomAvatarUrl(user.image)) {
+            await setUserImage(String(user.id), freshImage);
           }
+        } catch (error) {
+          console.error("Failed to refresh profile image on sign-in.", error);
         }
 
         // Multi-email identity (PRD 35 / Phase 15): record the email this provider returned against
@@ -148,23 +161,32 @@ function splitScopes(scope: string | undefined) {
 }
 
 /**
- * Pull the current avatar URL from a raw Spotify profile (`images: [{ url }]`, largest first).
- * Returns undefined when the profile has no usable image so callers leave the stored value alone.
+ * Pull the current avatar URL from a raw OAuth profile. Spotify exposes `images: [{ url }]` (largest
+ * first); Google exposes a single `picture` string. Returns undefined when there's no usable image
+ * so callers leave the stored value alone.
  */
-function extractSpotifyImage(profile: unknown): string | undefined {
+function extractProfileImage(provider: string, profile: unknown): string | undefined {
   if (!profile || typeof profile !== "object") {
     return undefined;
   }
-  const images = (profile as { images?: unknown }).images;
-  if (!Array.isArray(images)) {
-    return undefined;
+
+  if (provider === "google") {
+    const picture = (profile as { picture?: unknown }).picture;
+    return typeof picture === "string" && picture.length > 0 ? picture : undefined;
   }
-  for (const entry of images) {
-    const url = (entry as { url?: unknown })?.url;
-    if (typeof url === "string" && url.length > 0) {
-      return url;
+
+  if (provider === "spotify") {
+    const images = (profile as { images?: unknown }).images;
+    if (Array.isArray(images)) {
+      for (const entry of images) {
+        const url = (entry as { url?: unknown })?.url;
+        if (typeof url === "string" && url.length > 0) {
+          return url;
+        }
+      }
     }
   }
+
   return undefined;
 }
 

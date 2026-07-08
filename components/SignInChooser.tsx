@@ -26,7 +26,12 @@ import { TesterRequestForm } from "@/components/TesterRequestForm";
  * short-circuits: straight to Spotify, no check, no "Request access" door.
  */
 
-type GateConfig = { openAccess: boolean; spotifyEnabled: boolean; emailEnabled: boolean };
+type GateConfig = {
+  openAccess: boolean;
+  spotifyEnabled: boolean;
+  emailEnabled: boolean;
+  googleEnabled: boolean;
+};
 type GateOutcome = "allowed" | "pending" | "declined" | "not_found" | "email_required";
 type GateResult = { outcome: GateOutcome; email?: string; error?: string };
 
@@ -44,7 +49,7 @@ function fetchGateConfig(): Promise<GateConfig> {
     .catch(() => {
       configPromise = null;
       // Degrade to the gated posture — never to an ungated redirect.
-      return { openAccess: false, spotifyEnabled: true, emailEnabled: true };
+      return { openAccess: false, spotifyEnabled: true, emailEnabled: true, googleEnabled: false };
     });
   return configPromise;
 }
@@ -233,14 +238,19 @@ export function SignInChooser({
   const [emailDoor, setEmailDoor] = useState(false);
   const [requestDoor, setRequestDoor] = useState(false);
   const [openAccess, setOpenAccess] = useState<boolean | null>(null);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
   const [email, setEmail] = useState("");
   const [emailState, setEmailState] = useState<EmailDoorState>({ kind: "idle", message: "" });
 
-  // Resolve the flag so the "Request access" door hides itself under open access.
+  // Resolve the flags so the "Request access" door hides under open access and the Google door only
+  // shows when Google OAuth is configured.
   useEffect(() => {
     let active = true;
     void fetchGateConfig().then((config) => {
-      if (active) setOpenAccess(config.openAccess);
+      if (active) {
+        setOpenAccess(config.openAccess);
+        setGoogleEnabled(config.googleEnabled);
+      }
     });
     return () => {
       active = false;
@@ -282,6 +292,16 @@ export function SignInChooser({
         <SpotifyGateButton callbackUrl={callbackUrl} source={source} className="primary-action">
           Continue with Spotify
         </SpotifyGateButton>
+
+        {googleEnabled ? (
+          <button
+            className="ghost-control"
+            onClick={() => void signIn("google", { callbackUrl })}
+            type="button"
+          >
+            Continue with Google
+          </button>
+        ) : null}
 
         {!emailDoor ? (
           <button className="ghost-control" onClick={() => setEmailDoor(true)} type="button">

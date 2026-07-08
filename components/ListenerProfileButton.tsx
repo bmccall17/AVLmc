@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Bookmark, Plus, RotateCcw, SlidersHorizontal, Star, Trash2, Upload, UserCircle, Users, X } from "lucide-react";
+import { Bookmark, Camera, Plus, RotateCcw, SlidersHorizontal, Star, Trash2, Upload, Users, X } from "lucide-react";
 import { MusicConnectionActions } from "@/components/MusicConnectionActions";
 import { SpotifyGateButton } from "@/components/SignInChooser";
 import { SpotifyAccessRequest } from "@/components/SpotifyAccessRequest";
@@ -75,6 +75,10 @@ export function ListenerProfileButton({
   const [importState, setImportState] = useState<ActionState>({ kind: "idle", message: "" });
   const [isImporting, setIsImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState(user?.image ?? null);
+  const [avatarState, setAvatarState] = useState<ActionState>({ kind: "idle", message: "" });
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [savedPreferences, setSavedPreferences] = useState(() =>
     normalizeListenerPreferences(initialPreferences)
   );
@@ -134,6 +138,12 @@ export function ListenerProfileButton({
     setSavedPreferences(nextPreferences);
     setDraftPreferences(nextPreferences);
   }, [initialPreferences]);
+
+  // Keep the local avatar in sync when the server re-renders with a fresh image (e.g. after a
+  // provider sign-in refresh) so the optimistic upload state doesn't go stale.
+  useEffect(() => {
+    setAvatarUrl(user?.image ?? null);
+  }, [user?.image]);
 
   function setContributionVisibility(visibility: "anonymous" | "followers" | "everyone") {
     const nextPreferences = normalizeListenerPreferences(draftPreferences);
@@ -359,6 +369,61 @@ export function ListenerProfileButton({
     }
   }
 
+  async function uploadAvatar(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setAvatarState({ kind: "error", message: "Choose an image file (JPG, PNG, WEBP, or GIF)." });
+      return;
+    }
+    setIsUploadingAvatar(true);
+    setAvatarState({ kind: "notice", message: "Uploading your photo…" });
+    try {
+      const response = await fetch("/api/me/avatar", {
+        body: file,
+        headers: { "Content-Type": file.type },
+        method: "POST",
+      });
+      const data = (await response.json()) as { error?: string; image?: string };
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not upload that photo.");
+      }
+      setAvatarUrl(data.image ?? null);
+      setAvatarState({ kind: "success", message: "Photo updated." });
+      router.refresh();
+    } catch (error) {
+      setAvatarState({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Could not upload that photo.",
+      });
+    } finally {
+      setIsUploadingAvatar(false);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = "";
+      }
+    }
+  }
+
+  async function removeAvatar() {
+    setIsUploadingAvatar(true);
+    setAvatarState({ kind: "notice", message: "Removing your photo…" });
+    try {
+      const response = await fetch("/api/me/avatar", { method: "DELETE" });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not remove that photo.");
+      }
+      setAvatarUrl(null);
+      setAvatarState({ kind: "success", message: "Photo removed." });
+      router.refresh();
+    } catch (error) {
+      setAvatarState({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Could not remove that photo.",
+      });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  }
+
   async function sendEmailLink(targetEmail?: string) {
     const trimmed = (targetEmail ?? email).trim();
     if (!trimmed) {
@@ -401,7 +466,7 @@ export function ListenerProfileButton({
         onClick={() => setIsOpen(true)}
         type="button"
       >
-        <ProfileAvatar imageUrl={user?.image ?? null} name={user?.name ?? "Listener"} />
+        <ProfileAvatar imageUrl={avatarUrl} name={user?.name ?? "Listener"} />
         <span>
           <strong>{profileLabel}</strong>
           <small>{profileDetail}</small>
@@ -426,11 +491,49 @@ export function ListenerProfileButton({
           >
             <div className="listener-modal-header">
               <div className="listener-identity">
-                <ProfileAvatar imageUrl={user?.image ?? null} name={user?.name ?? "Listener"} />
+                <ProfileAvatar imageUrl={avatarUrl} name={user?.name ?? "Listener"} />
                 <div>
                   <p className="eyebrow">My Asheville music compass</p>
                   <h2 id="listener-profile-title">{profileLabel}</h2>
                   <p>{user?.name ?? user?.email ?? "Tune this browser's discovery profile."}</p>
+                  {isSignedIn ? (
+                    <div className="listener-avatar-controls">
+                      <input
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) {
+                            void uploadAvatar(file);
+                          }
+                        }}
+                        ref={avatarInputRef}
+                        style={{ display: "none" }}
+                        type="file"
+                      />
+                      <button
+                        className="listener-avatar-control"
+                        disabled={isUploadingAvatar}
+                        onClick={() => avatarInputRef.current?.click()}
+                        type="button"
+                      >
+                        <Camera aria-hidden="true" size={14} strokeWidth={2.4} />
+                        {isUploadingAvatar ? "Working…" : avatarUrl ? "Change photo" : "Add photo"}
+                      </button>
+                      {avatarUrl ? (
+                        <button
+                          className="listener-avatar-control"
+                          disabled={isUploadingAvatar}
+                          onClick={() => void removeAvatar()}
+                          type="button"
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {avatarState.message ? (
+                    <p className={`form-message ${avatarState.kind}`}>{avatarState.message}</p>
+                  ) : null}
                 </div>
               </div>
               <button
@@ -499,6 +602,15 @@ export function ListenerProfileButton({
                         Your board personalizes from your taste — instantly here in this browser, and
                         permanently when you sign in. No password, no Spotify required.
                       </p>
+                      {features.google ? (
+                        <button
+                          className="ghost-control"
+                          onClick={() => void signIn("google", { callbackUrl: "/" })}
+                          type="button"
+                        >
+                          Continue with Google
+                        </button>
+                      ) : null}
                       {features.email ? (
                         <div className="listener-email-signin">
                           <label htmlFor="listener-email">Sign in with email</label>
@@ -903,12 +1015,32 @@ function ProfileAvatar({ imageUrl, name }: { imageUrl: string | null; name: stri
     );
   }
 
+  // Clean initials chip: a single filled circle with the listener's initials, tinted by a color
+  // derived from their name so each account looks distinct. No overlapping glyph — that read as
+  // "broken." aria-hidden because the adjacent label already names the listener.
   return (
-    <span className="listener-avatar" aria-hidden="true">
-      <UserCircle size={24} strokeWidth={2.2} />
+    <span
+      aria-hidden="true"
+      className="listener-avatar has-initials"
+      style={{ backgroundColor: avatarColor(name) }}
+    >
       <i>{getInitials(name)}</i>
     </span>
   );
+}
+
+/**
+ * Deterministic, pleasant background color for an initials avatar. Hashes the name to a stable hue
+ * and returns a mid-lightness, saturated tone that keeps white initials readable (WCAG-safe).
+ */
+function avatarColor(name: string) {
+  let hash = 0;
+  for (let index = 0; index < name.length; index += 1) {
+    hash = name.charCodeAt(index) + ((hash << 5) - hash);
+    hash |= 0;
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 52%, 42%)`;
 }
 
 function getSourceStatus({

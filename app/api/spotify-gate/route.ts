@@ -28,6 +28,7 @@ export function GET() {
       openAccess: flags.spotifyOpenAccess,
       spotifyEnabled: flags.spotify,
       emailEnabled: flags.email,
+      googleEnabled: flags.google,
     },
     { headers: { "cache-control": "no-store" } }
   );
