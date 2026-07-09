@@ -216,6 +216,54 @@ function FireTurbulenceFilter() {
   );
 }
 
+// The hero headline rotates through a set of low-key, matter-of-fact lines — the
+// promise stays constant (matched local shows), the phrasing keeps it fresh. First
+// line renders on the server so there's no flash; the client crossfades from there.
+// Rotation pauses entirely under prefers-reduced-motion.
+const HERO_HEADLINES = [
+  "Find your next favorite band.",
+  "Your Asheville live music matchmaker.",
+  "Discover Asheville shows matched to your taste.",
+  "Find your next favorite artist.",
+  "Live music in Asheville, matched to you.",
+  "Find the Asheville show made for your taste.",
+  "A better way to find your next show.",
+] as const;
+
+const HERO_HOLD_MS = 4200;
+const HERO_FADE_MS = 420;
+
+function RotatingHeadline() {
+  const [index, setIndex] = useState(0);
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    let fadeTimer: ReturnType<typeof setTimeout>;
+    const cycle = window.setInterval(() => {
+      setVisible(false);
+      fadeTimer = setTimeout(() => {
+        setIndex((current) => (current + 1) % HERO_HEADLINES.length);
+        setVisible(true);
+      }, HERO_FADE_MS);
+    }, HERO_HOLD_MS);
+    return () => {
+      window.clearInterval(cycle);
+      clearTimeout(fadeTimer);
+    };
+  }, []);
+
+  return (
+    <h1 className="sandbox-rotating-headline">
+      <span data-visible={visible} style={{ transitionDuration: `${HERO_FADE_MS}ms` }}>
+        {HERO_HEADLINES[index]}
+      </span>
+    </h1>
+  );
+}
+
 export function EventBoard({
   circleActivityByEvent,
   curatedByEvent,
@@ -971,7 +1019,7 @@ export function EventBoard({
       <section className="sandbox-hero" id="for-you">
         <div className="sandbox-header">
           <p className="eyebrow">For You</p>
-          <h1>Find the Asheville show worth talking about.</h1>
+          <RotatingHeadline />
           <p className="lede">
             A {rangeDays > 0 ? "" : "rolling "}{effectiveWindowLabel} live music board, ranked by your taste, local pulse, and curator signals.
           </p>

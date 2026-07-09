@@ -2236,6 +2236,32 @@ body {
   max-width: 580px;
 }
 
+/* Rotating hero headline: the <span> crossfades on each swap; it keeps its own
+   `h1` typography (inherited from `.sandbox-header h1` above). Rests slightly
+   raised while fading so the swap reads as a settle rather than a hard cut. */
+.sandbox-rotating-headline span {
+  display: inline-block;
+  transition-property: opacity, transform;
+  transition-timing-function: ease;
+}
+
+.sandbox-rotating-headline span[data-visible="false"] {
+  opacity: 0;
+  transform: translateY(-0.12em);
+}
+
+.sandbox-rotating-headline span[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sandbox-rotating-headline span {
+    transition: none;
+    transform: none;
+  }
+}
+
 .sandbox-search {
   align-items: center;
   backdrop-filter: blur(18px);
