@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AVLmc — Personalization Panel Redesign Sandbox</title>
+<style>
+  :root{
+    --bg:#0a0a0b; --panel:#111214; --panel-2:#161719; --card:#1a1b1e;
+    --line:#26282c; --line-2:#33363b;
+    --txt:#f2f4f5; --muted:#9aa0a6; --dim:#6b7178;
+    --mint:#7ee6b8; --mint-dim:#3a5b4d; --teal:#17b6c9;
+    --amber:#e6c37e; --red:#e68a8a;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 700px at 70% -10%, #1a2320 0%, var(--bg) 55%);
+    color:var(--txt); font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex; flex-direction:column; align-items:center; padding:18px 14px 40px;
+  }
+
+  /* ---------- Sandbox control strip ---------- */
+  .sandbox-bar{
+    width:100%; max-width:1040px; background:linear-gradient(90deg,#17242a,#141e22);
+    border:1px solid var(--line-2); border-radius:12px; padding:12px 16px;
+    display:flex; flex-wrap:wrap; gap:18px 26px; align-items:center; margin-bottom:16px;
+  }
+  .sandbox-bar .brandlet{font-weight:700;letter-spacing:.3px;color:var(--teal);font-size:12px;text-transform:uppercase;margin-right:4px}
+  .ctl{display:flex;flex-direction:column;gap:5px}
+  .ctl > span{font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim)}
+  .seg{display:flex;background:#0d1214;border:1px solid var(--line-2);border-radius:9px;overflow:hidden}
+  .seg button{
+    background:transparent;border:0;color:var(--muted);padding:6px 11px;font-size:12.5px;cursor:pointer;
+    font-family:inherit;transition:.15s;white-space:nowrap;
+  }
+  .seg button+button{border-left:1px solid var(--line-2)}
+  .seg button.on{background:var(--teal);color:#04191c;font-weight:600}
+  .sandbox-note{font-size:11.5px;color:var(--dim);width:100%;margin-top:-4px}
+
+  /* ---------- Modal frame (non-scrolling outer) ---------- */
+  .modal{
+    width:100%; max-width:1040px; height:min(78vh,720px);
+    background:var(--panel); border:1px solid var(--line); border-radius:20px;
+    display:flex; flex-direction:column; overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.55);
+  }
+
+  /* header */
+  .m-head{
+    padding:18px 22px 14px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:14px; flex:0 0 auto;
+  }
+  .m-head .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#c026d3);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:15px;flex:0 0 auto}
+  .m-head .eyebrow{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);font-weight:700}
+  .m-head h1{font-size:18px;margin:2px 0 1px}
+  .m-head .sub{font-size:12.5px;color:var(--muted)}
+  .m-head .x{margin-left:auto;width:32px;height:32px;border-radius:8px;border:1px solid var(--line-2);background:transparent;color:var(--muted);cursor:pointer;font-size:16px}
+
+  /* guest CTA banner (only when guest) */
+  .guest-cta{
+    flex:0 0 auto; margin:14px 22px 0; border-radius:14px; padding:16px 18px;
+    background:linear-gradient(100deg,rgba(126,230,184,.14),rgba(23,182,201,.10));
+    border:1px solid var(--mint-dim); display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  }
+  .guest-cta .copy{flex:1;min-width:220px}
+  .guest-cta .copy b{font-size:15px}
+  .guest-cta .copy p{margin:3px 0 0;font-size:12.5px;color:var(--muted)}
+  .guest-cta .acts{display:flex;gap:10px;flex-wrap:wrap}
+  .btn{font-family:inherit;cursor:pointer;border-radius:10px;padding:10px 16px;font-size:13.5px;font-weight:600;border:1px solid var(--line-2);background:var(--card);color:var(--txt);transition:.15s}
+  .btn:hover{border-color:var(--mint)}
+  .btn.primary{background:var(--mint);color:#05130d;border-color:var(--mint)}
+  .btn.google{background:#fff;color:#1a1a1a;border-color:#fff}
+  .btn.ghost{background:transparent}
+  .btn.sm{padding:7px 12px;font-size:12.5px}
+
+  /* nav (tabs OR two-pane sidebar) */
+  .m-body{flex:1 1 auto;display:flex;min-height:0}
+
+  .tabs{display:flex;gap:4px;padding:12px 22px 0;flex:0 0 auto;border-bottom:1px solid var(--line)}
+  .tabs button{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:10px 14px;font-size:13.5px;font-family:inherit;cursor:pointer;font-weight:600}
+  .tabs button.on{color:var(--txt);border-bottom-color:var(--mint)}
+  .tabs .badge{font-size:10px;background:var(--mint);color:#05130d;border-radius:20px;padding:1px 7px;margin-left:6px;font-weight:700}
+
+  .sidebar{width:210px;flex:0 0 auto;border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+  .sidebar button{text-align:left;background:transparent;border:0;color:var(--muted);padding:10px 12px;border-radius:9px;font-family:inherit;font-size:13.5px;cursor:pointer;display:flex;align-items:center;gap:9px}
+  .sidebar button.on{background:var(--card);color:var(--txt);font-weight:600}
+  .sidebar button .dot{width:6px;height:6px;border-radius:50%;background:var(--mint);opacity:0;transition:.15s}
+  .sidebar button.on .dot{opacity:1}
+
+  /* scrolling content region */
+  .content{flex:1 1 auto;overflow-y:auto;padding:18px 22px 22px;min-height:0}
+  .content::-webkit-scrollbar{width:9px}
+  .content::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:20px}
+  .col{display:flex;flex-direction:column;gap:16px}
+
+  .section{display:none}
+  .section.show{display:block;animation:fade .2s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  .h2{font-size:15px;font-weight:700;margin:0 0 3px;display:flex;align-items:center;gap:9px}
+  .lead{font-size:12.5px;color:var(--muted);margin:0 0 16px}
+
+  /* accordion */
+  .acc{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden;background:var(--panel-2)}
+  .acc > .head{padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none}
+  .acc > .head .chev{margin-left:auto;transition:.2s;color:var(--dim)}
+  .acc.open > .head .chev{transform:rotate(90deg)}
+  .acc > .panel{max-height:0;overflow:hidden;transition:max-height .28s ease;padding:0 16px}
+  .acc.open > .panel{max-height:1400px;padding:0 16px 16px}
+  .acc .head .tt{font-weight:600;font-size:14px}
+  .acc .head .st{font-size:11.5px;color:var(--dim)}
+
+  /* presets */
+  .presets{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .preset{border:1px solid var(--line-2);border-radius:12px;padding:13px;cursor:pointer;background:var(--card);transition:.15s;text-align:left}
+  .preset:hover{border-color:var(--mint)}
+  .preset.on{border-color:var(--mint);background:linear-gradient(160deg,rgba(126,230,184,.13),transparent)}
+  .preset .pn{font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:7px}
+  .preset .pd{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.4}
+  .preset .tick{margin-left:auto;color:var(--mint);opacity:0}
+  .preset.on .tick{opacity:1}
+
+  .adv-toggle{background:transparent;border:1px dashed var(--line-2);color:var(--muted);border-radius:10px;padding:10px 14px;width:100%;cursor:pointer;font-family:inherit;font-size:13px;display:flex;align-items:center;gap:8px;justify-content:center}
+  .adv-toggle:hover{border-color:var(--mint);color:var(--txt)}
+  .adv-wrap{display:none;margin-top:14px}
+  .adv-wrap.show{display:block}
+
+  /* dial grid */
+  .dgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .dgroup-title{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);margin:16px 0 8px;font-weight:700}
+  .dgroup-title:first-child{margin-top:0}
+  .dial{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+  .dial .dt{font-weight:600;font-size:13px;display:flex;justify-content:space-between}
+  .dial .dt .val{color:var(--mint);font-variant-numeric:tabular-nums}
+  .dial .dd{font-size:11px;color:var(--dim);margin:3px 0 9px;line-height:1.35;min-height:29px}
+  input[type=range]{-webkit-appearance:none;width:100%;height:5px;border-radius:5px;background:var(--line-2);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--mint);cursor:pointer;box-shadow:0 0 0 4px rgba(126,230,184,.15)}
+  .dial.off .val{color:var(--dim)}
+
+  /* boosts */
+  .boost-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  select,.tin{font-family:inherit;background:var(--card);border:1px solid var(--line-2);color:var(--txt);border-radius:9px;padding:9px 11px;font-size:13px}
+  .tin{flex:1;min-width:160px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .chip{background:var(--card);border:1px solid var(--line-2);border-radius:20px;padding:6px 11px;font-size:12px;display:flex;align-items:center;gap:7px}
+  .chip.up{border-color:var(--mint-dim)}
+  .chip.down{border-color:#5b3a3a}
+  .chip .rm{cursor:pointer;color:var(--dim);font-weight:700}
+  .chip .tag{font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--dim)}
+
+  /* toggles */
+  .setting{display:flex;align-items:flex-start;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+  .setting:last-child{border-bottom:0}
+  .setting .info{flex:1}
+  .setting .info b{font-size:13.5px}
+  .setting .info p{margin:3px 0 0;font-size:11.5px;color:var(--muted);line-height:1.4}
+  .switch{position:relative;width:42px;height:24px;flex:0 0 auto;cursor:pointer}
+  .switch input{display:none}
+  .switch .track{position:absolute;inset:0;background:var(--line-2);border-radius:20px;transition:.2s}
+  .switch .knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+  .switch input:checked + .track{background:var(--mint)}
+  .switch input:checked + .track + .knob{transform:translateX(18px)}
+  .radio-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .radio-row:last-child{border-bottom:0}
+  .radio-row input{accent-color:var(--mint);width:16px;height:16px}
+  .radio-row b{font-size:13.5px}
+  .radio-row span{font-size:11.5px;color:var(--muted)}
+
+  /* WHY THESE SHOWS — learned taste */
+  .learn-hero{background:linear-gradient(150deg,rgba(126,230,184,.12),rgba(23,182,201,.06));border:1px solid var(--mint-dim);border-radius:14px;padding:16px;margin-bottom:16px}
+  .learn-hero .top{font-size:12px;color:var(--muted)}
+  .learn-hero .match{font-size:22px;font-weight:800;margin:4px 0 2px}
+  .learn-hero .match .pct{color:var(--mint)}
+  .learn-hero .conf{font-size:11.5px;color:var(--dim);margin-top:6px}
+  .conf-bar{height:6px;border-radius:6px;background:var(--line-2);margin-top:7px;overflow:hidden}
+  .conf-bar > i{display:block;height:100%;width:62%;background:linear-gradient(90deg,var(--teal),var(--mint))}
+
+  .know{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  .kcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px}
+  .kcard .kh{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--dim);font-weight:700;margin-bottom:9px}
+  .krow{display:flex;align-items:center;gap:9px;margin:8px 0;font-size:12.5px}
+  .krow .nm{flex:0 0 92px;color:var(--muted)}
+  .krow .bar{flex:1;height:7px;border-radius:6px;background:var(--line-2);overflow:hidden}
+  .krow .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--mint-dim),var(--mint))}
+  .krow .n{flex:0 0 34px;text-align:right;font-variant-numeric:tabular-nums;color:var(--mint);font-size:11.5px}
+
+  .factors .f{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+  .factors .f .fn{flex:1}
+  .factors .f .fn b{font-size:13px}
+  .factors .f .fn small{display:block;color:var(--dim);font-size:11px;margin-top:2px}
+  .factors .f .fv{font-weight:700;font-variant-numeric:tabular-nums;font-size:15px}
+  .factors .f.pos .fv{color:var(--mint)}
+  .factors .f.neg .fv{color:var(--red)}
+  .learn-note{font-size:11.5px;color:var(--dim);background:var(--panel-2);border:1px dashed var(--line-2);border-radius:10px;padding:11px 13px;margin-top:6px;line-height:1.5}
+
+  /* sticky footer */
+  .m-foot{flex:0 0 auto;border-top:1px solid var(--line);padding:13px 22px;display:flex;align-items:center;gap:12px;background:var(--panel)}
+  .m-foot .status{font-size:12px;color:var(--dim);margin-right:auto}
+  .m-foot .status b{color:var(--mint)}
+
+  .hidden{display:none!important}
+  @media (max-width:720px){
+    .presets,.dgrid,.know{grid-template-columns:1fr}
+    .sidebar{width:150px}
+  }
+</style>
+</head>
+<body>
+
+  <!-- ============ SANDBOX CONTROLS ============ -->
+  <div class="sandbox-bar">
+    <span class="brandlet">Sandbox</span>
+    <div class="ctl">
+      <span>Layout</span>
+      <div class="seg" id="segLayout">
+        <button data-v="tabs" class="on">Tabs</button>
+        <button data-v="accordion">Accordion</button>
+        <button data-v="twopane">Two-pane</button>
+      </div>
+    </div>
+    <div class="ctl">
+      <span>Tuning dials</span>
+      <div class="seg" id="segDials">
+        <button data-v="presetsadv" class="on">Presets + Advanced</button>
+        <button data-v="grouped">Grouped (all 10)</button>
+        <button data-v="presetsonly">Presets only</button>
+      </div>
+    </div>
+    <div class="ctl">
+      <span>User state</span>
+      <div class="seg" id="segState">
+        <button data-v="guest" class="on">Guest</button>
+        <button data-v="signed">Signed in</button>
+      </div>
+    </div>
+    <p class="sandbox-note">Flip these to compare. The modal below keeps a fixed height — the body scrolls, the Save bar never moves. This whole top strip disappears in the real app.</p>
+  </div>
+
+  <!-- ============ THE MODAL ============ -->
+  <div class="modal">
+
+    <div class="m-head">
+      <div class="avatar" id="avatar">LI</div>
+      <div>
+        <div class="eyebrow">My Asheville Music Compass</div>
+        <h1 id="headTitle">Personalize your board</h1>
+        <div class="sub" id="headSub">Tune this browser's discovery profile.</div>
+      </div>
+      <button class="x">✕</button>
+    </div>
+
+    <!-- Guest CTA (guest only) -->
+    <div class="guest-cta" id="guestCta">
+      <div class="copy">
+        <b>Save your tuning — sign in</b>
+        <p>Your dials work right now, in this browser. Sign in to keep them across devices and let the board learn your taste over time. No password, no Spotify required.</p>
+      </div>
+      <div class="acts">
+        <button class="btn google">Continue with Google</button>
+        <button class="btn primary">Email me a link</button>
+      </div>
+    </div>
+
+    <!-- BODY: tabs+content OR sidebar+content -->
+    <div class="m-body" id="mBody">
+
+      <!-- TAB NAV (layout=tabs) -->
+      <div class="tabs" id="tabNav">
+        <button data-sec="tune" class="on">Tune</button>
+        <button data-sec="boosts">Boosts</button>
+        <button data-sec="sharing">Sharing &amp; Privacy</button>
+        <button data-sec="why">Why these shows<span class="badge" id="whyBadge">learning</span></button>
+      </div>
+
+      <!-- SIDEBAR NAV (layout=twopane) -->
+      <div class="sidebar hidden" id="sideNav">
+        <button data-sec="tune" class="on"><span class="dot"></span>Tune</button>
+        <button data-sec="boosts"><span class="dot"></span>Boosts</button>
+        <button data-sec="sharing"><span class="dot"></span>Sharing &amp; Privacy</button>
+        <button data-sec="why"><span class="dot"></span>Why these shows</button>
+      </div>
+
+      <div class="content" id="content">
+
+        <!-- =============== TUNE =============== -->
+        <div class="section show" data-sec="tune" id="secTune">
+          <div class="h2">Tune what surfaces first</div>
+          <p class="lead">Start with a preset, then fine-tune if you want. 100% keeps the default weight; lower removes it, higher boosts it.</p>
+
+          <!-- presets -->
+          <div class="preset-block" id="presetBlock">
+            <div class="presets">
+              <button class="preset on" data-preset="discover">
+                <div class="pn">🧭 Discover more<span class="tick">✓</span></div>
+                <div class="pd">Leans into novelty and fresh listings you haven't seen.</div>
+              </button>
+              <button class="preset" data-preset="familiar">
+                <div class="pn">❤️ Familiar favorites<span class="tick">✓</span></div>
+                <div class="pd">Weights artists and genres you already love.</div>
+              </button>
+              <button class="preset" data-preset="local">
+                <div class="pn">📍 Local focus<span class="tick">✓</span></div>
+                <div class="pd">Prioritizes Asheville venues and hometown acts.</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- advanced toggle (presetsadv only) -->
+          <button class="adv-toggle" id="advToggle">⚙︎ Advanced — show all 10 dials</button>
+
+          <!-- dial region -->
+          <div class="adv-wrap" id="advWrap">
+            <div id="dialHost"></div>
+          </div>
+        </div>
+
+        <!-- =============== BOOSTS =============== -->
+        <div class="section" data-sec="boosts">
+          <div class="h2">Custom boosts &amp; lowers</div>
+          <p class="lead">Directly shape your list — pin the venues and artists you love, mute what you don't.</p>
+          <div class="boost-row">
+            <select><option>Boost</option><option>Lower</option></select>
+            <select><option>Artist</option><option>Venue</option><option>Tag</option><option>Keyword</option></select>
+            <input class="tin" placeholder="Example: The Orange Peel" />
+            <button class="btn sm">+ Add</button>
+          </div>
+          <div class="chips">
+            <span class="chip up"><span class="tag">boost · venue</span> The Grey Eagle <span class="rm">✕</span></span>
+            <span class="chip up"><span class="tag">boost · artist</span> Watchhouse <span class="rm">✕</span></span>
+            <span class="chip down"><span class="tag">lower · tag</span> EDM <span class="rm">✕</span></span>
+          </div>
+        </div>
+
+        <!-- =============== SHARING & PRIVACY =============== -->
+        <div class="section" data-sec="sharing">
+          <div class="h2">Sharing &amp; privacy</div>
+          <p class="lead">Following is one-way and private. Your activity stays hidden until you opt in.</p>
+
+          <div class="setting">
+            <div class="info"><b>Let approved people see your going / firing</b>
+              <p>Off by default. Only listeners you've approved — never anonymous visitors. Public community counts are unaffected.</p></div>
+            <label class="switch"><input type="checkbox"><span class="track"></span><span class="knob"></span></label>
+          </div>
+          <div class="setting">
+            <div class="info"><b>Your people influence your board</b>
+              <p>Let shows your followed friends and curators are into lift your list.</p></div>
+            <label class="switch"><input type="checkbox"><span class="track"></span><span class="knob"></span></label>
+          </div>
+
+          <div class="dgroup-title" style="margin-top:18px">Community name visibility</div>
+          <p class="lead" style="margin-bottom:8px">How your name appears on songs and notes you add to the community board.</p>
+          <label class="radio-row"><input type="radio" name="vis" checked><div><b>Anonymous</b> <span>— never shown. Safest for privacy.</span></div></label>
+          <label class="radio-row"><input type="radio" name="vis"><div><b>Followers only</b> <span>— only people who follow you see your name.</span></div></label>
+          <label class="radio-row"><input type="radio" name="vis"><div><b>Everyone</b> <span>— public. Curators get a clickable profile link.</span></div></label>
+        </div>
+
+        <!-- =============== WHY THESE SHOWS =============== -->
+        <div class="section" data-sec="why">
+          <div class="h2">Why these shows?</div>
+          <p class="lead">This is what the board has learned about your taste so far — and how it's shaping today's top match.</p>
+
+          <div class="learn-hero">
+            <div class="top">Current top match</div>
+            <div class="match"><span id="topMatchName">Watchhouse</span> · <span class="pct" id="topMatchPct">98%</span></div>
+            <div class="conf" id="confText">Taste confidence: <b>Medium</b> — based on 40 imported signals + 12 in-app actions. Keep going/firing shows to sharpen this.</div>
+            <div class="conf-bar"><i id="confFill"></i></div>
+          </div>
+
+          <div class="know">
+            <div class="kcard">
+              <div class="kh">Artists you return to</div>
+              <div class="krow"><span class="nm">Watchhouse</span><span class="bar"><i style="width:92%"></i></span><span class="n">92</span></div>
+              <div class="krow"><span class="nm">Madi Diaz</span><span class="bar"><i style="width:74%"></i></span><span class="n">74</span></div>
+              <div class="krow"><span class="nm">Nina Simone</span><span class="bar"><i style="width:61%"></i></span><span class="n">61</span></div>
+              <div class="krow"><span class="nm">Courtney M.A.</span><span class="bar"><i style="width:55%"></i></span><span class="n">55</span></div>
+            </div>
+            <div class="kcard">
+              <div class="kh">Genres leaning your way</div>
+              <div class="krow"><span class="nm">Folk / Americana</span><span class="bar"><i style="width:88%"></i></span><span class="n">88</span></div>
+              <div class="krow"><span class="nm">Indie</span><span class="bar"><i style="width:66%"></i></span><span class="n">66</span></div>
+              <div class="krow"><span class="nm">Jazz / soul</span><span class="bar"><i style="width:48%"></i></span><span class="n">48</span></div>
+              <div class="krow"><span class="nm">Bluegrass</span><span class="bar"><i style="width:41%"></i></span><span class="n">41</span></div>
+            </div>
+          </div>
+
+          <div class="dgroup-title">How that scores today's match</div>
+          <div class="factors">
+            <div class="f pos"><div class="fn"><b>Artist affinity</b><small>Your synced + saved artists overlap this bill</small></div><div class="fv">+66.3</div></div>
+            <div class="f pos"><div class="fn"><b>Genre match</b><small>Folk/Americana is your strongest lean</small></div><div class="fv">+39.2</div></div>
+            <div class="f pos"><div class="fn"><b>Venue preference</b><small>You keep saving Grey Eagle shows</small></div><div class="fv">+27</div></div>
+            <div class="f pos"><div class="fn"><b>Social heat</b><small>High community signal this week</small></div><div class="fv">+17</div></div>
+            <div class="f neg"><div class="fn"><b>Learned behavior</b><small>You've fired 2 similar late-night bills</small></div><div class="fv">−10.2</div></div>
+          </div>
+          <div class="learn-note">🔒 <b>This view updates with your activity.</b> Every show you save, attend, or fire nudges these numbers. Signed-out guests see genre/date-based guesses only — signing in is what lets the board actually <i>learn you</i>.</div>
+        </div>
+
+      </div><!-- /content -->
+    </div><!-- /m-body -->
+
+    <div class="m-foot">
+      <div class="status" id="footStatus">Editing as <b>guest</b> · changes live in this browser</div>
+      <button class="btn ghost sm">↺ Reset dials</button>
+      <button class="btn primary" id="saveBtn">Save settings</button>
+    </div>
+
+  </div><!-- /modal -->
+
+<script>
+  // ---------- dial definitions ----------
+  const DIALS = {
+    "Core matching":[
+      ["Artist affinity","How much synced artists & custom boosts lift a show.",100],
+      ["Genre match","How much event tags, styles & genre words matter.",100],
+      ["Venue preference","How much familiar/preferred venues shape the list.",100],
+    ],
+    "Timing & heat":[
+      ["Date availability","How strongly soon & weekend timing matter.",100],
+      ["Social heat","How much planning, fire, notes & voice activity lift a show.",100],
+      ["Novelty","How much quieter, less obvious listings get a chance.",100],
+    ],
+    "Asheville context":[
+      ["Local relevance","How much local, Asheville-specific signals matter.",100],
+      ["Free/paid preference","How much free vs paid-ticket wording matters.",100],
+      ["Outdoor/indoor","How much patio/outdoor vs room wording matters.",100],
+      ["Your people","How much followed friends & curators lift the list.",0],
+    ]
+  };
+
+  function buildDials(grouped){
+    let html="";
+    if(grouped){
+      for(const g in DIALS){
+        html+=`<div class="dgroup-title">${g}</div><div class="dgrid">`;
+        DIALS[g].forEach(d=>html+=dialCard(d));
+        html+="</div>";
+      }
+    }else{
+      html+='<div class="dgrid">';
+      for(const g in DIALS) DIALS[g].forEach(d=>html+=dialCard(d));
+      html+="</div>";
+    }
+    return html;
+  }
+  function dialCard([name,desc,val]){
+    const off = val===0;
+    return `<div class="dial ${off?'off':''}">
+      <div class="dt"><span>${name}</span><span class="val">${val}%</span></div>
+      <div class="dd">${desc}</div>
+      <input type="range" min="0" max="200" value="${val}"
+        oninput="this.closest('.dial').querySelector('.val').textContent=this.value+'%';this.closest('.dial').classList.toggle('off',this.value==0)">
+    </div>`;
+  }
+
+  // ---------- state ----------
+  let layout="tabs", dials="presetsadv", state="guest";
+
+  const el = s=>document.querySelector(s);
+  const all = s=>document.querySelectorAll(s);
+
+  function renderDials(){
+    const host=el("#dialHost");
+    const advToggle=el("#advToggle");
+    const advWrap=el("#advWrap");
+    const presetBlock=el("#presetBlock");
+
+    if(dials==="presetsonly"){
+      host.innerHTML="";
+      advToggle.classList.add("hidden");
+      advWrap.classList.remove("show");
+      presetBlock.classList.remove("hidden");
+    } else if(dials==="grouped"){
+      host.innerHTML=buildDials(true);
+      advToggle.classList.add("hidden");
+      advWrap.classList.add("show");     // always shown
+      presetBlock.classList.add("hidden"); // grouped = power mode, no presets
+    } else { // presetsadv
+      host.innerHTML=buildDials(false);
+      advToggle.classList.remove("hidden");
+      advWrap.classList.remove("show");  // hidden until toggled
+      presetBlock.classList.remove("hidden");
+    }
+  }
+
+  el("#advToggle").onclick=()=>{
+    const w=el("#advWrap");
+    w.classList.toggle("show");
+    el("#advToggle").textContent = w.classList.contains("show")
+      ? "⚙︎ Advanced — hide dials" : "⚙︎ Advanced — show all 10 dials";
+  };
+
+  function applyLayout(){
+    const tabNav=el("#tabNav"), sideNav=el("#sideNav"), body=el("#mBody"), content=el("#content");
+    // reset
+    tabNav.classList.remove("hidden"); sideNav.classList.add("hidden");
+    body.style.flexDirection="column";
+    // clear accordion wrapping
+    unwrapAccordion();
+
+    if(layout==="tabs"){
+      body.style.flexDirection="column";
+      tabNav.classList.remove("hidden"); sideNav.classList.add("hidden");
+      showSection(currentSec);
+    }
+    else if(layout==="twopane"){
+      body.style.flexDirection="row";
+      tabNav.classList.add("hidden"); sideNav.classList.remove("hidden");
+      showSection(currentSec);
+    }
+    else if(layout==="accordion"){
+      body.style.flexDirection="column";
+      tabNav.classList.add("hidden"); sideNav.classList.add("hidden");
+      wrapAccordion();
+    }
+  }
+
+  // ----- section switching (tabs / twopane) -----
+  let currentSec="tune";
+  function showSection(sec){
+    currentSec=sec;
+    all(".section").forEach(s=>s.classList.toggle("show",s.dataset.sec===sec));
+    all("#tabNav button").forEach(b=>b.classList.toggle("on",b.dataset.sec===sec));
+    all("#sideNav button").forEach(b=>b.classList.toggle("on",b.dataset.sec===sec));
+    el("#content").scrollTop=0;
+  }
+  all("#tabNav button").forEach(b=>b.onclick=()=>showSection(b.dataset.sec));
+  all("#sideNav button").forEach(b=>b.onclick=()=>showSection(b.dataset.sec));
+
+  // ----- accordion mode: wrap each section in a collapsible -----
+  const SEC_META={tune:["Tune what surfaces first","Presets & dials"],
+                  boosts:["Custom boosts & lowers","Pin or mute artists, venues, tags"],
+                  sharing:["Sharing & privacy","Who sees your activity"],
+                  why:["Why these shows?","What we've learned about your taste"]};
+  function wrapAccordion(){
+    all(".section").forEach((sec,i)=>{
+      const meta=SEC_META[sec.dataset.sec];
+      const acc=document.createElement("div");
+      acc.className="acc"+(i===0?" open":"");
+      acc.dataset.accfor=sec.dataset.sec;
+      const head=document.createElement("div");
+      head.className="head";
+      head.innerHTML=`<div><div class="tt">${meta[0]}</div><div class="st">${meta[1]}</div></div><span class="chev">›</span>`;
+      const panel=document.createElement("div");
+      panel.className="panel";
+      // move the section into panel (force it visible; accordion controls height)
+      sec.classList.add("show");
+      sec.querySelector(".h2").style.display="none"; // header handled by acc head
+      sec.querySelector(".lead").style.marginTop="14px";
+      panel.appendChild(sec);
+      acc.appendChild(head); acc.appendChild(panel);
+      head.onclick=()=>{ acc.classList.toggle("open"); };
+      el("#content").appendChild(acc);
+    });
+  }
+  function unwrapAccordion(){
+    const content=el("#content");
+    all(".acc").forEach(acc=>{
+      const sec=acc.querySelector(".section");
+      sec.querySelector(".h2").style.display="";
+      sec.querySelector(".lead").style.marginTop="";
+      content.appendChild(sec); // move back out
+      acc.remove();
+    });
+    // restore single-section visibility
+    all(".section").forEach(s=>s.classList.toggle("show",s.dataset.sec===currentSec));
+  }
+
+  // ----- presets -----
+  all(".preset").forEach(p=>p.onclick=()=>{
+    all(".preset").forEach(x=>x.classList.remove("on"));
+    p.classList.add("on");
+  });
+
+  // ----- guest vs signed -----
+  function applyState(){
+    const guest = state==="guest";
+    el("#guestCta").style.display = guest ? "flex" : "none";
+    el("#avatar").textContent = guest ? "LI" : "BM";
+    el("#avatar").style.background = guest ? "linear-gradient(135deg,#7c3aed,#c026d3)" : "linear-gradient(135deg,#0f766e,#14b8a6)";
+    el("#headTitle").textContent = guest ? "Personalize your board" : "Signed in · Brett A McCall";
+    el("#headSub").textContent = guest ? "Tune this browser's discovery profile — sign in to save it." : "Spotify connected · last synced Jul 8, 6:41 PM · 40 signals imported.";
+    el("#footStatus").innerHTML = guest ? 'Editing as <b>guest</b> · changes live in this browser' : 'Signed in · changes save to <b>your account</b>';
+    // Why-tab confidence differs
+    el("#whyBadge").textContent = guest ? "guessing" : "learning";
+    el("#confText").innerHTML = guest
+      ? 'Taste confidence: <b style="color:var(--amber)">Low</b> — guest mode uses genre & date guesses only. Sign in to let the board learn from what you save and fire.'
+      : 'Taste confidence: <b>Medium</b> — based on 40 imported signals + 12 in-app actions. Keep going/firing shows to sharpen this.';
+    el("#confFill").style.width = guest ? "22%" : "62%";
+    el("#topMatchName").textContent = guest ? "The Get Right Band" : "Watchhouse";
+    el("#topMatchPct").textContent = guest ? "86%" : "98%";
+  }
+
+  // ----- wire segmented controls -----
+  function wireSeg(id,setter){
+    all(`#${id} button`).forEach(b=>b.onclick=()=>{
+      all(`#${id} button`).forEach(x=>x.classList.remove("on"));
+      b.classList.add("on"); setter(b.dataset.v);
+    });
+  }
+  wireSeg("segLayout",v=>{layout=v; applyLayout();});
+  wireSeg("segDials",v=>{dials=v; renderDials(); if(layout==="accordion"){ /* re-render inside acc */ }});
+  wireSeg("segState",v=>{state=v; applyState();});
+
+  el("#saveBtn").onclick=()=>{ el("#saveBtn").textContent="✓ Saved"; setTimeout(()=>el("#saveBtn").textContent="Save settings",1200); };
+
+  // init
+  renderDials();
+  applyState();
+  applyLayout();
+</script>
+</body>
+</html>

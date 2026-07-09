@@ -23,6 +23,7 @@ import { InsightSection } from "@/components/admin/InsightSection";
 import { AnalyticsSection } from "@/components/admin/AnalyticsSection";
 import { ListenerGraphSection } from "@/components/admin/ListenerGraphSection";
 import { CardFxLabSection } from "@/components/admin/CardFxLabSection";
+import { DesignSandboxSection } from "@/components/admin/DesignSandboxSection";
 
 type AdminPortalProps = {
   data: AdminDashboardData;
@@ -46,6 +47,7 @@ type TabId =
   | "gaps"
   | "resources"
   | "card-lab"
+  | "design-sandbox"
   | "artist-matches"
   | "moderation";
 
@@ -61,6 +63,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: "gaps", label: "Gaps" },
   { id: "resources", label: "Resources" },
   { id: "card-lab", label: "Card FX Lab" },
+  { id: "design-sandbox", label: "Design Sandbox" },
   { id: "artist-matches", label: "Artist Matches" },
   { id: "moderation", label: "Moderation" },
 ];
@@ -243,6 +246,7 @@ export function AdminPortal({
         {activeTab === "gaps" && <GapsSection data={data} />}
         {activeTab === "resources" && <ResourcesSection data={data} />}
         {activeTab === "card-lab" && <CardFxLabSection />}
+        {activeTab === "design-sandbox" && <DesignSandboxSection />}
         {activeTab === "artist-matches" && (
           <LazySection
             value={artistMatches}

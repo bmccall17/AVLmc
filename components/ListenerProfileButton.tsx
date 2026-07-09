@@ -21,6 +21,7 @@ import {
   type ListenerCustomSignalKind,
   type ListenerDiscoveryPreferences,
   type ListenerPreferenceKey,
+  type ListenerPreferenceWeights,
 } from "@/lib/listener-preferences";
 import type { MusicConnection, MusicProfileItem } from "@/lib/music";
 import { SPOTIFY_LIMITED_BETA_MESSAGE } from "@/lib/spotify-limited-access";
@@ -60,6 +61,78 @@ const CUSTOM_SIGNAL_KIND_LABELS: Record<ListenerCustomSignalKind, string> = {
   venue: "Venue",
 };
 
+type ListenerModalSection = "tune" | "boosts" | "sharing" | "why" | "account";
+
+const MODAL_SECTIONS: Array<{ id: ListenerModalSection; label: string }> = [
+  { id: "tune", label: "Tune" },
+  { id: "boosts", label: "Boosts" },
+  { id: "sharing", label: "Sharing & Privacy" },
+  { id: "why", label: "Why these shows" },
+  { id: "account", label: "Account & sources" },
+];
+
+type ListenerPreset = {
+  description: string;
+  id: string;
+  name: string;
+  /**
+   * Preset weights intentionally leave `socialCircle` alone — "your people" influence is a consent
+   * dial the listener turns on explicitly (PRD 26), so no preset should flip it.
+   */
+  weights: Omit<ListenerPreferenceWeights, "socialCircle">;
+};
+
+const LISTENER_PRESETS: ListenerPreset[] = [
+  {
+    description: "Leans into novelty and fresh listings you haven't seen.",
+    id: "discover",
+    name: "🧭 Discover more",
+    weights: {
+      artistAffinity: 70,
+      genreMatch: 80,
+      venuePreference: 80,
+      dateAvailability: 100,
+      socialHeat: 90,
+      localRelevance: 100,
+      novelty: 170,
+      freePaidPreference: 100,
+      outdoorIndoorPreference: 100,
+    },
+  },
+  {
+    description: "Weights artists and genres you already love.",
+    id: "familiar",
+    name: "❤️ Familiar favorites",
+    weights: {
+      artistAffinity: 170,
+      genreMatch: 150,
+      venuePreference: 130,
+      dateAvailability: 100,
+      socialHeat: 100,
+      localRelevance: 100,
+      novelty: 40,
+      freePaidPreference: 100,
+      outdoorIndoorPreference: 100,
+    },
+  },
+  {
+    description: "Prioritizes Asheville venues and hometown acts.",
+    id: "local",
+    name: "📍 Local focus",
+    weights: {
+      artistAffinity: 90,
+      genreMatch: 90,
+      venuePreference: 150,
+      dateAvailability: 100,
+      socialHeat: 120,
+      localRelevance: 180,
+      novelty: 90,
+      freePaidPreference: 100,
+      outdoorIndoorPreference: 100,
+    },
+  },
+];
+
 export function ListenerProfileButton({
   features,
   hasTasteProfile,
@@ -72,6 +145,8 @@ export function ListenerProfileButton({
 }: ListenerProfileButtonProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<ListenerModalSection>("tune");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [importState, setImportState] = useState<ActionState>({ kind: "idle", message: "" });
   const [isImporting, setIsImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -204,6 +279,29 @@ export function ListenerProfileButton({
       active = false;
     };
   }, [isOpen, isSignedIn]);
+
+  const activePresetId = useMemo(
+    () =>
+      LISTENER_PRESETS.find((preset) =>
+        Object.entries(preset.weights).every(
+          ([key, value]) => draftPreferences.weights[key as ListenerPreferenceKey] === value
+        )
+      )?.id ?? null,
+    [draftPreferences.weights]
+  );
+
+  function applyPreset(preset: ListenerPreset) {
+    setDraftPreferences((current) =>
+      normalizeListenerPreferences({
+        ...current,
+        weights: {
+          ...current.weights,
+          ...preset.weights,
+        },
+      })
+    );
+    setSaveState({ kind: "idle", message: "" });
+  }
 
   function updateWeight(key: ListenerPreferenceKey, value: number) {
     setDraftPreferences((current) =>
@@ -463,7 +561,11 @@ export function ListenerProfileButton({
         aria-haspopup="dialog"
         aria-label={isSignedIn ? "Open listener profile" : "Open listener tuning"}
         className="sandbox-profile listener-profile-trigger"
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          setActiveSection("tune");
+          setShowAdvanced(false);
+          setIsOpen(true);
+        }}
         type="button"
       >
         <ProfileAvatar imageUrl={avatarUrl} name={user?.name ?? "Listener"} />
@@ -547,7 +649,77 @@ export function ListenerProfileButton({
               </button>
             </div>
 
-            <div className="listener-modal-grid">
+            {!isSignedIn && (features.google || features.email) ? (
+              <div className="listener-guest-cta">
+                <div className="listener-guest-copy">
+                  <strong>Save your tuning — sign in</strong>
+                  <p>
+                    Your dials work right now, in this browser. Sign in to keep them across devices
+                    and let the board learn your taste over time. No password, no Spotify required.
+                  </p>
+                </div>
+                <div className="listener-guest-actions">
+                  {features.google ? (
+                    <button
+                      className="ghost-control"
+                      onClick={() => void signIn("google", { callbackUrl: "/" })}
+                      type="button"
+                    >
+                      Continue with Google
+                    </button>
+                  ) : null}
+                  {features.email ? (
+                    <div className="listener-email-row">
+                      <input
+                        aria-label="Email for a one-tap sign-in link"
+                        autoComplete="email"
+                        inputMode="email"
+                        onChange={(event) => setEmail(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void sendEmailLink();
+                          }
+                        }}
+                        placeholder="you@example.com"
+                        type="email"
+                        value={email}
+                      />
+                      <button
+                        className="primary-action"
+                        disabled={!email.trim() || emailState.kind === "notice"}
+                        onClick={() => void sendEmailLink()}
+                        type="button"
+                      >
+                        Email me a link
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                {emailState.message ? (
+                  <p className={`form-message ${emailState.kind}`}>{emailState.message}</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="listener-modal-body">
+              <nav aria-label="Listener settings sections" className="listener-modal-nav">
+                {MODAL_SECTIONS.map((section) => (
+                  <button
+                    aria-current={activeSection === section.id ? "page" : undefined}
+                    className={activeSection === section.id ? "on" : undefined}
+                    key={section.id}
+                    onClick={() => setActiveSection(section.id)}
+                    type="button"
+                  >
+                    {section.label}
+                  </button>
+                ))}
+              </nav>
+
+              <div className="listener-modal-content">
+
+              {activeSection === "account" ? (
               <section className="listener-panel">
                 <div className="listener-panel-heading">
                   <SlidersHorizontal aria-hidden="true" size={18} strokeWidth={2.4} />
@@ -594,58 +766,6 @@ export function ListenerProfileButton({
                     ) : (
                       <p className="form-message notice">{SPOTIFY_LIMITED_BETA_MESSAGE}</p>
                     )
-                  ) : null}
-
-                  {!isSignedIn ? (
-                    <div className="listener-onboarding">
-                      <p className="listener-onboarding-copy">
-                        Your board personalizes from your taste — instantly here in this browser, and
-                        permanently when you sign in. No password, no Spotify required.
-                      </p>
-                      {features.google ? (
-                        <button
-                          className="ghost-control"
-                          onClick={() => void signIn("google", { callbackUrl: "/" })}
-                          type="button"
-                        >
-                          Continue with Google
-                        </button>
-                      ) : null}
-                      {features.email ? (
-                        <div className="listener-email-signin">
-                          <label htmlFor="listener-email">Sign in with email</label>
-                          <div className="listener-email-row">
-                            <input
-                              autoComplete="email"
-                              id="listener-email"
-                              inputMode="email"
-                              onChange={(event) => setEmail(event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  void sendEmailLink();
-                                }
-                              }}
-                              placeholder="you@example.com"
-                              type="email"
-                              value={email}
-                            />
-                            <button
-                              className="primary-action"
-                              disabled={!email.trim() || emailState.kind === "notice"}
-                              onClick={() => void sendEmailLink()}
-                              type="button"
-                            >
-                              Email me a link
-                            </button>
-                          </div>
-                          <small>We&apos;ll email you a one-tap sign-in link. No password to remember.</small>
-                          {emailState.message ? (
-                            <p className={`form-message ${emailState.kind}`}>{emailState.message}</p>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
                   ) : null}
 
                   {spotifyConnected ? (
@@ -754,7 +874,9 @@ export function ListenerProfileButton({
                   ) : null}
                 </div>
               </section>
+              ) : null}
 
+              {activeSection === "why" ? (
               <section className="listener-panel">
                 <h3>Why these shows?</h3>
                 {scorePreview ? (
@@ -793,16 +915,43 @@ export function ListenerProfileButton({
                   </p>
                 )}
               </section>
-            </div>
+              ) : null}
 
-            <section className="listener-panel listener-tuning-panel">
-              <div className="listener-panel-heading">
-                <SlidersHorizontal aria-hidden="true" size={18} strokeWidth={2.4} />
-                <div>
-                  <h3>Tune what surfaces first</h3>
-                  <p>100% keeps the default score. Lower removes weight; higher boosts it.</p>
+              {activeSection === "tune" ? (
+              <section className="listener-panel listener-tuning-panel">
+                <div className="listener-panel-heading">
+                  <SlidersHorizontal aria-hidden="true" size={18} strokeWidth={2.4} />
+                  <div>
+                    <h3>Tune what surfaces first</h3>
+                    <p>
+                      Start with a preset, then fine-tune if you want. 100% keeps the default weight;
+                      lower removes it, higher boosts it.
+                    </p>
+                  </div>
                 </div>
-              </div>
+                <div className="listener-preset-grid">
+                  {LISTENER_PRESETS.map((preset) => (
+                    <button
+                      aria-pressed={activePresetId === preset.id}
+                      className={`listener-preset${activePresetId === preset.id ? " on" : ""}`}
+                      key={preset.id}
+                      onClick={() => applyPreset(preset)}
+                      type="button"
+                    >
+                      <strong>{preset.name}</strong>
+                      <small>{preset.description}</small>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  aria-expanded={showAdvanced}
+                  className="listener-adv-toggle"
+                  onClick={() => setShowAdvanced((current) => !current)}
+                  type="button"
+                >
+                  {showAdvanced ? "⚙ Advanced — hide dials" : "⚙ Advanced — show all 10 dials"}
+                </button>
+                {showAdvanced ? (
               <div className="listener-slider-grid">
                 {LISTENER_PREFERENCE_CONTROLS.map((control) => (
                   <label className="listener-slider" key={control.key}>
@@ -822,10 +971,14 @@ export function ListenerProfileButton({
                   </label>
                 ))}
               </div>
-            </section>
+                ) : null}
+              </section>
+              ) : null}
 
-            <section className="listener-panel listener-custom-panel">
-              <h3>Custom boosts and lowers</h3>
+              {activeSection === "boosts" ? (
+              <section className="listener-panel listener-custom-panel">
+                <h3>Custom boosts and lowers</h3>
+                <p>Directly shape your list — pin the venues and artists you love, mute what you don&apos;t.</p>
               <div className="listener-custom-form">
                 <select
                   aria-label="Custom signal direction"
@@ -898,9 +1051,12 @@ export function ListenerProfileButton({
               ) : (
                 <p className="empty-copy">Add artists, venues, tags, or keywords to directly shape your list.</p>
               )}
-            </section>
+              </section>
+              ) : null}
 
-            <section className="listener-panel listener-sharing-panel">
+              {activeSection === "sharing" ? (
+              <>
+              <section className="listener-panel listener-sharing-panel">
               <div className="listener-panel-heading">
                 <Users aria-hidden="true" size={18} strokeWidth={2.4} />
                 <div>
@@ -971,8 +1127,24 @@ export function ListenerProfileButton({
                 </label>
               </div>
             </section>
+              </>
+              ) : null}
 
-            <div className="listener-modal-actions">
+              </div>
+            </div>
+
+            <div className="listener-modal-foot">
+              <p className="listener-foot-status">
+                {isSignedIn ? (
+                  <>
+                    Signed in · changes save to <strong>your account</strong>
+                  </>
+                ) : (
+                  <>
+                    Editing as <strong>guest</strong> · changes live in this browser
+                  </>
+                )}
+              </p>
               <button className="ghost-control" onClick={resetDraft} type="button">
                 <RotateCcw aria-hidden="true" size={16} strokeWidth={2.4} />
                 Reset dials
