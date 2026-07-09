@@ -1,6 +1,6 @@
 # AVL Music Companion Backlog
 
-Updated: July 8, 2026
+Updated: July 9, 2026
 
 ## Urgent
 
@@ -132,6 +132,41 @@ Updated: July 8, 2026
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
 ## Done
+
+* **Prod schema drift silently broke preference saves → Health schema-drift probe** —
+  Shipped (July 9, 2026), incident fix + permanent detection (PRD 07 / C2 enhancement;
+  recorded in [PRD 07](prds/prd-07-system-health-and-connection-visibility.md) Implementation Status).
+  * **Symptom:** the listener modal's "Let people you approve see…" toggle and Community Name
+    Visibility radios never persisted after Save; no error shown.
+  * **Root cause:** prod Neon was missing `listener_discovery_preferences.contribution_visibility`
+    (schema.sql is never auto-applied on deploy). The store's 42703 fallback kept saves "working"
+    while silently dropping both sharing fields; loads returned defaults. The same audit found
+    `contributions.music_provider(_item_id/_url)` also missing — declared only in the create-table
+    block, so even applying schema.sql couldn't add them to the pre-existing table.
+  * **Fix (data):** applied the schema to prod (both drift classes verified gone — the app's exact
+    upsert round-trips both fields, tested inside a rolled-back transaction); added
+    `add column if not exists` migrations for the three `music_provider*` columns so `db/schema.sql`
+    is truly idempotent again.
+  * **Fix (detection):** new `lib/admin/schema-drift.ts` parses the declared schema from
+    `db/schema.sql` (no hand-kept manifest) and diffs it against `information_schema`; wired as a
+    tenth Health probe rendering critical with the exact missing `table.column` list + psql
+    remediation. Verified live both ways: green against synced prod; critical, naming exactly the
+    dropped column, against a disposable Neon branch with the column removed.
+  * `typecheck` / `lint` / `test:registry` (7) green; Snyk scan clean on new code; `$0`, no new deps.
+
+* **Listener personalization modal redesign — two-pane + presets, admin Design Sandbox tab** —
+  Shipped (July 9, 2026), standalone UX redesign (no PRD/admin cycle), commit `5c910bb`.
+  * **Modal** (`components/ListenerProfileButton.tsx`): fixed-height two-pane shell — sidebar nav
+    (Tune / Boosts / Sharing & Privacy / Why these shows / Account & sources), scrolling content,
+    pinned save bar with guest/signed-in status; on mobile the nav collapses to a horizontal chip
+    row. Tune opens with three one-tap presets (Discover more / Familiar favorites / Local focus)
+    plus an "Advanced — show all 10 dials" toggle; presets never touch the `socialCircle` consent
+    dial (PRD 26). Guest sign-in (Google + email link) moved to a compact CTA banner.
+  * **Admin:** new **Design Sandbox** tab embedding the interactive mock
+    (`docs/avlmc-redesign-sandbox.html`, served admin-gated at `/admin/design/redesign-sandbox`,
+    traced into the bundle via `outputFileTracingIncludes`).
+  * Verified via Playwright against the production build (presets apply, guest save/reload
+    round-trip, mobile layout, admin gate 307s unauthenticated); deployed to production.
 
 * **Hotfix: un-fire / un-going returned 500 in production** —
   Shipped (July 4, 2026), follow-on hotfix to the July 3 fire/going toggle fix below (no PRD/admin cycle;

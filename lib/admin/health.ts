@@ -3,6 +3,7 @@ import { query } from "@/lib/db";
 import { getAuthFeatureFlags, isEnabled } from "@/lib/auth-flags";
 import { getAvlgoFeedSource, getDateWindow, isUsingCustomAvlgoFeed } from "@/lib/events";
 import { getRecentJobRuns, type JobName, type JobRun } from "@/lib/admin/job-runs";
+import { detectSchemaDrift } from "@/lib/admin/schema-drift";
 
 /**
  * System health & connection visibility (PRD 07 / C2, Outcome 4).
@@ -109,6 +110,7 @@ export function healthByProbeId(
 async function runAllProbes(): Promise<HealthProbe[]> {
   const probeFns: Array<() => Promise<HealthProbe>> = [
     probeDatabase,
+    probeSchemaDrift,
     probeEventData,
     probeAvlgoFeed,
     probeAuthProvider,
@@ -174,6 +176,47 @@ async function probeDatabase(): Promise<HealthProbe> {
       severity: "critical",
       detail: messageFrom(error, "select 1 round-trip failed."),
       remediation: "Check DATABASE_URL and Aiven Postgres availability.",
+    });
+  }
+}
+
+async function probeSchemaDrift(): Promise<HealthProbe> {
+  const label = "Database Schema (vs db/schema.sql)";
+  try {
+    const drift = await withTimeout(detectSchemaDrift(), 8000, "schema drift");
+    const missing = [
+      ...drift.missingTables.map((table) => `table ${table}`),
+      ...drift.missingColumns.map((column) => `column ${column}`),
+    ];
+
+    if (missing.length > 0) {
+      const shown = missing.slice(0, 12).join(", ");
+      const more = missing.length > 12 ? ` (+${missing.length - 12} more)` : "";
+      return base("schema-drift", label, {
+        status: "misconfigured",
+        severity: "critical",
+        detail: `Live database is missing ${missing.length} item(s) declared in db/schema.sql: ${shown}${more}. The store layers tolerate missing columns silently — saves appear to succeed while dropping these fields (this is how the sharing/visibility settings "wouldn't stick").`,
+        remediation:
+          'Apply the idempotent schema to prod Neon: psql "$DATABASE_URL" -f db/schema.sql — it is never applied automatically on deploy.',
+      });
+    }
+
+    return base("schema-drift", label, {
+      status: "ok",
+      severity: "ok",
+      detail: `Live schema matches db/schema.sql — all ${drift.expectedTables} tables and ${drift.expectedColumns} declared columns are present.`,
+    });
+  } catch (error) {
+    // Distinguish "couldn't read the shipped schema file" (a build/tracing fault on our side —
+    // worth attention) from a DB read failure (already covered by the Database probe).
+    const fileProblem =
+      error instanceof Error && /ENOENT|no such file/i.test(error.message);
+    return base("schema-drift", label, {
+      status: "unknown",
+      severity: fileProblem ? "warning" : "info",
+      detail: fileProblem
+        ? "db/schema.sql was not found in the deployed bundle, so drift can't be checked. Verify outputFileTracingIncludes covers /admin → db/schema.sql."
+        : `Drift check could not run (${messageFrom(error, "database unavailable")}); see the Database probe.`,
     });
   }
 }

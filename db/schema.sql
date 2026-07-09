@@ -356,6 +356,16 @@ create table if not exists public.contributions (
 alter table public.contributions
   add column if not exists updated_at timestamptz not null default now();
 
+-- Additive columns for databases provisioned before PRD 46's shared-song provider metadata.
+-- IF NOT EXISTS keeps schema.sql idempotent (the create-table block alone can't add these to a
+-- pre-existing table — exactly the drift the Health panel's schema probe now detects).
+alter table public.contributions
+  add column if not exists music_provider text;
+alter table public.contributions
+  add column if not exists music_provider_item_id text;
+alter table public.contributions
+  add column if not exists music_provider_url text;
+
 create index if not exists contributions_event_id_status_idx
   on public.contributions (event_id, status, created_at desc);
 create index if not exists contributions_session_created_at_idx
