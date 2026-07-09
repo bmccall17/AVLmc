@@ -107,6 +107,13 @@ In [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) �
 
 ### Go-live runbook (on grant)
 
+0. **Pre-flight (hard blocker, added July 8, 2026):** fix audit finding **F1** before the flag
+   flip — remove `allowDangerousEmailAccountLinking` from the Spotify provider and mark
+   spotify-sourced emails unverified. Spotify emails are **not** verified (Spotify docs:
+   *"this email address is unverified"*), so open access + auto-link = an account-takeover
+   surface. Full analysis + fix shape:
+   [auth durability audit F1](../auth-durability-audit-2026-07-08.md) and the parked entry in
+   [`backlog.md`](../backlog.md).
 1. Grant email received → paste date/terms here.
 2. Vercel → Project → Settings → Environment Variables: set `SPOTIFY_OPEN_ACCESS=true`
    (Production) → redeploy.

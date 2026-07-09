@@ -1,6 +1,6 @@
 # AVL Music Companion Backlog
 
-Updated: July 4, 2026
+Updated: July 8, 2026
 
 ## Urgent
 
@@ -89,6 +89,25 @@ Updated: July 4, 2026
   * Take a final Aiven `pg_dump` to cold storage before deleting, just in case.
 
 ## Parked
+
+* **Spotify auto-link rests on an unverified email — account-takeover surface once Spotify access
+  opens (audit F1).** The [July 8, 2026 auth durability audit](auth-durability-audit-2026-07-08.md)
+  disproved the recorded PRD 44 assumption ("Spotify verifies its emails"): Spotify's own profile
+  docs state the `/me` email is **unverified** — *"there is no proof that it actually belongs to
+  the user."* With `allowDangerousEmailAccountLinking: true` on the Spotify provider, an attacker
+  who sets their Spotify email to a victim's address gets linked into the victim's account; the
+  audit also flags that `isProviderEmailVerified` marks spotify emails `verified`, making them
+  magic-link sign-in keys via the multi-email resolver. **Exposure today ≈ 0** (5-seat allowlist;
+  Spotify dev-mode `/v1/me` 403 fails sign-in for non-seated users) — deferred by owner decision
+  (July 8, 2026). **Trigger to un-park (hard blocker): before `SPOTIFY_OPEN_ACCESS=true` is ever
+  flipped (now pre-flight step 0 in the [PRD 45](prds/prd-45-extended-quota-readiness.md) go-live
+  runbook), or if the project grows beyond the invite-only beta.** Fix shape (small): remove
+  `allowDangerousEmailAccountLinking` from the **Spotify** provider only (Google keeps it — Google
+  verifies), flip `isProviderEmailVerified("spotify")` to `false`, reconcile the
+  `duplicate_account` copy's "matching emails converge automatically" parenthetical — the
+  sign-in-then-link recovery (PRD 37) already ships and covers the resulting flow. See audit F1
+  for the full analysis; Phase 19 ([`auth-durability-prd.md`](auth-durability-prd.md)) covers the
+  audit's other findings (F2–F6).
 
 * **YouTube (Google) sign-in & account-linking provider** — Parked for a future sprint, after Phase 15 (Spotify) account linking ships. Phase 15's [`account-signin-linking-prd.md`](account-signin-linking-prd.md) builds the linking + multi-email model **generically**: the `googleYouTube` flag already exists (`lib/auth-flags.ts`, off) and `user_emails.source = 'google_youtube'` is a reserved value. Remaining work: register a Google/YouTube provider in `auth.ts`, wire its read-only scopes + a `music_connections` provider, surface "Connect YouTube / add this email" through the PRD 35 `me/account-links` surface, and add it to the PRD 38 cross-browser test. No new `users` row — the returned email associates to the existing account like Spotify's. `$0`, no writes, Snyk-clean.
 
