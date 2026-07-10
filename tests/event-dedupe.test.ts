@@ -472,6 +472,172 @@ test("merges aliased venue labels but keeps unrelated venues separate", () => {
   assert.equal(getCanonicalEvents([greyEagle, salvage]).length, 2);
 });
 
+test("collapses the Slow Runner pair despite bare 'with' support phrasing", () => {
+  const mountainXListing = event({
+    avlgoEventId: "9ccee219-mx-slow-runner",
+    eventDate: "2026-07-10",
+    eventTime: "7:00 PM",
+    eventTitle: "Slow Runner - Album Release Show w/Whym",
+    eventUrl: "https://mountainx.com/event/slow-runner-album-release-show-w-whym/",
+    id: "9ccee219-mx-slow-runner",
+    imageUrl: "https://mountainx.com/wp-content/uploads/2026/05/slow-runner.jpg",
+    source: "AVLgo live feed: MOUNTAIN_X",
+    startsAt: "2026-07-10T23:00:00.000Z",
+    tags: ["Live Music", "Nightlife", "Album Release", "Singer Songwriter"],
+    venueName: "AyurPrana Listening Room",
+  });
+  const avlTodayListing = event({
+    avlgoEventId: "2a249adb-at-slow-runner",
+    eventDate: "2026-07-10",
+    eventTime: "7:00 PM",
+    eventTitle: "Slow Runner - Album Release Show - with Whym",
+    eventUrl: "https://link.dice.fm/y2d01fc94b2b",
+    id: "2a249adb-at-slow-runner",
+    imageUrl: "https://citysparkstorage.blob.core.windows.net/portalimages/slow-runner.jpg",
+    source: "AVLgo live feed: AVL_TODAY",
+    startsAt: "2026-07-10T23:00:00.000Z",
+    tags: ["Live Music", "Album Release", "Listening Room"],
+    venueName: "AyurPrana Listening Room",
+  });
+
+  const canonical = getCanonicalEvents([avlTodayListing, mountainXListing]);
+  assert.equal(canonical.length, 1);
+  assert.equal(canonical[0].id, "9ccee219-mx-slow-runner");
+});
+
+test("collapses the Afro Rhythm trio when sources disagree on the start time", () => {
+  const exploreFresh = event({
+    avlgoEventId: "af599533-ea-afro-rhythm",
+    eventDate: "2026-07-12",
+    eventTime: "2:00 PM",
+    eventTitle: "Afro Rhythm with Chinobay",
+    eventUrl: "https://www.exploreasheville.com/black-mountain/events/afro-rhythm-chinobay",
+    id: "af599533-ea-afro-rhythm",
+    imageUrl: "https://www.exploreasheville.com/images/afro-rhythm.png",
+    source: "AVLgo live feed: EXPLORE_ASHEVILLE",
+    startsAt: "2026-07-12T18:00:00.000Z",
+    tags: ["Live Music", "Dance", "Afrobeat", "Dance Party"],
+    updatedAt: "2026-07-09T10:35:03.823Z",
+    venueName: "White Horse Black Mountain",
+  });
+  const mountainXLaterTime = event({
+    avlgoEventId: "e6d26172-mx-afro-rhythm",
+    eventDate: "2026-07-12",
+    eventTime: "5:00 PM",
+    eventTitle: "An Evening of Afro Rhythm with Chinobay",
+    eventUrl: "https://mountainx.com/event/an-evening-of-afro-rhythm-with-chinobay/",
+    id: "e6d26172-mx-afro-rhythm",
+    imageUrl: "https://www.avlgo.com/asheville-default.jpg",
+    source: "AVLgo live feed: MOUNTAIN_X",
+    startsAt: "2026-07-12T21:00:00.000Z",
+    tags: ["Live Music", "Afrobeat", "Danceable Grooves"],
+    updatedAt: "2026-07-09T10:35:03.823Z",
+    venueName: "White Horse Black Mountain",
+  });
+  const exploreStale = event({
+    avlgoEventId: "54484a7f-ea-afro-rhythm",
+    eventDate: "2026-07-12",
+    eventTime: "2:00 PM",
+    eventTitle: "An Evening of Afro Rhythm with Chinobay",
+    eventUrl:
+      "https://www.exploreasheville.com/black-mountain/events/evening-afro-rhythm-chinobay",
+    id: "54484a7f-ea-afro-rhythm",
+    imageUrl: "https://www.exploreasheville.com/images/afro-rhythm.png",
+    source: "AVLgo live feed: EXPLORE_ASHEVILLE",
+    startsAt: "2026-07-12T18:00:00.000Z",
+    tags: ["Live Music", "Dance", "Afrobeats", "Dance Party"],
+    updatedAt: "2026-07-05T10:26:28.296Z",
+    venueName: "White Horse Black Mountain",
+  });
+
+  const rows = [exploreFresh, mountainXLaterTime, exploreStale];
+  const canonical = getCanonicalEvents(rows);
+  assert.equal(canonical.length, 1);
+  assert.equal(canonical[0].id, "af599533-ea-afro-rhythm");
+
+  const audit = buildEventDuplicateAudit(rows);
+  assert.equal(audit.length, 1);
+  assert.deepEqual(audit[0].hiddenIds, [
+    "54484a7f-ea-afro-rhythm",
+    "e6d26172-mx-afro-rhythm",
+  ]);
+  assert.ok(
+    audit[0].winnerReasons.includes(
+      "merged: sources disagree on the start time for the same listing"
+    )
+  );
+});
+
+test("keeps series episodes with disjoint featured artists separate", () => {
+  const shared = {
+    eventDate: "2026-07-20",
+    eventTime: "7:00 PM",
+    source: "AVLgo live feed: EXPLORE_ASHEVILLE",
+    startsAt: "2026-07-20T23:00:00.000Z",
+    venueName: "White Horse Black Mountain",
+  };
+  const caryFridley = event({
+    ...shared,
+    eventTitle: "Local Live with Cary Fridley",
+    id: "local-live-cary",
+  });
+  const jennyBradley = event({
+    ...shared,
+    eventTitle: "Local Live with Jenny Bradley",
+    id: "local-live-jenny",
+  });
+  const jayBrown = event({
+    ...shared,
+    eventTitle: "Local Live with Jay Brown",
+    id: "local-live-jay",
+  });
+
+  assert.equal(getCanonicalEvents([caryFridley, jennyBradley, jayBrown]).length, 3);
+});
+
+test("merges relistings whose guest lists overlap even when one names extra acts", () => {
+  const shared = {
+    eventDate: "2026-07-06",
+    eventTime: "7:00 PM",
+    startsAt: "2026-07-06T23:00:00.000Z",
+    venueName: "White Horse Black Mountain",
+  };
+  const short = event({
+    ...shared,
+    eventTitle: "Local Live w/ Jay Brown",
+    id: "local-live-jay-short",
+    source: "AVLgo live feed: EXPLORE_ASHEVILLE",
+  });
+  const long = event({
+    ...shared,
+    eventTitle: "Local Live with Jay Brown with guests Pilar, and Kelley Jane & Kevin Wayne",
+    id: "local-live-jay-long",
+    source: "AVLgo live feed: LIVE_MUSIC_AVL",
+  });
+
+  assert.equal(getCanonicalEvents([short, long]).length, 1);
+});
+
+test("still splits a multi-set night when one source lists conflicting times", () => {
+  const sameSourceEarly = event({
+    eventDate: "2026-07-12",
+    eventTime: "2:00 PM",
+    eventTitle: "Afro Rhythm with Chinobay",
+    id: "afro-same-source-early",
+    source: "AVLgo live feed: MOUNTAIN_X",
+    startsAt: "2026-07-12T18:00:00.000Z",
+    venueName: "White Horse Black Mountain",
+  });
+  const sameSourceLate = event({
+    ...sameSourceEarly,
+    eventTime: "5:00 PM",
+    id: "afro-same-source-late",
+    startsAt: "2026-07-12T21:00:00.000Z",
+  });
+
+  assert.equal(getCanonicalEvents([sameSourceEarly, sameSourceLate]).length, 2);
+});
+
 test("merges a tba copy into the group's single timed cluster and keeps tba-only pairs merged", () => {
   const timed = event({
     eventDate: "2026-07-05",

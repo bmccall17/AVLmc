@@ -53,6 +53,7 @@ type ScoredEvent<EventType extends CanonicalEventRecord> = {
   quality: EventCanonicalQuality;
   startMinuteLabel: string;
   startMinuteOfDay: number | null;
+  guestTokens: Set<string>;
 };
 
 type CanonicalEventGroup<EventType extends CanonicalEventRecord> = {
@@ -98,11 +99,27 @@ const VENUE_ALIAS_KEY_MAP = new Map<string, string>(
   })
 );
 
-// Support-act phrasing that feeds append after the headliner. Bare " and ",
-// "&", and dashes are deliberately excluded: co-bills ("Band A & Band B") key
-// on both acts, and dash suffixes distinguish early/late shows.
+// Support-act phrasing that feeds append after the headliner, including bare
+// "with <opener>" ("An Evening with X" is stripped as a prefix first, so it
+// never keys on "an evening"). Bare " and ", "&", and dashes are deliberately
+// excluded: co-bills ("Band A & Band B") key on both acts, and dash suffixes
+// distinguish early/late shows.
 const SUPPORT_MARKER_PATTERN =
-  /\bw\s*\/|\bfeaturing\b|\bfeat\.?\b|\bft\.?\b|\bwith\s+(?:special\s+)?guests?\b|\bwith\s+support\b|\bplus\s+special\s+guests?\b|\s\+\s/i;
+  /\bw\s*\/|\bfeaturing\b|\bfeat\.?\b|\bft\.?\b|\bwith\b|\bplus\s+special\s+guests?\b|\s\+\s/i;
+
+const EVENING_PREFIX_PATTERN = /^\s*an\s+evening\s+(?:with|of)\s+/i;
+
+// Filler words in a support segment ("with special guests …") that carry no
+// identity; only the remaining act-name tokens decide whether two guest lists
+// describe the same bill.
+const GUEST_STOPWORD_TOKENS = new Set([
+  "and",
+  "friend",
+  "guest",
+  "special",
+  "support",
+  "with",
+]);
 
 export function getCanonicalEvents<EventType extends CanonicalEventRecord>(
   events: EventType[]
@@ -140,34 +157,96 @@ function groupCanonicalEvents<EventType extends CanonicalEventRecord>(
       quality: scoreEventQuality(event),
       startMinuteLabel,
       startMinuteOfDay: minuteLabelToMinuteOfDay(startMinuteLabel),
+      guestTokens: extractGuestTokens(event.eventTitle),
     });
     groups.set(baseKey, candidates);
   }
 
   return Array.from(groups.entries()).flatMap(([baseKey, candidates]) =>
-    clusterByStartTime(candidates).map((cluster) => {
-      const sorted = [...cluster].sort(compareScoredEvents);
-      const [canonical, ...hidden] = sorted;
+    partitionByGuestCompatibility(candidates).flatMap((partition, partitionIndex) =>
+      clusterByStartTime(partition).map((cluster) => {
+        const sorted = [...cluster].sort(compareScoredEvents);
+        const [canonical, ...hidden] = sorted;
 
-      if (!canonical) {
-        throw new Error("Cannot pick a canonical event from an empty group.");
-      }
+        if (!canonical) {
+          throw new Error("Cannot pick a canonical event from an empty group.");
+        }
 
-      const groupKey = buildClusterKey(baseKey, cluster);
-      for (const candidate of cluster) {
-        candidate.groupKey = groupKey;
-      }
+        const groupKey =
+          buildClusterKey(baseKey, cluster) +
+          (partitionIndex > 0 ? `|guests-${partitionIndex}` : "");
+        for (const candidate of cluster) {
+          candidate.groupKey = groupKey;
+        }
 
-      const winnerReasons = describeWinner(canonical, hidden);
-      if (clusterSpansStartTimes(cluster)) {
-        winnerReasons.push(
-          `merged: start times within ${FUZZY_START_WINDOW_MINUTES} minutes across sources`
-        );
-      }
+        const winnerReasons = describeWinner(canonical, hidden);
+        if (clusterSpansStartTimes(cluster)) {
+          winnerReasons.push(describeStartTimeMerge(cluster));
+        }
 
-      return { groupKey, canonical, hidden, winnerReasons };
-    })
+        return { groupKey, canonical, hidden, winnerReasons };
+      })
+    )
   );
+}
+
+// Sub-partitions a (date, venue, headliner) group by the acts named after the
+// support marker. Series episodes like "Local Live with Cary Fridley" vs
+// "Local Live with Jenny Bradley" share a headliner core but name disjoint
+// guests, so they must stay separate; the same show relisted always overlaps
+// on at least one guest name ("w/Whym" vs "- with Whym"). Rows with no guest
+// segment behave like TBA times: they join when only one guested partition
+// exists, otherwise they stay together rather than guessing.
+function partitionByGuestCompatibility<EventType extends CanonicalEventRecord>(
+  candidates: Array<ScoredEvent<EventType>>
+): Array<Array<ScoredEvent<EventType>>> {
+  const wildcard: Array<ScoredEvent<EventType>> = [];
+  const guested: Array<{ tokens: Set<string>; members: Array<ScoredEvent<EventType>> }> = [];
+
+  for (const candidate of candidates) {
+    if (candidate.guestTokens.size === 0) {
+      wildcard.push(candidate);
+      continue;
+    }
+
+    const matches = guested.filter((partition) =>
+      hasTokenOverlap(partition.tokens, candidate.guestTokens)
+    );
+
+    if (matches.length === 0) {
+      guested.push({ tokens: new Set(candidate.guestTokens), members: [candidate] });
+      continue;
+    }
+
+    const [first, ...rest] = matches;
+    first.members.push(candidate);
+    candidate.guestTokens.forEach((token) => first.tokens.add(token));
+    for (const other of rest) {
+      first.members.push(...other.members);
+      other.tokens.forEach((token) => first.tokens.add(token));
+      guested.splice(guested.indexOf(other), 1);
+    }
+  }
+
+  const partitions = guested.map((partition) => partition.members);
+  if (wildcard.length > 0) {
+    if (partitions.length === 1) {
+      partitions[0].push(...wildcard);
+    } else {
+      partitions.push(wildcard);
+    }
+  }
+
+  return partitions;
+}
+
+function hasTokenOverlap(a: Set<string>, b: Set<string>) {
+  for (const token of b) {
+    if (a.has(token)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function getCanonicalEventBaseKey(event: CanonicalEventRecord) {
@@ -181,9 +260,12 @@ function getCanonicalEventBaseKey(event: CanonicalEventRecord) {
 // Chain-clusters a (date, venue, title-core) group by local start time. A timed
 // event joins the current cluster only while it stays within
 // FUZZY_START_WINDOW_MINUTES of the cluster's earliest member (the anchor), so
-// 7:00 + 8:00 merge but 7:00 + 8:15 + 9:30 never collapse into one. TBA events
-// join the group's timed cluster only when exactly one exists; otherwise they
-// stay together as their own cluster rather than guessing.
+// 7:00 + 8:00 merge but 7:00 + 8:15 + 9:30 never collapse into one. The window
+// only applies when a single source lists the same title at conflicting times
+// (a genuine multi-set night); when sources merely disagree with each other on
+// the clock, it is one show with a data error, so the whole group merges. TBA
+// events join the group's timed cluster only when exactly one exists; otherwise
+// they stay together as their own cluster rather than guessing.
 function clusterByStartTime<EventType extends CanonicalEventRecord>(
   candidates: Array<ScoredEvent<EventType>>
 ): Array<Array<ScoredEvent<EventType>>> {
@@ -197,15 +279,20 @@ function clusterByStartTime<EventType extends CanonicalEventRecord>(
   const untimed = candidates.filter((candidate) => candidate.startMinuteOfDay === null);
 
   const clusters: Array<Array<ScoredEvent<EventType>>> = [];
-  let anchorMinute: number | null = null;
 
-  for (const candidate of timed) {
-    const minute = candidate.startMinuteOfDay as number;
-    if (anchorMinute === null || minute - anchorMinute > FUZZY_START_WINDOW_MINUTES) {
-      clusters.push([candidate]);
-      anchorMinute = minute;
-    } else {
-      clusters[clusters.length - 1].push(candidate);
+  if (timed.length > 0 && !hasSameSourceTimeConflict(timed)) {
+    clusters.push([...timed]);
+  } else {
+    let anchorMinute: number | null = null;
+
+    for (const candidate of timed) {
+      const minute = candidate.startMinuteOfDay as number;
+      if (anchorMinute === null || minute - anchorMinute > FUZZY_START_WINDOW_MINUTES) {
+        clusters.push([candidate]);
+        anchorMinute = minute;
+      } else {
+        clusters[clusters.length - 1].push(candidate);
+      }
     }
   }
 
@@ -218,6 +305,20 @@ function clusterByStartTime<EventType extends CanonicalEventRecord>(
   }
 
   return clusters;
+}
+
+function hasSameSourceTimeConflict<EventType extends CanonicalEventRecord>(
+  timed: Array<ScoredEvent<EventType>>
+) {
+  const minutesBySource = new Map<string, Set<number>>();
+
+  for (const candidate of timed) {
+    const minutes = minutesBySource.get(candidate.event.source) ?? new Set<number>();
+    minutes.add(candidate.startMinuteOfDay as number);
+    minutesBySource.set(candidate.event.source, minutes);
+  }
+
+  return Array.from(minutesBySource.values()).some((minutes) => minutes.size > 1);
 }
 
 function buildClusterKey<EventType extends CanonicalEventRecord>(
@@ -233,6 +334,19 @@ function clusterSpansStartTimes<EventType extends CanonicalEventRecord>(
   cluster: Array<ScoredEvent<EventType>>
 ) {
   return new Set(cluster.map((candidate) => candidate.startMinuteLabel)).size > 1;
+}
+
+function describeStartTimeMerge<EventType extends CanonicalEventRecord>(
+  cluster: Array<ScoredEvent<EventType>>
+) {
+  const minutes = cluster
+    .map((candidate) => candidate.startMinuteOfDay)
+    .filter((minute): minute is number => minute !== null);
+  const span = minutes.length > 1 ? Math.max(...minutes) - Math.min(...minutes) : 0;
+
+  return span <= FUZZY_START_WINDOW_MINUTES
+    ? `merged: start times within ${FUZZY_START_WINDOW_MINUTES} minutes across sources`
+    : "merged: sources disagree on the start time for the same listing";
 }
 
 function minuteLabelToMinuteOfDay(label: string) {
@@ -351,7 +465,23 @@ function canonicalVenueKey(value: string) {
 // grouping key. Runs on the raw string because normalizeWords erases the
 // punctuation markers ("w/", "+") this relies on.
 function extractHeadliner(value: string) {
-  let title = value.replace(/^\s*an\s+evening\s+with\s+/i, "");
+  const { headliner } = splitHeadlinerAndGuests(value);
+  return headliner;
+}
+
+// The act names after the support marker, minus filler words. Empty when the
+// title has no support segment (or the marker sits at the very start).
+function extractGuestTokens(value: string) {
+  const { guestSegment } = splitHeadlinerAndGuests(value);
+  return new Set(
+    normalizeWords(guestSegment, { removeArticles: true }).filter(
+      (token) => !GUEST_STOPWORD_TOKENS.has(token)
+    )
+  );
+}
+
+function splitHeadlinerAndGuests(value: string) {
+  let title = value.replace(EVENING_PREFIX_PATTERN, "");
 
   const presentsMatch = title.match(/\bpresents:?\s+(.+)$/i);
   if (presentsMatch) {
@@ -359,8 +489,19 @@ function extractHeadliner(value: string) {
   }
 
   const markerMatch = title.match(SUPPORT_MARKER_PATTERN);
-  const headliner = markerMatch ? title.slice(0, markerMatch.index) : title;
-  return headliner.trim() ? headliner : title;
+  if (markerMatch?.index === undefined) {
+    return { headliner: title, guestSegment: "" };
+  }
+
+  const headliner = title.slice(0, markerMatch.index);
+  if (!headliner.trim()) {
+    return { headliner: title, guestSegment: "" };
+  }
+
+  return {
+    headliner,
+    guestSegment: title.slice(markerMatch.index + markerMatch[0].length),
+  };
 }
 
 function normalizeTitleCore(value: string) {
