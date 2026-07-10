@@ -340,6 +340,138 @@ test("does not chain-collapse a run of shows anchored to the earliest start", ()
   assert.ok(canonical.some((row) => row.id === "spoon-2130"));
 });
 
+test("collapses the Watchhouse trio across venue aliases and support-act titles", () => {
+  const orangePeelListing = event({
+    avlgoEventId: "op-watchhouse",
+    eventDate: "2026-07-18",
+    eventTime: "6:00 PM",
+    eventTitle: "Watchhouse",
+    eventUrl:
+      "https://theorangepeel.net/events/watchhouse-3/hellbender-by-the-orange-peel/2026-07-18/",
+    id: "6d8060c8-op-watchhouse",
+    source: "AVLgo live feed: ORANGE_PEEL",
+    startsAt: "2026-07-18T22:00:00.000Z",
+    venueName: "The Orange Peel",
+  });
+  const mountainXListing = event({
+    avlgoEventId: "mx-watchhouse",
+    eventDate: "2026-07-18",
+    eventTime: "7:00 PM",
+    eventTitle: "Watchhouse w/Fruit Bats",
+    eventUrl: "https://mountainx.com/event/watchhouse-w-fruit-bats/2026-07-18/",
+    id: "2382fc27-mx-watchhouse",
+    source: "AVLgo live feed: MOUNTAIN_X",
+    startsAt: "2026-07-18T23:00:00.000Z",
+    venueName: "Hellbender",
+  });
+  const exploreAshevilleListing = event({
+    avlgoEventId: "ea-watchhouse",
+    eventDate: "2026-07-18",
+    eventTime: "6:00 PM",
+    eventTitle: "Watchhouse with special guests Fruit Bats and Two Runner",
+    eventUrl: "https://www.exploreasheville.com/asheville/events/watchhouse",
+    id: "85742a21-ea-watchhouse",
+    imageUrl: "https://www.exploreasheville.com/images/events/watchhouse.png",
+    source: "AVLgo live feed: EXPLORE_ASHEVILLE",
+    startsAt: "2026-07-18T22:00:00.000Z",
+    tags: ["Live Music", "Americana", "Outdoor Concert"],
+    venueName: "Hellbender",
+  });
+
+  const rows = [orangePeelListing, mountainXListing, exploreAshevilleListing];
+  const canonical = getCanonicalEvents(rows);
+  assert.equal(canonical.length, 1);
+  assert.equal(canonical[0].id, "85742a21-ea-watchhouse");
+
+  const audit = buildEventDuplicateAudit(rows);
+  assert.equal(audit.length, 1);
+  assert.equal(audit[0].canonicalId, "85742a21-ea-watchhouse");
+  assert.deepEqual(audit[0].hiddenIds, [
+    "6d8060c8-op-watchhouse",
+    "2382fc27-mx-watchhouse",
+  ]);
+  assert.ok(
+    audit[0].winnerReasons.includes(
+      `merged: start times within ${FUZZY_START_WINDOW_MINUTES} minutes across sources`
+    )
+  );
+});
+
+test("keys titles on the headliner across support-act and promoter phrasings", () => {
+  const shared = {
+    eventDate: "2026-08-01",
+    eventTime: "8:00 PM",
+    startsAt: "2026-08-02T00:00:00.000Z",
+    venueName: "The Grey Eagle",
+  };
+  const rows = [
+    event({ ...shared, eventTitle: "Big Thief", id: "bt-plain" }),
+    event({ ...shared, eventTitle: "Big Thief w/Buck Meek", id: "bt-w-slash" }),
+    event({ ...shared, eventTitle: "Big Thief featuring Buck Meek", id: "bt-featuring" }),
+    event({
+      ...shared,
+      eventTitle: "Big Thief with special guests Buck Meek and Twain",
+      id: "bt-special-guests",
+    }),
+    event({ ...shared, eventTitle: "An Evening with Big Thief", id: "bt-evening-with" }),
+    event({ ...shared, eventTitle: "AC Entertainment presents Big Thief", id: "bt-presents" }),
+  ];
+
+  assert.equal(getCanonicalEvents(rows).length, 1);
+});
+
+test("keeps co-bills distinct from solo billings", () => {
+  const shared = {
+    eventDate: "2026-08-01",
+    eventTime: "8:00 PM",
+    startsAt: "2026-08-02T00:00:00.000Z",
+    venueName: "The Grey Eagle",
+  };
+  const solo = event({ ...shared, eventTitle: "Band A", id: "band-a-solo" });
+  const coBill = event({ ...shared, eventTitle: "Band A & Band B", id: "band-a-and-b" });
+
+  assert.equal(getCanonicalEvents([solo, coBill]).length, 2);
+});
+
+test("merges aliased venue labels but keeps unrelated venues separate", () => {
+  const hellbender = event({
+    eventDate: "2026-07-19",
+    eventTime: "7:00 PM",
+    eventTitle: "Watchhouse",
+    id: "watchhouse-hellbender",
+    startsAt: "2026-07-19T23:00:00.000Z",
+    venueName: "Hellbender",
+  });
+  const orangePeelLabel = event({
+    ...hellbender,
+    id: "watchhouse-orange-peel",
+    venueName: "The Orange Peel",
+  });
+  const fullAlias = event({
+    ...hellbender,
+    id: "watchhouse-full-alias",
+    venueName: "Hellbender by The Orange Peel",
+  });
+
+  assert.equal(
+    getCanonicalEvents([hellbender, orangePeelLabel, fullAlias]).length,
+    1
+  );
+
+  const greyEagle = event({
+    ...hellbender,
+    id: "watchhouse-grey-eagle",
+    venueName: "The Grey Eagle",
+  });
+  const salvage = event({
+    ...hellbender,
+    id: "watchhouse-salvage",
+    venueName: "Salvage Station",
+  });
+
+  assert.equal(getCanonicalEvents([greyEagle, salvage]).length, 2);
+});
+
 test("merges a tba copy into the group's single timed cluster and keeps tba-only pairs merged", () => {
   const timed = event({
     eventDate: "2026-07-05",

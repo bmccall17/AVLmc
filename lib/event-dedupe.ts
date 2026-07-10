@@ -69,6 +69,41 @@ const GENERIC_TITLE_SUFFIXES = new Set(["band", "show", "event", "concert"]);
 const GENERIC_TAGS = new Set(["live music", "music", "event", "events", "nightlife"]);
 const ARTICLE_WORDS = new Set(["a", "an", "the"]);
 
+// Each group lists venue strings that name the same physical room across
+// upstream feeds (room name vs building name vs promoter label). The first
+// entry is the canonical label; matching happens on normalizeVenueKey output,
+// so punctuation/article/plural variants of any alias also resolve. Keep this
+// table explicit — no fuzzy matching — to avoid over-merging venues that
+// merely share a word.
+const VENUE_ALIAS_GROUPS: string[][] = [
+  ["Hellbender by The Orange Peel", "Hellbender", "The Orange Peel", "115 Thompson Street"],
+  ["The Grey Eagle", "The Grey Eagle Music Hall and Pub"],
+  ["Wicked Weed Brewing", "Wicked Weed Brewing's Brewpub"],
+  ["The Funkatorium", "Wicked Weed Funkatorium"],
+  ["WNC Nature Center", "75 Gashes Creek Rd"],
+  ["NC Arboretum", "Baker Event Lawn"],
+  ["Center For Spiritual Living Asheville", "Community Commons at CSL Ashevill"],
+  ["Grovemont Park", 'Grovemont Park (aka "Grovemont Square")', "Friends of Grovemont Park"],
+  ["The Mule", "The Mule at Devil's Foot Beverage"],
+  ["One World Brewing", "One World Brewing Downtown"],
+  ["Hendersonville Main Street", "South Main Street Hendersonville"],
+  ["Pack Square Park", "Bascom Lamar Lunsford Stage"],
+  ["AyurPrana Listening Room", "312 Haywood Road"],
+];
+
+const VENUE_ALIAS_KEY_MAP = new Map<string, string>(
+  VENUE_ALIAS_GROUPS.flatMap((group) => {
+    const canonicalKey = normalizeVenueKey(group[0]);
+    return group.map((alias): [string, string] => [normalizeVenueKey(alias), canonicalKey]);
+  })
+);
+
+// Support-act phrasing that feeds append after the headliner. Bare " and ",
+// "&", and dashes are deliberately excluded: co-bills ("Band A & Band B") key
+// on both acts, and dash suffixes distinguish early/late shows.
+const SUPPORT_MARKER_PATTERN =
+  /\bw\s*\/|\bfeaturing\b|\bfeat\.?\b|\bft\.?\b|\bwith\s+(?:special\s+)?guests?\b|\bwith\s+support\b|\bplus\s+special\s+guests?\b|\s\+\s/i;
+
 export function getCanonicalEvents<EventType extends CanonicalEventRecord>(
   events: EventType[]
 ): EventType[] {
@@ -138,7 +173,7 @@ function groupCanonicalEvents<EventType extends CanonicalEventRecord>(
 function getCanonicalEventBaseKey(event: CanonicalEventRecord) {
   return [
     event.eventDate,
-    normalizeVenueKey(event.venueName),
+    canonicalVenueKey(event.venueName),
     normalizeTitleCore(event.eventTitle),
   ].join("|");
 }
@@ -306,8 +341,30 @@ function normalizeVenueKey(value: string) {
   return normalizeWords(value, { removeArticles: true }).join(" ");
 }
 
+function canonicalVenueKey(value: string) {
+  const key = normalizeVenueKey(value);
+  return VENUE_ALIAS_KEY_MAP.get(key) ?? key;
+}
+
+// Reduces a raw title to its headliner segment so lineup phrasing appended by
+// some feeds ("w/Fruit Bats", "with special guests …") doesn't split the
+// grouping key. Runs on the raw string because normalizeWords erases the
+// punctuation markers ("w/", "+") this relies on.
+function extractHeadliner(value: string) {
+  let title = value.replace(/^\s*an\s+evening\s+with\s+/i, "");
+
+  const presentsMatch = title.match(/\bpresents:?\s+(.+)$/i);
+  if (presentsMatch) {
+    title = presentsMatch[1];
+  }
+
+  const markerMatch = title.match(SUPPORT_MARKER_PATTERN);
+  const headliner = markerMatch ? title.slice(0, markerMatch.index) : title;
+  return headliner.trim() ? headliner : title;
+}
+
 function normalizeTitleCore(value: string) {
-  const tokens = normalizeWords(value, { removeArticles: true });
+  const tokens = normalizeWords(extractHeadliner(value), { removeArticles: true });
 
   while (tokens.length > 0) {
     const last = tokens[tokens.length - 1];
