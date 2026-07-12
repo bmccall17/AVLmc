@@ -31,7 +31,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 17 | [Open Spotify Access (Epic)](spotify-access-prd.md) | C1–C4 shipped (Jul 2, 2026); **seat-free taste import shipped (Jul 4, 2026)** as the practical exit ramp — listeners import taste from an uploaded playlist export with no allowlist seat, since Extended Quota is now effectively closed (Spotify's Apr-2025 ~250k-MAU / registered-business rule) | Any listener with an active Spotify account can sign in, connect, and have their taste persistently feed discovery — one account per person, no dead ends. While Spotify's 25-seat Development Mode cap applies: capture sign-in intent at the exact moment it's expressed (pre-redirect chooser + gate, anonymous `tester_requests` capture with owner notification + invite loop), auto-link the two email-verified doors onto one identity, and file the Extended Quota exit ramp so the gate retires with one `SPOTIFY_OPEN_ACCESS` flag flip. `$0`, read-only scopes, no Spotify writes. PRDs 42–45 across four cycles. |
 | 18 | [Cross-Source Duplicate Event Unification](prds/prd-06-cross-source-duplicate-unification.md) | Shipped (Jul 3, 2026) | Collapse cross-source copies of the same show (doors-vs-showtime listings, e.g. the Spoon @ Orange Peel pair) into one canonical card via fuzzy time bucketing in `lib/event-dedupe.ts`, while keeping legitimate same-night repeats and distinctly titled early/late shows separate. Pure read-path change; `$0`. |
 | 19 | [Auth Durability Hardening (Epic)](auth-durability-prd.md) | Planned | Harden the passing auth system against the failure modes the [July 8 auth durability audit](auth-durability-audit-2026-07-08.md) found (F2–F6): no post-sign-in side effect can fail a successful sign-in (F2); expired magic links and Google OAuth failures recover through the *right* door instead of Spotify-beta copy (F3+F4); in-app webviews, local dev, and preview deploys get honest, working sign-in guidance (F5+F6). F1 (Spotify unverified-email auto-link) deliberately parked in `backlog.md` with a hard pre-open-access trigger. `$0`, no schema changes, failure-paths only. PRDs 47–49 across three cycles. |
-| 20 | [Cost Containment & Scale Readiness (Epic)](cost-containment-prd.md) | C1–C2 Shipped (Jul 12, 2026); C3 open | Make cost bounded and observable before the end-of-2026 traffic ramp, per the [July 11 audit](cost-containment-prd.md#appendix-a--evidence-base-july-11-2026-audit) + [July 12 re-audit](cost-containment-prd.md#appendix-b--july-12-2026-code-re-audit-refinements): defuse the traffic-independent cost bombs (unauth `/api/sync/*`, open `/_next/image` proxy, unbounded ingest, render-path scrape fallback), decouple read cost from pageviews (cached reads + static shell + Neon pooled scale-to-zero), then guardrails (write rate limits, edge bot controls, lean CI, transactional `db:apply`). No listener-visible change; every item a cost reduction or cap, never a new paid service. `$0`. PRDs 50–52 across three cycles ([ADR 002](adrs/0002-decouple-read-cost-from-traffic.md) + [ADR 003](adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md)). |
+| 20 | [Cost Containment & Scale Readiness (Epic)](cost-containment-prd.md) | C1–C3 Shipped (Jul 12, 2026) — epic complete | Make cost bounded and observable before the end-of-2026 traffic ramp, per the [July 11 audit](cost-containment-prd.md#appendix-a--evidence-base-july-11-2026-audit) + [July 12 re-audit](cost-containment-prd.md#appendix-b--july-12-2026-code-re-audit-refinements): defuse the traffic-independent cost bombs (unauth `/api/sync/*`, open `/_next/image` proxy, unbounded ingest, render-path scrape fallback), decouple read cost from pageviews (cached reads + static shell + Neon pooled scale-to-zero), then guardrails (write rate limits, edge bot controls, lean CI, transactional `db:apply`). No listener-visible change; every item a cost reduction or cap, never a new paid service. `$0`. PRDs 50–52 across three cycles ([ADR 002](adrs/0002-decouple-read-cost-from-traffic.md) + [ADR 003](adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md)). |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
@@ -588,7 +588,7 @@ unchanged, the canonical keeps its own start time, and fuzzy merges surface in t
 with a `merged: start times within 90 minutes across sources` reason. Verified against the live prod
 rows; regression-locked by a real-fixture test. DB cleanup of hidden loser rows stays a later phase.
 
-### Phase 20: Cost Containment & Scale Readiness (C1–C2 shipped Jul 12, 2026; C3 open)
+### Phase 20: Cost Containment & Scale Readiness (C1–C3 shipped Jul 12, 2026 — epic complete)
 
 An infrastructure/cost-hardening epic tracked by
 [Cost Containment & Scale Readiness (Epic)](cost-containment-prd.md). Driven by the July 11, 2026
@@ -605,7 +605,7 @@ dependency-sequenced cycle PRDs, each independently shippable:
 | --- | --- | --- | --- | --- |
 | C1 | [PRD 50 — Defuse the Cost Bombs](prds/prd-50-defuse-cost-bombs.md) | Authenticate every compute trigger, close the open image proxy, bound ingest, kill the render-path scrape fallback, turn on spend/usage alerts. | [003](adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md) | **Shipped (Jul 12, 2026)** |
 | C2 | [PRD 51 — Decouple Read Cost from Traffic](prds/prd-51-decouple-read-cost.md) | Cached event reads invalidated by the cron + static shell with dynamic islands + anonymous/personalized payload split + Neon pooled scale-to-zero. | [002](adrs/0002-decouple-read-cost-from-traffic.md) | **Shipped (Jul 12, 2026)** |
-| C3 | [PRD 52 — Guardrails so Growth Stays Cheap](prds/prd-52-cost-guardrails.md) | Rate-limit + honeypot public writes, edge bot controls, a lean CI gate, transactional automated `db:apply`. | [003](adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md) | Planned |
+| C3 | [PRD 52 — Guardrails so Growth Stays Cheap](prds/prd-52-cost-guardrails.md) | Rate-limit + honeypot public writes, edge bot controls, a lean CI gate, transactional automated `db:apply`. | [003](adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md) | **Shipped (Jul 12, 2026)** |
 
 Build order **C1 → C2 → C3** (C1's findings cost money at zero users; C2 is the structural lever and
 wants C1's clean traffic; C3's throttles want C2's cache in place and its CI gate locks everything
@@ -642,6 +642,25 @@ observed suspended ~5 min after last activity — its first idle window — and 
 payloads with empty personalization containers, healthy crons, and zero runtime errors.
 `test:events-cache` (8 tests) + all suites, typecheck, lint, build, readability smoke green;
 Snyk-clean; $0.
+
+**C3 shipped (Jul 12, 2026):** growth stays cheap. A shared sliding-window limiter
+(`lib/write-rate-limit.ts`, reusing the tested helpers from `lib/tester-requests-core.ts`) now
+guards all seven public write routes over an IP + optional identity dimension, checked before the
+body is parsed — the Nth write in a 10-minute window returns 429; `feedback` gained the `website`
+honeypot, and the `contributions` limiter's new IP dimension survives a cleared cookie (the durable
+session check in `lib/community.ts` is untouched). A **lean CI gate** (`.github/workflows/ci.yml`)
+runs typecheck, lint, all 30 pure-node suites, and the readability smoke on every push to `main` and
+PRs — single job, docs path-filtered, cancel-in-progress, npm + Playwright caches, no `next build`;
+first run green (Node pinned to 24 to match the runtime). `scripts/apply-schema.ts` is now
+**transactional** (`BEGIN`/`COMMIT`/`ROLLBACK`; rollback proven on a throwaway Neon branch) and runs
+automatically via a gated `db-apply` CI job on green `main` pushes (direct endpoint, via the
+`MIGRATION_DATABASE_URL` secret — first automated run applied 28 tables cleanly). Edge bot controls:
+the Vercel WAF `rate_limit` action is Pro-gated, so two **log-mode** observation rules are staged for
+the owner to publish; the in-repo limiter is the active write protection (ADR 003 amendment 4).
+`test:write-rate-limits` (10) + all suites, typecheck, lint, readability smoke green; Snyk-clean; $0.
+Remaining owner steps (deployed limiter smoke; CI red-push proof; WAF publish) tracked in
+`backlog.md` → Urgent. **This completes the Cost Containment & Scale Readiness epic (Phase 20,
+C1–C3).**
 
 ## Scaling Milestones & Tracking
 

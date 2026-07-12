@@ -2,16 +2,19 @@
 
 Updated: July 12, 2026
 
-**Status: C1–C2 shipped (Jul 12, 2026); C3 open.** Decomposed into three dependency-sequenced
-cycles (C1–C3), each promoted to a numbered cycle PRD on July 12, 2026 (per the numbering
-reservation below):
+**Status: C1–C3 shipped (Jul 12, 2026) — the epic is complete.** Decomposed into three
+dependency-sequenced cycles (C1–C3), each promoted to a numbered cycle PRD on July 12, 2026 (per
+the numbering reservation below):
 [PRD 50 — Defuse the Cost Bombs](prds/prd-50-defuse-cost-bombs.md) (**shipped Jul 12, 2026** —
 see the C1 build record below; post-deploy smoke + spend/usage-alert dashboard steps remain
 owner actions, tracked in `backlog.md`),
 [PRD 51 — Decouple Read Cost from Traffic](prds/prd-51-decouple-read-cost.md) (**shipped
 Jul 12, 2026** — verification pass run against production the same day; see the C2 verification
 record below),
-[PRD 52 — Guardrails so Growth Stays Cheap](prds/prd-52-cost-guardrails.md). The cycle PRDs are the
+[PRD 52 — Guardrails so Growth Stays Cheap](prds/prd-52-cost-guardrails.md) (**shipped
+Jul 12, 2026** — limiters + honeypot on every write route, transactional `db:apply` automated in a
+lean CI gate; see the C3 build record below. Deployed-limiter smoke, CI red-push proof, and WAF
+publish remain owner actions, tracked in `backlog.md`). The cycle PRDs are the
 build documents; this epic remains the umbrella (posture, sequencing, success criteria, evidence).
 A **July 12 code re-audit** independently confirmed every Appendix A finding still live and added
 four refinements, folded into the cycle PRDs and Appendix B.
@@ -107,7 +110,7 @@ not architecture — no ADR; specified directly in C3.
 | --- | --- | --- | --- | --- | --- | --- |
 | **C1 — Defuse the Cost Bombs** | [PRD 50](prds/prd-50-defuse-cost-bombs.md) | Authenticate every compute trigger, close the open image proxy, bound image ingest, cap the heavy sync jobs, kill the render-path scrape fallback (pulled forward from C2), and turn on spend/usage alerts. | Traffic-independent (1) + safety net | 0003 | ~2–3 days (all S) | **Shipped (Jul 12, 2026)** |
 | **C2 — Decouple Read Cost from Traffic** | [PRD 51](prds/prd-51-decouple-read-cost.md) | Cache event reads + invalidate from the cron; serve the public pages as a static shell with dynamic islands; split the anonymous payload from the signed-in personalization maps; move Neon to the pooled scale-to-zero endpoint. | Linear scaling (2) | 0002 | ~3–5 days (M) | **Shipped (Jul 12, 2026)** |
-| **C3 — Guardrails so Growth Stays Cheap** | [PRD 52](prds/prd-52-cost-guardrails.md) | Rate-limit + honeypot public writes, add edge bot controls on hot/dynamic + `/_next/image` routes, add a **lean** CI gate, and automate a transactional `db:apply`. | Guardrails (3) | 0003 (rate limits) | ~3–5 days (M) | Planned |
+| **C3 — Guardrails so Growth Stays Cheap** | [PRD 52](prds/prd-52-cost-guardrails.md) | Rate-limit + honeypot public writes, add edge bot controls on hot/dynamic + `/_next/image` routes, add a **lean** CI gate, and automate a transactional `db:apply`. | Guardrails (3) | 0003 (rate limits) | ~3–5 days (M) | **Shipped (Jul 12, 2026)** |
 
 > **Scope moves (July 12, 2026):** the render-path-sync removal moved **C2 → C1** (the
 > `getEventById` bogus-id fallback is a single-actor cost lever, same class as the unauth sync
@@ -330,6 +333,41 @@ guarantee in this epic is regression-locked by an automated — and *itself chea
 **C3 Definition of Done:** public writes are IP-throttled and honeypot-guarded; bots are refused at
 the edge on the metered routes; CI gates `main` on typecheck/lint/affected-tests and is demonstrably
 lean (path-filtered, cancel-in-progress); `db:apply` is transactional and runs in deploy.
+
+**C3 build record (July 12, 2026).** Shipped across commits `63eba03` (W1 limiter + honeypot),
+`43b37d0` (W4 transactional `db:apply`), `5a8a6ad` (W3 CI + `.gitattributes`), `ae88f2c` (CI Node 24
++ blob-guard keepalive fix). Facts a future maintainer needs:
+
+- **Every public write route is throttled by one shared limiter** (`lib/write-rate-limit.ts`),
+  checked before body parse, over an IP dimension + an optional identity (session/user) dimension:
+  `feedback` 5, `contributions` 5 IP + 5 session, `reactions` 30, `ticket-intents` 20,
+  `event-action` 120 (telemetry-shaped), `spotify-match-correction` 10, `avatar` 5 (per 10-min
+  window). The IP dimension on `contributions` is the cookie-clear fix — the durable session check
+  in `lib/community.ts` is untouched. `feedback` gained the `website` honeypot. **Accepted
+  limitation (ADR 003 amendment 4):** the limiter is in-memory per warm instance — free, effective
+  under Fluid Compute reuse; the WAF rules are the intended cross-instance layer.
+- **The edge cross-instance throttle is deferred by plan tier.** The Vercel WAF `rate_limit` action
+  is **Pro-only** (the API refused it on the Hobby team: "Rate limiting is not available for this
+  plan") — the same tier pattern as the C1 spend alerts. Two **log-mode** observation rules are
+  staged as drafts ("Observe: API POSTs", "Observe: /_next/image") for the owner to publish; the
+  escalation path is a plan upgrade (unlocks `rate_limit`) or Vercel BotID (free basic tier, code
+  integration). Recorded so the "edge-refused on metered routes" success criterion is honestly
+  qualified: today the in-repo limiter carries it, with the edge as the observed-then-enforced layer.
+- **CI is live and green** (`.github/workflows/ci.yml`): `checks` (typecheck, lint, 30 pure-node
+  suites, readability smoke) ran 3m06s; `db-apply` ran 27s. Node pinned to 24 to match local +
+  Vercel; a Node-20 event-loop quirk cancelled the blob-guard abort test on the first run and was
+  fixed (`ae88f2c`). No `next build` step (Vercel builds every push). Measure GitHub minutes in the
+  first week (the "lean" requirement).
+- **`db:apply` is transactional and automated.** `scripts/apply-schema.ts` wraps the batch in
+  `BEGIN`/`COMMIT`/`ROLLBACK`; rollback proven on a throwaway Neon branch (bad statement mid-file →
+  exit 1, new table absent). The CI `db-apply` job runs it on green `main` pushes against the direct
+  endpoint via the **`MIGRATION_DATABASE_URL` repo secret** (added by the owner Jul 12; first
+  automated run: "✓ applied db/schema.sql → 28 public tables, 0 errors"). The Health tab's
+  schema-drift probe remains the detection backstop.
+- **Remaining owner steps (date here when done):** deployed limiter smoke (6 rapid POSTs to
+  `/api/feedback` → 429; populated `website` → 400); CI red-push proof (deliberately failing branch
+  blocks → revert; docs-only push skips); `vercel firewall publish` for the staged rules, then
+  observe 3–7 days before any tighten.
 
 ---
 

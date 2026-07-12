@@ -49,9 +49,25 @@ Updated: July 12, 2026
      [`cost-containment-prd.md`](cost-containment-prd.md) C1 build record as **mandatory
      day-one actions on any plan upgrade**.
 
-* _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. **Active build focus is
-  Phase 20 (Cost Containment — C1–C2/PRDs 50–51 shipped Jul 12, 2026; next PRD 52)**, plus the
-  owner actions above and the Personalized Discovery follow-ups tracked in
+* **Finish the PRD 52 guardrails proofs (owner actions, ~15 minutes).** The code shipped
+  Jul 12, 2026 (commits `63eba03`/`43b37d0`/`5a8a6ad`/`ae88f2c`) and CI is live and green (the
+  `db-apply` job already applied prod schema via the `MIGRATION_DATABASE_URL` secret). Three proofs
+  remain:
+  1. **Deployed limiter smoke:** 6 rapid `curl -X POST https://avlmc.vercel.app/api/feedback`
+     (JSON `{"message":"…"}`) from one IP → the 6th returns **429**; a body with
+     `{"website":"x"}` → **400**. Date the result in the epic's C3 build record.
+  2. **CI red-push proof:** push a deliberately failing branch/commit once → confirm the workflow
+     blocks → revert; confirm a docs-only push is skipped (path filter) and a rapid second push
+     cancels the first run.
+  3. **`vercel firewall publish`** the two staged log-mode observation rules ("Observe: API POSTs",
+     "Observe: /_next/image") after reviewing `vercel firewall diff`; observe 3–7 days
+     (`vc metrics vercel.firewall_action.count --group-by waf_action`) before any tighten. Note:
+     the WAF `rate_limit` action is Pro-gated, so the edge throttle waits on a plan upgrade or
+     Vercel BotID — the in-repo limiter is the active protection meanwhile.
+
+* _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. **Phase 20 (Cost
+  Containment — PRDs 50–52 / C1–C3) shipped Jul 12, 2026; the epic is complete** (owner proofs above).
+  Next build focus is unset — run `/orchestrator`. Personalized Discovery follow-ups remain tracked in
   [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
 
 ## Planned Next / Up Next
@@ -64,8 +80,10 @@ Updated: July 12, 2026
   [PRD 51 (decouple read cost from traffic)](prds/prd-51-decouple-read-cost.md) — **shipped
   Jul 12, 2026** (verification pass run against production the same day: Neon compute now idles,
   anonymous views cost zero DB queries — see the epic's C2 verification record) →
-  [PRD 52 (guardrails: rate limits, bot controls, lean CI, transactional `db:apply`)](prds/prd-52-cost-guardrails.md) — **next up**.
-  `$0`, no listener-visible change, no new heavy compute.
+  [PRD 52 (guardrails: rate limits, bot controls, lean CI, transactional `db:apply`)](prds/prd-52-cost-guardrails.md) — **shipped
+  Jul 12, 2026** (limiters + honeypot on every write route, transactional `db:apply` automated in a
+  lean CI gate; WAF `rate_limit` Pro-gated so edge rules staged log-mode; owner proofs in Urgent above).
+  **The epic is complete (C1–C3).** `$0`, no listener-visible change, no new heavy compute.
 
 - **Aiven decommission is past its trigger (scheduled for on/after June 23; it's July 12).** See the
   Scheduled section below — Neon has been prod-stable for ~4 weeks; run the retirement checklist

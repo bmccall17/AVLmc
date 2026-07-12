@@ -30,7 +30,50 @@ suites, and `db:apply` is manual + non-transactional — the recurring schema-dr
 
 ## Implementation Status
 
-**Planned.**
+**Shipped (Jul 12, 2026).** Delivered:
+
+- **Shared write rate limiter + honeypot** — `lib/write-rate-limit.ts` (`createWriteRateLimiter`,
+  `getClientIp`, `honeypotTripped`, `RATE_LIMIT_MESSAGE`) reuses the pure sliding-window helpers from
+  `lib/tester-requests-core.ts`. Wired into all seven public write routes, checked before body parse:
+  `feedback` (5/IP), `community/reactions` (30), `community/contributions` (5 IP + 5 session —
+  the IP dimension is the cookie-clear fix; `lib/community.ts`'s session DB check is untouched),
+  `community/ticket-intents` (20), `discovery/event-action` (120, telemetry-shaped),
+  `discovery/spotify-match-correction` (10), `me/avatar` (5 IP + 5 user — the 429 lands before the
+  4 MB read + Blob `put`). Nth write in the 10-min window → **429** with a friendly retry message.
+  The `website` honeypot was added to `feedback` (route check + hidden field in `FeedbackForm.tsx`),
+  and the two inline `x-forwarded-for` copies in `tester-requests`/`spotify-gate` now share
+  `getClientIp`. In-memory per-instance by design (ADR 003 amendment 4 accepted limitation).
+- **Edge bot controls (staged, log-mode).** Two Vercel WAF observation rules staged as drafts
+  ("Observe: API POSTs", "Observe: /_next/image", both `action: log`). **The `rate_limit` WAF
+  action turned out to be Pro-gated** (the API rejected it on Hobby: "Rate limiting is not available
+  for this plan"), so the cross-instance edge throttle is deferred to a plan upgrade or Vercel BotID;
+  the in-repo limiter above is the active write protection, exactly as ADR 003 designed. Owner
+  publishes (`vercel firewall publish`) after reviewing `vercel firewall diff`.
+- **Lean CI** — `.github/workflows/ci.yml`: a single `checks` job on push to `main` + PRs runs
+  `typecheck`, `lint`, all 30 pure-node suites, then the readability smoke (chromium, last — a red
+  unit suite never pays the browser install). `paths-ignore` for `docs/**` + `**.md`,
+  `concurrency` cancel-in-progress, npm + Playwright caches, no `next build` (Vercel builds every
+  push). A gated `db-apply` job (see below) runs on green `main` pushes. `.gitattributes` normalizes
+  to LF so `test:registry`'s byte-exact map compare can't fail on a CRLF checkout. Node pinned to 24
+  (matches local + Vercel runtime). **First run green** (`checks` 3m06s + `db-apply` 27s).
+- **Transactional `db:apply`** — `scripts/apply-schema.ts` wraps the schema batch in explicit
+  `BEGIN`/`COMMIT` with best-effort `ROLLBACK` on error (exit 1 preserved); the sanity table-count
+  now runs pre-commit. Proven on a throwaway Neon branch: happy path applied 28 tables, and a
+  doctored copy with a bad statement mid-file exited 1 and left the new table absent — no partial
+  schema. The CI `db-apply` job then ran it for real against prod (direct endpoint via the
+  `MIGRATION_DATABASE_URL` secret): "✓ applied db/schema.sql → 28 public tables, 0 errors."
+- **Tests** — `tests/write-rate-limits.test.ts` (`test:write-rate-limits`, 10): Nth-write 429,
+  sliding-window expiry, route isolation, the cookie-rotation-still-IP-limited case, identity
+  dimension across IPs, no cross-dimension recording, `getClientIp` parsing, the honeypot matrix,
+  and a source scan locking the wiring on all seven routes + the feedback honeypot. Registered a
+  `svc-write-rate-limit` node; system map regenerated. All suites + typecheck + lint green; touched
+  files Snyk-clean; `$0`, no new dependencies.
+
+**Remaining (owner, dated in the epic when done):** the deployed limiter smoke (6 rapid POSTs to
+`/api/feedback` → 429; populated `website` → 400); the CI red-push proof (push a deliberately failing
+branch once → workflow blocks → revert, and confirm a docs-only push skips); and
+`vercel firewall publish` for the two staged observation rules, then observe 3–7 days before any
+tighten. Tracked in `backlog.md` → Urgent.
 
 ## Requirements
 
