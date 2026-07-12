@@ -32,7 +32,7 @@ work and to stop payload egress scaling with event volume × signal maps.
 
 ## Implementation Status
 
-**Built (Jul 12, 2026) — owner verification pass pending.** Delivered:
+**Shipped.** (Jul 12, 2026 — built and verified same day.) Delivered:
 
 - **Cached event reads** — `lib/event-read-cache.ts` (pure wiring: day-keyed reads + per-view
   started-events filter so output matches the uncached query) injected with `unstable_cache` in
@@ -62,9 +62,14 @@ work and to stop payload egress scaling with event volume × signal maps.
   through the cache. All suites, typecheck, lint, build, readability smoke (18) green; touched
   files Snyk-clean.
 
-**Remaining (owner, dated in the epic when done):** the PRD's verification pass — on a preview
-deploy, `/` twice → no event DB queries on the second load (Vercel logs); Neon compute shows an
-idle/suspended window during a no-traffic gap.
+**Verification pass (Jul 12, 2026) — passed against production** (deployment `dpl_ABiD1xZD`,
+commit `9a85057`); full evidence in the epic's C2 verification record. Highlights: Neon prod
+compute observed **suspended** (~5 min after last activity — the first idle window this branch
+has had); anonymous board loads returned byte-identical 200s with calibrated
+`pg_stat_database` counters showing **zero event DB queries per anonymous view** once the cache
+is warm (5 loads → ~4 background transactions, 10 loads → ~3 — time-correlated noise, not
+per-load); personalization containers serialize empty in the anonymous payload; crons healthy;
+zero runtime errors/warnings on the deployment.
 
 ## Requirements
 
@@ -124,9 +129,10 @@ idle/suspended window during a no-traffic gap.
   (assert on the serialized props/HTML); a signed-in render still receives them.
 - `test:registry` green (regenerate the system map if any node's notes change);
   readability smoke (`playwright.smoke.config.ts`) green against the now-static board.
-- **Verification pass (owner, dated in the epic):** on a preview deploy, load `/` twice → Vercel
-  logs show no event DB queries on the second load (cache hit); Neon shows an idle/suspended
-  compute window during a no-traffic gap. This is the epic's core proof.
+- **Verification pass (owner, dated in the epic):** load `/` twice → no event DB queries on the
+  second load; Neon shows an idle/suspended compute window during a no-traffic gap. This is the
+  epic's core proof. **Completed Jul 12, 2026 against production** — see the C2 verification
+  record in the epic.
 
 ## Risks
 

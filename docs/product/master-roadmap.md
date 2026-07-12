@@ -31,7 +31,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 17 | [Open Spotify Access (Epic)](spotify-access-prd.md) | C1–C4 shipped (Jul 2, 2026); **seat-free taste import shipped (Jul 4, 2026)** as the practical exit ramp — listeners import taste from an uploaded playlist export with no allowlist seat, since Extended Quota is now effectively closed (Spotify's Apr-2025 ~250k-MAU / registered-business rule) | Any listener with an active Spotify account can sign in, connect, and have their taste persistently feed discovery — one account per person, no dead ends. While Spotify's 25-seat Development Mode cap applies: capture sign-in intent at the exact moment it's expressed (pre-redirect chooser + gate, anonymous `tester_requests` capture with owner notification + invite loop), auto-link the two email-verified doors onto one identity, and file the Extended Quota exit ramp so the gate retires with one `SPOTIFY_OPEN_ACCESS` flag flip. `$0`, read-only scopes, no Spotify writes. PRDs 42–45 across four cycles. |
 | 18 | [Cross-Source Duplicate Event Unification](prds/prd-06-cross-source-duplicate-unification.md) | Shipped (Jul 3, 2026) | Collapse cross-source copies of the same show (doors-vs-showtime listings, e.g. the Spoon @ Orange Peel pair) into one canonical card via fuzzy time bucketing in `lib/event-dedupe.ts`, while keeping legitimate same-night repeats and distinctly titled early/late shows separate. Pure read-path change; `$0`. |
 | 19 | [Auth Durability Hardening (Epic)](auth-durability-prd.md) | Planned | Harden the passing auth system against the failure modes the [July 8 auth durability audit](auth-durability-audit-2026-07-08.md) found (F2–F6): no post-sign-in side effect can fail a successful sign-in (F2); expired magic links and Google OAuth failures recover through the *right* door instead of Spotify-beta copy (F3+F4); in-app webviews, local dev, and preview deploys get honest, working sign-in guidance (F5+F6). F1 (Spotify unverified-email auto-link) deliberately parked in `backlog.md` with a hard pre-open-access trigger. `$0`, no schema changes, failure-paths only. PRDs 47–49 across three cycles. |
-| 20 | [Cost Containment & Scale Readiness (Epic)](cost-containment-prd.md) | C1 Shipped (Jul 12, 2026); C2–C3 open | Make cost bounded and observable before the end-of-2026 traffic ramp, per the [July 11 audit](cost-containment-prd.md#appendix-a--evidence-base-july-11-2026-audit) + [July 12 re-audit](cost-containment-prd.md#appendix-b--july-12-2026-code-re-audit-refinements): defuse the traffic-independent cost bombs (unauth `/api/sync/*`, open `/_next/image` proxy, unbounded ingest, render-path scrape fallback), decouple read cost from pageviews (cached reads + static shell + Neon pooled scale-to-zero), then guardrails (write rate limits, edge bot controls, lean CI, transactional `db:apply`). No listener-visible change; every item a cost reduction or cap, never a new paid service. `$0`. PRDs 50–52 across three cycles ([ADR 002](adrs/0002-decouple-read-cost-from-traffic.md) + [ADR 003](adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md)). |
+| 20 | [Cost Containment & Scale Readiness (Epic)](cost-containment-prd.md) | C1–C2 Shipped (Jul 12, 2026); C3 open | Make cost bounded and observable before the end-of-2026 traffic ramp, per the [July 11 audit](cost-containment-prd.md#appendix-a--evidence-base-july-11-2026-audit) + [July 12 re-audit](cost-containment-prd.md#appendix-b--july-12-2026-code-re-audit-refinements): defuse the traffic-independent cost bombs (unauth `/api/sync/*`, open `/_next/image` proxy, unbounded ingest, render-path scrape fallback), decouple read cost from pageviews (cached reads + static shell + Neon pooled scale-to-zero), then guardrails (write rate limits, edge bot controls, lean CI, transactional `db:apply`). No listener-visible change; every item a cost reduction or cap, never a new paid service. `$0`. PRDs 50–52 across three cycles ([ADR 002](adrs/0002-decouple-read-cost-from-traffic.md) + [ADR 003](adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md)). |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
 
@@ -588,7 +588,7 @@ unchanged, the canonical keeps its own start time, and fuzzy merges surface in t
 with a `merged: start times within 90 minutes across sources` reason. Verified against the live prod
 rows; regression-locked by a real-fixture test. DB cleanup of hidden loser rows stays a later phase.
 
-### Phase 20: Cost Containment & Scale Readiness (C1 shipped Jul 12, 2026; C2–C3 open)
+### Phase 20: Cost Containment & Scale Readiness (C1–C2 shipped Jul 12, 2026; C3 open)
 
 An infrastructure/cost-hardening epic tracked by
 [Cost Containment & Scale Readiness (Epic)](cost-containment-prd.md). Driven by the July 11, 2026
@@ -604,7 +604,7 @@ dependency-sequenced cycle PRDs, each independently shippable:
 | Cycle | PRD | Theme | ADR | Status |
 | --- | --- | --- | --- | --- |
 | C1 | [PRD 50 — Defuse the Cost Bombs](prds/prd-50-defuse-cost-bombs.md) | Authenticate every compute trigger, close the open image proxy, bound ingest, kill the render-path scrape fallback, turn on spend/usage alerts. | [003](adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md) | **Shipped (Jul 12, 2026)** |
-| C2 | [PRD 51 — Decouple Read Cost from Traffic](prds/prd-51-decouple-read-cost.md) | Cached event reads invalidated by the cron + static shell with dynamic islands + anonymous/personalized payload split + Neon pooled scale-to-zero. | [002](adrs/0002-decouple-read-cost-from-traffic.md) | Planned |
+| C2 | [PRD 51 — Decouple Read Cost from Traffic](prds/prd-51-decouple-read-cost.md) | Cached event reads invalidated by the cron + static shell with dynamic islands + anonymous/personalized payload split + Neon pooled scale-to-zero. | [002](adrs/0002-decouple-read-cost-from-traffic.md) | **Shipped (Jul 12, 2026)** |
 | C3 | [PRD 52 — Guardrails so Growth Stays Cheap](prds/prd-52-cost-guardrails.md) | Rate-limit + honeypot public writes, edge bot controls, a lean CI gate, transactional automated `db:apply`. | [003](adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md) | Planned |
 
 Build order **C1 → C2 → C3** (C1's findings cost money at zero users; C2 is the structural lever and
@@ -624,6 +624,24 @@ read serves the seed fallback and an unknown `/event/<id>` is not-found — `syn
 cron-only, held by a source-scan guard. `test:cron-auth` + `test:blob-guard` + `test:read-path`
 (19 tests) green; Snyk-clean; $0. Remaining owner steps (post-deploy smoke; Vercel Spend
 Management + Neon usage alerts) tracked in `backlog.md` → Urgent.
+
+**C2 shipped (Jul 12, 2026):** read cost is decoupled from traffic. Event reads are cached
+(`lib/event-read-cache.ts` injected via `unstable_cache` in `lib/events.ts`, tag `events`, daily
+backstop) with event-driven invalidation — `/api/sync/avlgo` revalidates after a successful upsert;
+public board/detail signal payloads are cached per-event (`lib/board-data.ts`, tag `event-signals`,
+hourly backstop) and all ten community/curator/shared-song write routes revalidate on a successful
+write (`lib/event-signals-cache.ts`). The anonymous payload is split from the signed-in
+personalization maps — viewer-scoped reads short-circuit to empty without a session, so a cookieless
+view costs **zero DB queries** (`force-dynamic` retained by design; see the ADR 002 Jul-12
+amendment). `DATABASE_URL` now points at the Neon `-pooler` endpoint with the direct endpoint kept
+for migrations, and image optimization is trimmed (`minimumCacheTTL` 31 days, pruned size lists).
+**Verified same day against production** (the epic's C2 verification record): Neon prod compute
+observed suspended ~5 min after last activity — its first idle window — and calibrated
+`pg_stat_database` counters showed zero event DB queries across repeated anonymous loads (5 loads →
+~4 background xacts, 10 loads → ~3; time-correlated, not per-load), byte-identical anonymous
+payloads with empty personalization containers, healthy crons, and zero runtime errors.
+`test:events-cache` (8 tests) + all suites, typecheck, lint, build, readability smoke green;
+Snyk-clean; $0.
 
 ## Scaling Milestones & Tracking
 

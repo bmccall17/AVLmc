@@ -2,13 +2,15 @@
 
 Updated: July 12, 2026
 
-**Status: C1 shipped (Jul 12, 2026); C2–C3 open.** Decomposed into three dependency-sequenced
+**Status: C1–C2 shipped (Jul 12, 2026); C3 open.** Decomposed into three dependency-sequenced
 cycles (C1–C3), each promoted to a numbered cycle PRD on July 12, 2026 (per the numbering
 reservation below):
 [PRD 50 — Defuse the Cost Bombs](prds/prd-50-defuse-cost-bombs.md) (**shipped Jul 12, 2026** —
 see the C1 build record below; post-deploy smoke + spend/usage-alert dashboard steps remain
 owner actions, tracked in `backlog.md`),
-[PRD 51 — Decouple Read Cost from Traffic](prds/prd-51-decouple-read-cost.md),
+[PRD 51 — Decouple Read Cost from Traffic](prds/prd-51-decouple-read-cost.md) (**shipped
+Jul 12, 2026** — verification pass run against production the same day; see the C2 verification
+record below),
 [PRD 52 — Guardrails so Growth Stays Cheap](prds/prd-52-cost-guardrails.md). The cycle PRDs are the
 build documents; this epic remains the umbrella (posture, sequencing, success criteria, evidence).
 A **July 12 code re-audit** independently confirmed every Appendix A finding still live and added
@@ -103,8 +105,8 @@ not architecture — no ADR; specified directly in C3.
 
 | Cycle | PRD | Theme | Cost class | ADR | Effort | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| **C1 — Defuse the Cost Bombs** | [PRD 50](prds/prd-50-defuse-cost-bombs.md) | Authenticate every compute trigger, close the open image proxy, bound image ingest, cap the heavy sync jobs, kill the render-path scrape fallback (pulled forward from C2), and turn on spend/usage alerts. | Traffic-independent (1) + safety net | 0003 | ~2–3 days (all S) | Planned |
-| **C2 — Decouple Read Cost from Traffic** | [PRD 51](prds/prd-51-decouple-read-cost.md) | Cache event reads + invalidate from the cron; serve the public pages as a static shell with dynamic islands; split the anonymous payload from the signed-in personalization maps; move Neon to the pooled scale-to-zero endpoint. | Linear scaling (2) | 0002 | ~3–5 days (M) | Planned |
+| **C1 — Defuse the Cost Bombs** | [PRD 50](prds/prd-50-defuse-cost-bombs.md) | Authenticate every compute trigger, close the open image proxy, bound image ingest, cap the heavy sync jobs, kill the render-path scrape fallback (pulled forward from C2), and turn on spend/usage alerts. | Traffic-independent (1) + safety net | 0003 | ~2–3 days (all S) | **Shipped (Jul 12, 2026)** |
+| **C2 — Decouple Read Cost from Traffic** | [PRD 51](prds/prd-51-decouple-read-cost.md) | Cache event reads + invalidate from the cron; serve the public pages as a static shell with dynamic islands; split the anonymous payload from the signed-in personalization maps; move Neon to the pooled scale-to-zero endpoint. | Linear scaling (2) | 0002 | ~3–5 days (M) | **Shipped (Jul 12, 2026)** |
 | **C3 — Guardrails so Growth Stays Cheap** | [PRD 52](prds/prd-52-cost-guardrails.md) | Rate-limit + honeypot public writes, add edge bot controls on hot/dynamic + `/_next/image` routes, add a **lean** CI gate, and automate a transactional `db:apply`. | Guardrails (3) | 0003 (rate limits) | ~3–5 days (M) | Planned |
 
 > **Scope moves (July 12, 2026):** the render-path-sync removal moved **C2 → C1** (the
@@ -240,14 +242,37 @@ look at it. 10× the traffic ≈ flat Neon compute and roughly flat Vercel invoc
   system map — `npm run generate:system-map` — per `workflow.md`).
 - Manual smoke: `playwright test --config playwright.smoke.config.ts` (existing readability smoke)
   passes against the now-static board; the board still renders the same events.
-- **Verification pass (owner, dated here):** on a preview deploy, load `/` twice and confirm in
-  Vercel logs that the second load did **not** issue event DB queries (cache hit), and that the Neon
-  branch shows an idle/suspended compute window during a no-traffic gap. This is the epic's core
-  proof that read cost is decoupled.
+- **Verification pass (owner, dated here):** load `/` twice and confirm the second load did
+  **not** issue event DB queries (cache hit), and that the Neon branch shows an idle/suspended
+  compute window during a no-traffic gap. This is the epic's core proof that read cost is
+  decoupled. **Completed Jul 12, 2026 — see the C2 verification record below.**
 
 **C2 Definition of Done:** repeated anonymous page loads serve from cache with no per-view DB query;
 a cron re-ingest is visible within one revalidation; Neon compute idles between traffic bursts;
 listener-visible output is unchanged (smoke green).
+
+**C2 verification record (July 12, 2026).** Run against **production** (deployment
+`dpl_ABiD1xZD`, commit `9a85057`, the PRD 51 build), not a preview — stronger evidence, zero risk
+(read-only observation). Findings:
+
+- **Neon scale-to-zero is real:** the prod compute (`ep-square-bonus`, branch `br-holy-smoke`)
+  was observed **suspended** at 18:52:17Z, ~5 minutes after its last activity — the first idle
+  window this branch has had (pre-C2, the uncached read trickle kept it permanently awake).
+- **Anonymous reads don't touch the DB once the cache is warm:** with calibrated
+  `pg_stat_database` counters (each observer query = exactly +1 xact), 5 anonymous loads of `/`
+  added ~4 transactions and 10 loads added ~3 — i.e. the residue is time-correlated background,
+  **not per-load**. Zero event DB queries per anonymous view. The first request after the
+  suspension woke the compute once to re-warm the cache (the designed backstop cadence: cost
+  tracks content-change/backstop frequency, not traffic).
+- **Payload split holds in prod:** repeated anonymous loads are byte-identical 200s; the
+  personalization containers serialize empty (`"musicProfileItems":[]`,
+  `"circleActivityByEvent":{}`, `"initialSavedEventKeys":[]`) while public signals (counts,
+  curated-by) are present.
+- **Crons healthy through the C1 auth gate:** `avlgo_sync` succeeded same-day (547 items),
+  `artist_match` + `cleanup` green in `system_job_runs`; zero runtime errors/warnings on the
+  deployment. The live cron→`revalidateTag` freshness observation lands at the next cron tick
+  (the deploy postdates the day's sync); the mechanism itself is regression-locked by
+  `test:events-cache`.
 
 ---
 

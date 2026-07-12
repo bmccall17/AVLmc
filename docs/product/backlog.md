@@ -46,7 +46,7 @@ Updated: July 12, 2026
      thresholds there.
 
 * _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. **Active build focus is
-  Phase 20 (Cost Containment — C1/PRD 50 shipped Jul 12, 2026; next PRD 51 → PRD 52)**, plus the
+  Phase 20 (Cost Containment — C1–C2/PRDs 50–51 shipped Jul 12, 2026; next PRD 52)**, plus the
   owner actions above and the Personalized Discovery follow-ups tracked in
   [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
 
@@ -57,8 +57,10 @@ Updated: July 12, 2026
   [`cost-containment-prd.md`](cost-containment-prd.md) and the build docs are
   [PRD 50 (defuse the cost bombs)](prds/prd-50-defuse-cost-bombs.md) — **shipped Jul 12, 2026**
   (owner remainder in Urgent above) →
-  [PRD 51 (decouple read cost from traffic)](prds/prd-51-decouple-read-cost.md) — **next up** →
-  [PRD 52 (guardrails: rate limits, bot controls, lean CI, transactional `db:apply`)](prds/prd-52-cost-guardrails.md).
+  [PRD 51 (decouple read cost from traffic)](prds/prd-51-decouple-read-cost.md) — **shipped
+  Jul 12, 2026** (verification pass run against production the same day: Neon compute now idles,
+  anonymous views cost zero DB queries — see the epic's C2 verification record) →
+  [PRD 52 (guardrails: rate limits, bot controls, lean CI, transactional `db:apply`)](prds/prd-52-cost-guardrails.md) — **next up**.
   `$0`, no listener-visible change, no new heavy compute.
 
 - **Aiven decommission is past its trigger (scheduled for on/after June 23; it's July 12).** See the
