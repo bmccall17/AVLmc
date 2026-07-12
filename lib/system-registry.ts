@@ -1296,7 +1296,12 @@ const NODES: RegistryNode[] = [
       {
         kind: "note",
         detail:
-          "Postgres adapter + database session strategy; the events.signIn callback runs migrateSessionSignalsToUser (best-effort, never blocks sign-in) and records each provider's email into user_emails.",
+          "Postgres adapter + database session strategy; the events.signIn body lives in lib/auth-signin-event.ts (handleSignInEvent) and runs four best-effort steps — record music connection, refresh avatar, record provider email into user_emails, and migrate anonymous session signals — each through runBestEffort.",
+      },
+      {
+        kind: "runtime_gotcha",
+        detail:
+          "events.signIn is AWAITED inside the @auth/core callback (callback/index.js), so a throw aborts the response after the session row is created but before the cookie is set — stranding a valid sign-in on /auth/error (audit F2). Every step MUST be best-effort: handleSignInEvent (lib/auth-signin-event.ts) wraps all four in runBestEffort, which logs a stable 'signIn side-effect failed:' prefix and never throws. Never add a bare await side effect to the event. Proven by tests/signin-event.test.ts (a throwing recordMusicConnection still completes sign-in).",
       },
       {
         kind: "runtime_gotcha",

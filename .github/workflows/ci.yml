@@ -48,7 +48,7 @@ jobs:
             account-integrity social-guardrails personalization-benchmark artist-match \
             hover-player audius-core \
             registry cron-auth blob-guard read-path events-cache write-rate-limits \
-            spotify-gate spotify-reconnect; do
+            signin-event spotify-gate spotify-reconnect; do
             echo "::group::test:$suite"
             npm run "test:$suite"
             echo "::endgroup::"

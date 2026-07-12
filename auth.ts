@@ -3,19 +3,11 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import Spotify from "next-auth/providers/spotify";
 import Resend from "next-auth/providers/resend";
-import { cookies } from "next/headers";
-import {
-  ANONYMOUS_SESSION_COOKIE_NAME,
-  getAnonymousSessionIdFromCookieValue,
-} from "@/lib/anonymous-session";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { getPool } from "@/lib/db";
-import { migrateSessionSignalsToUser } from "@/lib/discovery-memory";
-import { recordProviderEmail } from "@/lib/account-emails";
 import { withMultiEmailResolution } from "@/lib/auth-adapter";
 import { sendMagicLinkEmail } from "@/lib/auth-email";
-import { recordMusicConnection } from "@/lib/music";
-import { isCustomAvatarUrl, setUserImage } from "@/lib/user-image";
+import { handleSignInEvent } from "@/lib/auth-signin-event";
 
 const SPOTIFY_SCOPES = ["user-read-private", "user-read-email", "user-top-read"];
 
@@ -98,97 +90,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
       },
     },
     events: {
-      async signIn({ user, account, profile }) {
-        if (!user.id || !account?.provider) {
-          return;
-        }
-
-        // Only music providers (Spotify) carry a taste-import token. Email magic-link sign-in has
-        // no music connection to record — recording one would create a bogus `accounts` row.
-        if (account.provider === "spotify") {
-          await recordMusicConnection({
-            accessToken: account.access_token,
-            expiresAt: account.expires_at,
-            provider: account.provider,
-            refreshToken: account.refresh_token,
-            scopes: splitScopes(account.scope),
-            tokenType: account.token_type,
-            userId: String(user.id),
-          });
-        }
-
-        // Refresh the stored avatar from the fresh provider profile. Provider avatars can be signed,
-        // expiring URLs (Spotify serves `platform-lookaside.fbsbx.com` Facebook links whose `ext` is
-        // an expiry); the adapter writes `users.image` only on first sign-in, so without this a
-        // stored URL eventually expires and renders broken. We skip this when the listener has set
-        // their own uploaded photo (a Blob URL) so a provider sign-in never clobbers it. Best-effort:
-        // a failure must never block sign-in.
-        try {
-          const freshImage = extractProfileImage(account.provider, profile);
-          if (freshImage && freshImage !== user.image && !isCustomAvatarUrl(user.image)) {
-            await setUserImage(String(user.id), freshImage);
-          }
-        } catch (error) {
-          console.error("Failed to refresh profile image on sign-in.", error);
-        }
-
-        // Multi-email identity (PRD 35 / Phase 15): record the email this provider returned against
-        // the account so any of a listener's emails resolves to one identity. Best-effort + additive
-        // (it never changes sign-in resolution here) — a failure must never block sign-in.
-        await recordProviderEmail(String(user.id), account.provider, user.email);
-
-        // Durable anonymous → account hand-off (PRD 20 / C3): migrate this browser's anonymous
-        // session signals to the account so signing in is continuity, not a reset. Best-effort and
-        // idempotent — a failure here must never block sign-in.
-        try {
-          const cookieStore = await cookies();
-          const sessionId = getAnonymousSessionIdFromCookieValue(
-            cookieStore.get(ANONYMOUS_SESSION_COOKIE_NAME)?.value
-          );
-          if (sessionId) {
-            await migrateSessionSignalsToUser(sessionId, String(user.id));
-          }
-        } catch (error) {
-          console.error("Anonymous session hand-off failed.", error);
-        }
-      },
+      // The body lives in lib/auth-signin-event.ts so it is testable in isolation and every step is
+      // best-effort by construction: @auth/core awaits this inside the callback, so a throw would
+      // abort the response after the session row is created but before the cookie is set (PRD 47 /
+      // audit F2). Never add a bare `await` side effect here.
+      signIn: handleSignInEvent,
     },
   };
 });
-
-function splitScopes(scope: string | undefined) {
-  return scope?.split(" ").filter(Boolean) ?? [];
-}
-
-/**
- * Pull the current avatar URL from a raw OAuth profile. Spotify exposes `images: [{ url }]` (largest
- * first); Google exposes a single `picture` string. Returns undefined when there's no usable image
- * so callers leave the stored value alone.
- */
-function extractProfileImage(provider: string, profile: unknown): string | undefined {
-  if (!profile || typeof profile !== "object") {
-    return undefined;
-  }
-
-  if (provider === "google") {
-    const picture = (profile as { picture?: unknown }).picture;
-    return typeof picture === "string" && picture.length > 0 ? picture : undefined;
-  }
-
-  if (provider === "spotify") {
-    const images = (profile as { images?: unknown }).images;
-    if (Array.isArray(images)) {
-      for (const entry of images) {
-        const url = (entry as { url?: unknown })?.url;
-        if (typeof url === "string" && url.length > 0) {
-          return url;
-        }
-      }
-    }
-  }
-
-  return undefined;
-}
 
 /**
  * Normalize the email-sender env (`AUTH_EMAIL_FROM`) for Resend. Resend requires

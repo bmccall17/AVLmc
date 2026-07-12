@@ -951,7 +951,8 @@ Optional sign-in backed by the Postgres adapter: email magic link (Resend, brand
 - **Env vars (names only):** `NEXT_PUBLIC_AUTH_ENABLED`, `AUTH_SECRET`
 - **Health probe:** `auth-provider` (PRD 07)
 - **Implementation notes:**
-  - _Note:_ Postgres adapter + database session strategy; the events.signIn callback runs migrateSessionSignalsToUser (best-effort, never blocks sign-in) and records each provider's email into user_emails.
+  - _Note:_ Postgres adapter + database session strategy; the events.signIn body lives in lib/auth-signin-event.ts (handleSignInEvent) and runs four best-effort steps — record music connection, refresh avatar, record provider email into user_emails, and migrate anonymous session signals — each through runBestEffort.
+  - _Runtime gotcha:_ events.signIn is AWAITED inside the @auth/core callback (callback/index.js), so a throw aborts the response after the session row is created but before the cookie is set — stranding a valid sign-in on /auth/error (audit F2). Every step MUST be best-effort: handleSignInEvent (lib/auth-signin-event.ts) wraps all four in runBestEffort, which logs a stable 'signIn side-effect failed:' prefix and never throws. Never add a bare await side effect to the event. Proven by tests/signin-event.test.ts (a throwing recordMusicConnection still completes sign-in).
   - _Runtime gotcha:_ getUserByEmail is wrapped (lib/auth-adapter.ts) for multi-email resolution, and the Spotify provider auto-links on a verified email match (PRD 44 — convergence proven in tests/one-identity.integration.mts). OAuthAccountNotLinked remains only for genuine edges (email mismatch), mapped to the duplicate_account recovery copy. Any NEW provider must re-justify the auto-link flag explicitly.
 - **Flows to / depends on:**
   - → users (flowsTo) — user records
