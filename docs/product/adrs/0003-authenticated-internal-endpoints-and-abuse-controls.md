@@ -125,3 +125,19 @@ authenticated, allow-listed, or throttled by construction.** Concretely:
    adequate at current scale under Fluid Compute instance reuse, with §5's edge bot controls as
    the cross-instance layer and a KV-backed limiter remaining the measured-only escape hatch.
    Executed in [PRD 52](../prds/prd-52-cost-guardrails.md).
+
+### July 12, 2026 — C3 build note: §5 edge rate limiting is plan-gated
+
+Decision §4 shipped as specified: a shared sliding-window limiter (`lib/write-rate-limit.ts`,
+IP + optional identity dimension) now guards all seven public write routes, and the `feedback`
+honeypot + the contributions IP dimension landed. **Decision §5 hit a plan constraint** worth
+recording against amendment 4's "§5 as the cross-instance layer" framing: the Vercel WAF
+`rate_limit` action is **Pro-only** (the API refused it on the Hobby team — "Rate limiting is not
+available for this plan"), the same tier ceiling as the C1 spend/usage alerts. So §5 shipped as
+**two `log`-mode observation rules** (staged for the owner to publish), not an enforced
+cross-instance throttle. Consequence: at the current plan the in-repo per-instance limiter (§4) is
+the *only* active write throttle — there is no cross-instance layer yet, contrary to amendment 4's
+assumption. The escape hatch is unchanged in shape but now has a concrete trigger: a Vercel **Pro**
+upgrade (unlocks WAF `rate_limit`) or **Vercel BotID** (free basic tier, code integration) becomes
+the cross-instance layer if per-instance accuracy proves insufficient under real load. Until then,
+the log-mode rules exist to *observe* origin-hitting volume so that decision is data-driven.
