@@ -59,13 +59,25 @@ async function main() {
 
   await client.connect();
   try {
-    // The schema is param-free, so the whole file runs as one simple-query batch.
-    await client.query(sql);
-    const { rows } = await client.query<{ count: number }>(
-      "select count(*)::int as count from information_schema.tables where table_schema = 'public'"
-    );
-    // eslint-disable-next-line no-console
-    console.log(`✓ applied db/schema.sql → ${rows[0]?.count ?? "?"} public tables, 0 errors.`);
+    // Explicit transaction (PRD 52): a bad statement mid-file rolls the WHOLE apply back — no
+    // partial schema. (Postgres runs a simple-query batch in an implicit transaction, but the
+    // explicit BEGIN/COMMIT makes the guarantee visible, survives a future refactor to
+    // statement-splitting, and lets the sanity count run pre-commit.) Safe because db/schema.sql
+    // is idempotent and contains no CONCURRENTLY / transaction-control statements.
+    await client.query("BEGIN");
+    try {
+      // The schema is param-free, so the whole file runs as one simple-query batch.
+      await client.query(sql);
+      const { rows } = await client.query<{ count: number }>(
+        "select count(*)::int as count from information_schema.tables where table_schema = 'public'"
+      );
+      await client.query("COMMIT");
+      // eslint-disable-next-line no-console
+      console.log(`✓ applied db/schema.sql → ${rows[0]?.count ?? "?"} public tables, 0 errors.`);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    }
   } finally {
     await client.end();
   }
