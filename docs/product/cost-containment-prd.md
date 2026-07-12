@@ -2,14 +2,17 @@
 
 Updated: July 12, 2026
 
-**Status: Scoped — ready to build.** Decomposed into three dependency-sequenced cycles (C1–C3),
-each promoted to a numbered cycle PRD on July 12, 2026 (per the numbering reservation below):
-[PRD 50 — Defuse the Cost Bombs](prds/prd-50-defuse-cost-bombs.md),
+**Status: C1 shipped (Jul 12, 2026); C2–C3 open.** Decomposed into three dependency-sequenced
+cycles (C1–C3), each promoted to a numbered cycle PRD on July 12, 2026 (per the numbering
+reservation below):
+[PRD 50 — Defuse the Cost Bombs](prds/prd-50-defuse-cost-bombs.md) (**shipped Jul 12, 2026** —
+see the C1 build record below; post-deploy smoke + spend/usage-alert dashboard steps remain
+owner actions, tracked in `backlog.md`),
 [PRD 51 — Decouple Read Cost from Traffic](prds/prd-51-decouple-read-cost.md),
 [PRD 52 — Guardrails so Growth Stays Cheap](prds/prd-52-cost-guardrails.md). The cycle PRDs are the
 build documents; this epic remains the umbrella (posture, sequencing, success criteria, evidence).
 A **July 12 code re-audit** independently confirmed every Appendix A finding still live and added
-four refinements, folded into the cycle PRDs and Appendix B. Not started.
+four refinements, folded into the cycle PRDs and Appendix B.
 
 This is **Phase 20** in [`master-roadmap.md`](master-roadmap.md). It is driven by the
 [July 11, 2026 systems/UX/UI audit](#appendix-a--evidence-base-july-11-2026-audit) (evidence folded

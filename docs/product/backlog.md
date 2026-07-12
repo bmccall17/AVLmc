@@ -33,9 +33,21 @@ Updated: July 12, 2026
   session-bound signed-token + confirm route (the email-provider path doesn't auto-link to the session like
   OAuth does), plus hardening `findUserIdByEmail` to `verified`-only — security-sensitive, lower urgency.
 
+* **Finish the PRD 50 safety net (owner actions, ~10 minutes + one push).** The code shipped
+  Jul 12, 2026 (commit `d1577c1`); what remains needs a deploy and two dashboards:
+  1. `git push` (deploys the gate — `CRON_SECRET` is already set in Vercel Production + Preview,
+     so the real crons keep running), then run the smoke and date the results in the epic's C1
+     build record: `curl -i https://avlmc.vercel.app/api/sync/cleanup` → **401**; same with
+     `-H "Authorization: Bearer $CRON_SECRET"` → **200**; Vercel cron logs green the next
+     morning; `/_next/image?url=https://example.com/x.jpg` → **400**.
+  2. Enable **Vercel Spend Management** (suggested $10/mo hard cap + email alert) and **Neon
+     usage alerts** (~80% of free tier) — step-by-step in
+     [`cost-containment-prd.md`](cost-containment-prd.md) → C1 build record; record the chosen
+     thresholds there.
+
 * _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. **Active build focus is
-  Phase 20 (Cost Containment, PRDs 50–52 — first item below)**, plus the two owner actions above and
-  the Personalized Discovery follow-ups tracked in
+  Phase 20 (Cost Containment — C1/PRD 50 shipped Jul 12, 2026; next PRD 51 → PRD 52)**, plus the
+  owner actions above and the Personalized Discovery follow-ups tracked in
   [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
 
 ## Planned Next / Up Next
@@ -43,11 +55,11 @@ Updated: July 12, 2026
 - **Phase 20 — Cost Containment & Scale Readiness (PRDs 50–52), in order C1 → C2 → C3.** Scoped
   July 12, 2026 from the July 11 audit + July 12 code re-audit; the epic is
   [`cost-containment-prd.md`](cost-containment-prd.md) and the build docs are
-  [PRD 50 (defuse the cost bombs)](prds/prd-50-defuse-cost-bombs.md) →
-  [PRD 51 (decouple read cost from traffic)](prds/prd-51-decouple-read-cost.md) →
+  [PRD 50 (defuse the cost bombs)](prds/prd-50-defuse-cost-bombs.md) — **shipped Jul 12, 2026**
+  (owner remainder in Urgent above) →
+  [PRD 51 (decouple read cost from traffic)](prds/prd-51-decouple-read-cost.md) — **next up** →
   [PRD 52 (guardrails: rate limits, bot controls, lean CI, transactional `db:apply`)](prds/prd-52-cost-guardrails.md).
-  Start with PRD 50 — every item is effort-S, independently shippable, and closes a surface that
-  can cost money at zero real users. `$0`, no listener-visible change, no new heavy compute.
+  `$0`, no listener-visible change, no new heavy compute.
 
 - **Aiven decommission is past its trigger (scheduled for on/after June 23; it's July 12).** See the
   Scheduled section below — Neon has been prod-stable for ~4 weeks; run the retirement checklist

@@ -4,7 +4,7 @@ Part of the [Cost Containment & Scale Readiness initiative](../cost-containment-
 Cycle **C1** — governed by [ADR 003](../adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md).
 No dependencies — do this first. Every item is effort-S and independently shippable.
 
-Updated: July 12, 2026
+Updated: July 12, 2026 (shipped)
 
 ## Goal
 
@@ -34,7 +34,32 @@ in:
 
 ## Implementation Status
 
-**Planned.**
+**Shipped.** (Jul 12, 2026; commit `d1577c1`.) Delivered:
+
+- `lib/cron-auth.ts` — shared `assertCronRequest(request)` bearer gate (timing-safe compare,
+  fails closed when `CRON_SECRET` is unset) applied to all four `/api/sync/*` handlers (`avlgo`,
+  `cleanup`, `backfill-images`, `artist-match`); `artist-match`'s `?limit=` clamped to a
+  server-side ceiling (500). `CRON_SECRET` set in Vercel Production + Preview **before** the gate
+  landed, and mirrored in `.env.local`; Vercel injects the header on cron invocations.
+- `next.config.mjs` — `/_next/image` `remotePatterns` wildcard (`**`) replaced with the four-host
+  allow-list, verified against live prod `events.image_url` hosts on Jul 12, 2026 (nothing renders
+  a remote host through `next/image` today, so the lock is purely defensive).
+- `lib/image-ingest-guard.ts` (pure) + `lib/blob-storage.ts` — `ingestImageToBlob` is bounded:
+  10s `AbortSignal.timeout`, `image/*` content-type required, 8 MB byte ceiling enforced
+  mid-stream (a host lying about `content-length` is cut off). AVLgo feed fetch time-boxed (8s)
+  into the existing seed fallback; sync image ingest chunked to 6 concurrent; `avlgo` + `cleanup`
+  declare explicit `maxDuration = 300` / `runtime = "nodejs"`.
+- Render paths never scrape (`lib/events.ts`): an empty board read serves `getSeedFallbackEvents`;
+  an unknown event id is not-found. `syncUpcomingEvents` is cron-only, enforced by a source-scan
+  guard (`tests/read-path-fallback.test.ts`, the `spotify-gate` pattern).
+- New suites: `test:cron-auth` (7), `test:blob-guard` (9), `test:read-path` (3) — all green with
+  typecheck, lint, registry, and build; touched files Snyk-clean. Registry job/integration nodes
+  document the gate + bounds; system map regenerated; the epic carries the C1 build record and
+  manual re-trigger recipe.
+
+**Open owner remainder** (tracked in `backlog.md` → Urgent; needs a deploy + dashboards, not code):
+the post-deploy smoke (401/200/400 curls + next-morning cron-log check) and enabling
+**Vercel Spend Management** + **Neon usage alerts** with thresholds recorded in the epic.
 
 ## Requirements
 
