@@ -1268,9 +1268,11 @@ Daily scheduled refresh of events from the AVLgo feed (10:00 UTC).
 - **Source of truth:** `app/api/sync/avlgo/route.ts`
 - **Access:** internal
 - **Ownership:** automated
+- **Env vars (names only):** `CRON_SECRET`
 - **Health probe:** `cron-avlgo-sync` (PRD 07)
 - **Implementation notes:**
   - _Note:_ Scheduled 10:00 UTC; records a start + finish/failure row via recordJobRun. Supports an `?audit` query mode (searchParams) for a dry-run duplicate audit without persisting.
+  - _Note:_ Bearer-gated (PRD 50): requires `Authorization: Bearer ${CRON_SECRET}` via assertCronRequest (lib/cron-auth.ts) — Vercel injects it on cron invocations; any other caller gets 401. Feed fetch is time-boxed (8s → seed fallback) and image ingest runs chunked (~6 concurrent).
 - **Flows to / depends on:**
   - → Event Ingestion (dependsOn) — scheduled trigger
   - → system_job_runs (flowsTo) — records outcome
@@ -1283,9 +1285,11 @@ Daily scheduled cleanup of stale cached event images from blob storage (11:00 UT
 - **Source of truth:** `app/api/sync/cleanup/route.ts`
 - **Access:** internal
 - **Ownership:** automated
+- **Env vars (names only):** `CRON_SECRET`
 - **Health probe:** `cron-cleanup` (PRD 07)
 - **Implementation notes:**
   - _Note:_ Scheduled 11:00 UTC; records the run via recordJobRun. A failure returns 500 with success:false rather than throwing.
+  - _Note:_ Bearer-gated (PRD 50): requires `Authorization: Bearer ${CRON_SECRET}` via assertCronRequest (lib/cron-auth.ts); any other caller gets 401.
 - **Flows to / depends on:**
   - → Vercel Blob (flowsTo) — delete stale images
   - → system_job_runs (flowsTo) — records outcome
@@ -1298,8 +1302,10 @@ Manual repair pass that re-ingests stored expiring Facebook CDN image URLs into 
 - **Source of truth:** `app/api/sync/backfill-images/route.ts`
 - **Access:** internal
 - **Ownership:** manual
+- **Env vars (names only):** `CRON_SECRET`
 - **Implementation notes:**
   - _Note:_ Idempotent GET; scans rows with fbcdn image URLs, uploads still-live ones to Blob, nulls the rest so the initials fallback is intentional. Records the run via recordJobRun (job: image_backfill). Precedence rules live in lib/image-resilience.ts.
+  - _Note:_ Bearer-gated (PRD 50): not in vercel.json's cron list — a manual re-trigger needs `curl -H "Authorization: Bearer $CRON_SECRET"`; unauthenticated callers get 401. Same gate covers /api/sync/artist-match.
 - **Flows to / depends on:**
   - → Vercel Blob (flowsTo) — re-ingest images
   - → system_job_runs (flowsTo) — records outcome
@@ -1316,6 +1322,7 @@ Stores cached event images so cards stay fast and the upstream feed isn't hammer
 - **Health probe:** `blob-storage` (PRD 07)
 - **Implementation notes:**
   - _SQL fallback:_ Blob calls are wrapped in try/catch and degrade gracefully — a failed cache write or cleanup never breaks event rendering.
+  - _Note:_ Ingest is bounded (PRD 50): 10s fetch timeout, content-type must be image/*, and the body is read under an 8 MB ceiling — pure guard logic in lib/image-ingest-guard.ts (test:blob-guard).
 - **Fed by / required by:**
   - ← Event Ingestion (flowsTo) — cache images
   - ← Image Cleanup (cron) (flowsTo) — delete stale images

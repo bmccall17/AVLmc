@@ -82,6 +82,8 @@ type EventRow = {
 const AVLGO_EXPORT_URL = "https://www.avlgo.com/api/export/json";
 const LIVE_MUSIC_TAG = "Live Music";
 const EVENT_UPSERT_BATCH_SIZE = 100;
+const AVLGO_FEED_TIMEOUT_MS = 8_000;
+const IMAGE_INGEST_CONCURRENCY = 6;
 
 const MUSIC_TAGS = [
   "music",
@@ -165,6 +167,9 @@ export function getDateWindow(now = new Date()) {
   return { start, end };
 }
 
+// Render paths never scrape (PRD 50 / ADR 002 §2): an empty read serves the static seed
+// fallback and an unknown id is simply not-found. Ingest is the cron's job only — otherwise
+// `/event/<bogus-id>` in a loop is a single-actor scrape/normalize/ingest cost lever.
 export async function getUpcomingEvents(now = new Date()): Promise<EventRecord[]> {
   const storedEvents = await listUpcomingEventsFromDatabase(now);
 
@@ -172,18 +177,15 @@ export async function getUpcomingEvents(now = new Date()): Promise<EventRecord[]
     return storedEvents;
   }
 
-  return syncUpcomingEvents(now);
+  return getSeedFallbackEvents(now);
 }
 
 export async function getEventById(id: string): Promise<EventRecord | null> {
-  const storedEvent = await getEventByIdFromDatabase(id);
+  return getEventByIdFromDatabase(id);
+}
 
-  if (storedEvent) {
-    return storedEvent;
-  }
-
-  const events = await syncUpcomingEvents();
-  return events.find((event) => event.id === id) ?? null;
+export function getSeedFallbackEvents(now = new Date()): EventRecord[] {
+  return normalizeEvents(seedEvents, now);
 }
 
 export async function syncUpcomingEvents(now = new Date()): Promise<EventRecord[]> {
@@ -290,7 +292,11 @@ async function getRawEvents(now: Date): Promise<RawEventResult> {
   const apiUrl = getAvlgoFeedSource(now);
 
   try {
-    const response = await fetch(apiUrl, { next: { revalidate: 3600 } });
+    const response = await fetch(apiUrl, {
+      next: { revalidate: 3600 },
+      // A hung AVLgo feed must abort into the seed fallback, not pin a sync invocation open.
+      signal: AbortSignal.timeout(AVLGO_FEED_TIMEOUT_MS),
+    });
     if (!response.ok) {
       return { events: seedEvents, shouldPersist: false };
     }
@@ -388,31 +394,35 @@ async function ingestImagesForEvents(events: EventRecord[]): Promise<ImageIngest
 
   const storedUrlsById = await getStoredImageUrls(expiring.map((event) => event.id));
 
-  await Promise.allSettled(
-    expiring.map(async (event) => {
-      const stored = storedUrlsById.get(event.id) ?? null;
+  // Chunked so a big sync fans out at most IMAGE_INGEST_CONCURRENCY simultaneous remote
+  // fetches/uploads instead of one burst per expiring image (PRD 50 / ADR 003 §3).
+  for (let i = 0; i < expiring.length; i += IMAGE_INGEST_CONCURRENCY) {
+    await Promise.allSettled(
+      expiring.slice(i, i + IMAGE_INGEST_CONCURRENCY).map(async (event) => {
+        const stored = storedUrlsById.get(event.id) ?? null;
 
-      // Already durably ingested on a previous sync — keep the blob, skip the upload.
-      if (isBlobImageUrl(stored)) {
-        event.imageUrl = stored;
-        stats.reused += 1;
-        return;
-      }
+        // Already durably ingested on a previous sync — keep the blob, skip the upload.
+        if (isBlobImageUrl(stored)) {
+          event.imageUrl = stored;
+          stats.reused += 1;
+          return;
+        }
 
-      const blobUrl = await ingestImageToBlob(event.imageUrl as string, event.id);
-      if (blobUrl) {
-        event.imageUrl = blobUrl;
-        stats.ingested += 1;
-        return;
-      }
+        const blobUrl = await ingestImageToBlob(event.imageUrl as string, event.id);
+        if (blobUrl) {
+          event.imageUrl = blobUrl;
+          stats.ingested += 1;
+          return;
+        }
 
-      stats.failed += 1;
-      event.imageUrl = resolveStoredImageUrl(stored, event.imageUrl);
-      if (!event.imageUrl) {
-        stats.deadSkipped += 1;
-      }
-    })
-  );
+        stats.failed += 1;
+        event.imageUrl = resolveStoredImageUrl(stored, event.imageUrl);
+        if (!event.imageUrl) {
+          stats.deadSkipped += 1;
+        }
+      })
+    );
+  }
 
   return stats;
 }

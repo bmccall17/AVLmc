@@ -1715,12 +1715,18 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/sync/avlgo/route.ts",
     access: "internal",
     ownership: "automated",
+    envVars: ["CRON_SECRET"],
     healthProbeId: "cron-avlgo-sync",
     implementationNotes: [
       {
         kind: "note",
         detail:
           "Scheduled 10:00 UTC; records a start + finish/failure row via recordJobRun. Supports an `?audit` query mode (searchParams) for a dry-run duplicate audit without persisting.",
+      },
+      {
+        kind: "note",
+        detail:
+          "Bearer-gated (PRD 50): requires `Authorization: Bearer ${CRON_SECRET}` via assertCronRequest (lib/cron-auth.ts) — Vercel injects it on cron invocations; any other caller gets 401. Feed fetch is time-boxed (8s → seed fallback) and image ingest runs chunked (~6 concurrent).",
       },
     ],
   },
@@ -1733,12 +1739,18 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/sync/cleanup/route.ts",
     access: "internal",
     ownership: "automated",
+    envVars: ["CRON_SECRET"],
     healthProbeId: "cron-cleanup",
     implementationNotes: [
       {
         kind: "note",
         detail:
           "Scheduled 11:00 UTC; records the run via recordJobRun. A failure returns 500 with success:false rather than throwing.",
+      },
+      {
+        kind: "note",
+        detail:
+          "Bearer-gated (PRD 50): requires `Authorization: Bearer ${CRON_SECRET}` via assertCronRequest (lib/cron-auth.ts); any other caller gets 401.",
       },
     ],
   },
@@ -1752,11 +1764,17 @@ const NODES: RegistryNode[] = [
     sourceOfTruth: "app/api/sync/backfill-images/route.ts",
     access: "internal",
     ownership: "manual",
+    envVars: ["CRON_SECRET"],
     implementationNotes: [
       {
         kind: "note",
         detail:
           "Idempotent GET; scans rows with fbcdn image URLs, uploads still-live ones to Blob, nulls the rest so the initials fallback is intentional. Records the run via recordJobRun (job: image_backfill). Precedence rules live in lib/image-resilience.ts.",
+      },
+      {
+        kind: "note",
+        detail:
+          "Bearer-gated (PRD 50): not in vercel.json's cron list — a manual re-trigger needs `curl -H \"Authorization: Bearer $CRON_SECRET\"`; unauthenticated callers get 401. Same gate covers /api/sync/artist-match.",
       },
     ],
   },
@@ -1777,6 +1795,11 @@ const NODES: RegistryNode[] = [
         kind: "sql_fallback",
         detail:
           "Blob calls are wrapped in try/catch and degrade gracefully — a failed cache write or cleanup never breaks event rendering.",
+      },
+      {
+        kind: "note",
+        detail:
+          "Ingest is bounded (PRD 50): 10s fetch timeout, content-type must be image/*, and the body is read under an 8 MB ceiling — pure guard logic in lib/image-ingest-guard.ts (test:blob-guard).",
       },
     ],
   },

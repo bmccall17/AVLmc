@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
 import { cleanupOldEventImages } from "@/lib/events";
 import { recordJobRun } from "@/lib/admin/job-runs";
+import { assertCronRequest } from "@/lib/cron-auth";
 
-export async function GET() {
+export const maxDuration = 300;
+export const runtime = "nodejs";
+
+export async function GET(request: Request) {
+  const unauthorized = assertCronRequest(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   const startedAt = new Date();
 
   try {

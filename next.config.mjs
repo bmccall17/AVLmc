@@ -14,11 +14,16 @@ const nextConfig = {
     "/admin": ["./db/schema.sql"]
   },
   images: {
+    // PRD 50 / ADR 003 §2: `/_next/image?url=` optimizes only these hosts — a `**` wildcard makes
+    // the optimizer an open proxy anyone can bill us through. Posters currently render via plain
+    // <img> (unaffected); every current <Image> src is a local static asset. Verified against live
+    // prod `events.image_url` hosts on Jul 12, 2026 before locking. Extend this list deliberately
+    // if a component starts rendering a remote host through next/image.
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "**"
-      }
+      { protocol: "https", hostname: "*.blob.vercel-storage.com" },
+      { protocol: "https", hostname: "i.scdn.co" },
+      { protocol: "https", hostname: "*.fbcdn.net" },
+      { protocol: "https", hostname: "www.avlgo.com" }
     ]
   }
 };

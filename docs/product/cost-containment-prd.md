@@ -173,6 +173,30 @@ of legitimate traffic; and we are alerted before any metric approaches a tier li
 `/_next/image` refuses non-allow-listed hosts; ingest is size/type/time/concurrency bounded; spend
 and usage alerts are live with recorded thresholds.
 
+**C1 build record (July 12, 2026).** Code complete; see [PRD 50](prds/prd-50-defuse-cost-bombs.md)
+for scope. Operational facts a future maintainer needs:
+
+- **`CRON_SECRET` is set** in Vercel (Production + Preview, added Jul 12, 2026) and mirrored in
+  `.env.local`. Vercel injects `Authorization: Bearer ${CRON_SECRET}` on cron invocations
+  automatically; rotating the secret is one `vercel env` update, no code change.
+- **Manual re-trigger** (backfill-images / artist-match have no scheduled caller; avlgo/cleanup
+  when run by hand):
+  `curl -i -H "Authorization: Bearer $CRON_SECRET" https://avlmc.vercel.app/api/sync/<route>`
+  — the token is the `CRON_SECRET` value from `vercel env pull` / `.env.local`.
+- **Allow-list verification:** live prod `events.image_url` hosts were sampled on Jul 12, 2026
+  (16 hosts, led by www.avlgo.com / exploreasheville.com / mountainx.com). None of them render
+  through `next/image` today (posters use plain `<img>`; every current `<Image>` src is a local
+  static asset), so the locked four-host list breaks nothing and exists purely to close the
+  `/_next/image?url=` proxy.
+- **Post-deploy smoke (run after the next push to `main`, date the results here):**
+  `curl -i https://avlmc.vercel.app/api/sync/cleanup` → 401; same with bearer → 200; Vercel cron
+  logs green the next morning; `/_next/image?url=https://example.com/x.jpg` → 400.
+- **Safety net (owner dashboard steps, ~5 min — record thresholds here when set):**
+  1. Vercel → Team **Settings → Billing → Spend Management**: enable, set a hard cap (suggested
+     **$10/mo** — far above $0-normal, far below pain) + email alert.
+  2. Neon console → project `avlmc` (`long-violet-36681196`) → **Settings/Billing → usage
+     alerts**: enable compute-hours + storage alerts (suggested ~80% of free tier).
+
 ---
 
 ## C2 — Decouple Read Cost from Traffic

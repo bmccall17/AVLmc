@@ -9,8 +9,17 @@ import {
 import { describeImageIngestStats } from "@/lib/image-resilience";
 import { recordJobRun } from "@/lib/admin/job-runs";
 import { matchArtistsForNewEvents } from "@/lib/artist-match";
+import { assertCronRequest } from "@/lib/cron-auth";
+
+export const maxDuration = 300;
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
+  const unauthorized = assertCronRequest(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   const startedAt = new Date();
   const auditMode = new URL(request.url).searchParams.get("audit");
 

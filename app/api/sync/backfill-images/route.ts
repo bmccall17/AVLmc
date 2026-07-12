@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { backfillDeadImageUrls } from "@/lib/events";
 import { recordJobRun } from "@/lib/admin/job-runs";
+import { assertCronRequest } from "@/lib/cron-auth";
 
 export const maxDuration = 300;
+export const runtime = "nodejs";
 
 /**
  * Manual repair pass (PRD 06): rows persisted before the image-resilience rules can still hold
@@ -10,7 +12,12 @@ export const maxDuration = 300;
  * the rest to NULL so the placeholder renders intentionally. Idempotent — once no fbcdn URLs
  * remain, it scans zero rows.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = assertCronRequest(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   const startedAt = new Date();
 
   try {
