@@ -10,16 +10,20 @@
  *   vercel env pull .env.local   # provides the prod DATABASE_URL locally (never commit it)
  *   npm run db:apply
  *
- * Connection: prefers MIGRATION_DATABASE_URL, else DATABASE_URL. DDL is applied against the Neon
- * DIRECT endpoint (the pooled `-pooler` host is stripped) — see db/schema.sql's header. Only the host
- * is ever printed, never the full connection string.
+ * Connection: prefers MIGRATION_DATABASE_URL, then DATABASE_URL_UNPOOLED (the direct endpoint set
+ * alongside the pooled runtime DATABASE_URL — PRD 51), else DATABASE_URL. DDL is applied against
+ * the Neon DIRECT endpoint (the pooled `-pooler` host is stripped) — see db/schema.sql's header.
+ * Only the host is ever printed, never the full connection string.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
 
 function resolveConnectionString(): string {
-  const raw = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL;
+  const raw =
+    process.env.MIGRATION_DATABASE_URL ||
+    process.env.DATABASE_URL_UNPOOLED ||
+    process.env.DATABASE_URL;
   if (!raw) {
     throw new Error(
       "No connection string set. Provide DATABASE_URL (e.g. `vercel env pull .env.local`) or MIGRATION_DATABASE_URL."

@@ -24,7 +24,15 @@ const nextConfig = {
       { protocol: "https", hostname: "i.scdn.co" },
       { protocol: "https", hostname: "*.fbcdn.net" },
       { protocol: "https", hostname: "www.avlgo.com" }
-    ]
+    ],
+    // PRD 51 / ADR 002 §5: each source image is transformed ~once, not per-viewer-per-viewport.
+    // Every current <Image> is a small fixed-size local asset (24–42px logos/previews), so the
+    // size matrix is pruned to those slots plus a small responsive set for future poster use;
+    // 31-day cache TTL keeps re-transforms off the bill (sources change only via re-ingest,
+    // which changes the URL).
+    minimumCacheTTL: 2678400,
+    deviceSizes: [640, 1080, 1920],
+    imageSizes: [32, 48, 64, 96]
   }
 };
 

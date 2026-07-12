@@ -10,6 +10,7 @@ import {
   CuratorValidationError,
   type CuratorPickStatus,
 } from "@/lib/curators";
+import { revalidateEventSignals } from "@/lib/event-signals-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
       eventTitle: typeof body.eventTitle === "string" ? body.eventTitle : undefined,
       note: typeof body.note === "string" ? body.note : null,
     });
+    revalidateEventSignals();
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleError(error);
@@ -65,6 +67,9 @@ export async function PATCH(request: Request) {
   try {
     if (body.target === "pick" && typeof body.id === "string" && typeof body.status === "string") {
       const ok = await setMyPickStatus(userId, body.id, body.status as CuratorPickStatus);
+      if (ok) {
+        revalidateEventSignals();
+      }
       return ok ? NextResponse.json({ ok }) : notFound();
     }
     const curator = await updateMyCuratorPersona(userId, {
@@ -73,6 +78,7 @@ export async function PATCH(request: Request) {
       avatarUrl: typeof body.avatarUrl === "string" ? body.avatarUrl : undefined,
       handle: typeof body.handle === "string" ? body.handle : undefined,
     });
+    revalidateEventSignals();
     return NextResponse.json({ curator });
   } catch (error) {
     return handleError(error);
@@ -88,6 +94,9 @@ export async function DELETE(request: Request) {
 
   try {
     const removed = await removeMyPick(userId, body.id);
+    if (removed) {
+      revalidateEventSignals();
+    }
     return removed ? NextResponse.json({ ok: true }) : notFound();
   } catch (error) {
     return handleError(error);

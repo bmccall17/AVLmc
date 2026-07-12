@@ -11,6 +11,7 @@ import {
 } from "@/lib/anonymous-session";
 import { getOptionalUserId } from "@/lib/current-user";
 import { recordDiscoveryEventAction } from "@/lib/discovery-memory";
+import { revalidateEventSignals } from "@/lib/event-signals-cache";
 import { getEventById } from "@/lib/events";
 
 const REACTIONS = new Set<ReactionType>(["going", "fire"]);
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
 
     const counts = await recordEventIntent({ eventId, eventTitle, sessionId, source, userId });
     await recordReactionDiscoveryAction({ eventId, sessionId, source, type, userId });
+    revalidateEventSignals();
     const response = NextResponse.json({ counts });
     setAnonymousSessionCookie(response, sessionId);
     return response;
@@ -51,6 +53,7 @@ export async function POST(request: Request) {
 
   const counts = await toggleReaction({ eventId, eventTitle, sessionId, type, userId });
   await recordReactionDiscoveryAction({ eventId, sessionId, source, type, userId });
+  revalidateEventSignals();
   const response = NextResponse.json({ counts });
   setAnonymousSessionCookie(response, sessionId);
   return response;

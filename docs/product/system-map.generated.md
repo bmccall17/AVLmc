@@ -87,6 +87,7 @@ Fetches the AVLgo feed, normalizes fields, filters to music events, applies the 
 - **Implementation notes:**
   - _Note:_ Only a successful, non-empty fetch triggers upsertEvents; a failed fetch returns seed events without persisting.
   - _SQL fallback:_ upsertEvents writes in batches (EVENT_UPSERT_BATCH_SIZE) with `on conflict (id) do update`, so the daily re-ingest updates rows in place rather than duplicating.
+  - _Note:_ Read path is cached (PRD 51): getUpcomingEvents/getEventById run through unstable_cache under the `events` tag (wiring in lib/event-read-cache.ts, day-keyed with an in-memory started-events filter so output matches the uncached query). The AVLgo cron revalidates the tag after a successful upsert; public per-event signal maps (lib/board-data.ts, tag `event-signals`) are revalidated by community/curator/shared-song writes via lib/event-signals-cache.ts. test:events-cache guards once-per-key, tag invalidation, and the freshness contract.
 - **Flows to / depends on:**
   - → Deduplication (flowsTo) — normalized rows
   - → Vercel Blob (flowsTo) — cache images

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { recordTicketIntent } from "@/lib/community";
 import { recordDiscoveryEventAction } from "@/lib/discovery-memory";
+import { revalidateEventSignals } from "@/lib/event-signals-cache";
 import { getEventById } from "@/lib/events";
 import {
   getOrCreateAnonymousSessionId,
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
   const response = NextResponse.json({ counts });
   revalidatePath("/");
   revalidatePath(`/event/${encodeURIComponent(eventId)}`);
+  revalidateEventSignals();
   setAnonymousSessionCookie(response, sessionId);
   return response;
 }

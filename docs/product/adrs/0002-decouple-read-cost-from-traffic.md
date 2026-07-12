@@ -119,3 +119,21 @@ Constraints that shape the decision:
 3. **Confirmation:** the re-audit found **no client-side polling** (the only `setInterval` is a
    UI-only headline rotator), confirming the uncached read path is the sole linear-scaling surface
    this ADR needs to address.
+
+### July 12, 2026 — build amendment (PRD 51): §3 executed as data-layer decoupling; `force-dynamic` retained
+
+Decision §3 assumed the anonymous board is viewer-independent. It is not quite: **anonymous
+session tuning is server-rendered** (Phase 14 made anonymous tuning the default — a cookie-carrying
+anonymous viewer's discovery states, preference signals, and implicit signals personalize the SSR
+board). Literally dropping `force-dynamic` would (a) reintroduce the build-time DB render pass the
+flag guards against, and (b) break §6's own "anonymous output byte-for-byte" gate for any
+anonymous viewer with history. So §3 shipped as **data-layer decoupling**: the pages stay
+per-request (cookies are inherently per-request), but every read behind them is cached and
+write-invalidated — event reads under the `events` tag (`lib/event-read-cache.ts`), the public
+per-event signal maps under `event-signals` (`lib/board-data.ts`), invalidated by the cron and by
+each community/curator/shared-song write (`lib/event-signals-cache.ts`). Viewer-scoped reads
+short-circuit to empty without a session identity, so a **cookieless view (bots, first-time
+visitors — the traffic that scales) costs zero DB queries**; a cheap DB-free invocation per view
+remains, which is the flattest cost axis on the bill. A full CDN-static shell would require moving
+anonymous personalization client-side (post-hydration fetch + re-score) and is deferred as an
+explicit follow-up, to be weighed against the hydration flash it introduces.

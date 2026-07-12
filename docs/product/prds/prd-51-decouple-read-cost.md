@@ -32,7 +32,39 @@ work and to stop payload egress scaling with event volume × signal maps.
 
 ## Implementation Status
 
-**Planned.**
+**Built (Jul 12, 2026) — owner verification pass pending.** Delivered:
+
+- **Cached event reads** — `lib/event-read-cache.ts` (pure wiring: day-keyed reads + per-view
+  started-events filter so output matches the uncached query) injected with `unstable_cache` in
+  `lib/events.ts`; tag `events`, daily backstop. `/api/sync/avlgo` calls `revalidateEventReads()`
+  after a successful upsert (both modes, plus the artist-match hook, `backfill-images`, and the
+  `artist-match` route for their slices) — freshness is event-driven, the timer is a backstop.
+- **Cached public payloads** — `lib/board-data.ts`: `getPublicBoardSignals` (counts, shared-song
+  summaries, curated-by, track counts — one shared entry for the board) and `getPublicEventContext`
+  (community, shared songs, curated-by, artist match — one entry per event), tag `event-signals`
+  (+`events`), hourly backstop. All ten community/curator/shared-song write routes revalidate the
+  tag on a successful write via `lib/event-signals-cache.ts`, so counts move on the write itself.
+- **Payload split** — viewer-scoped reads stay per-request and short-circuit to empty with no
+  session identity: a cookieless anonymous view (bots, first-time visitors — the traffic that
+  scales) costs **zero DB queries**. `force-dynamic` is retained by design: anonymous session
+  tuning is server-rendered (Phase 14), so the pages are inherently per-request — see the
+  July 12 build amendment in ADR 002 for the full rationale and the deferred CDN-static follow-up.
+- **Neon pooled + scale-to-zero** — Vercel `DATABASE_URL` (Production + Preview) now points at the
+  `-pooler` endpoint, validated first against the live DB with the app's exact pool settings
+  (select/tx/parameterized reads); `DATABASE_URL_UNPOOLED` added for migrations and preferred by
+  `npm run db:apply`; stale Aiven/PgBouncer comment in `lib/db.ts` replaced. Branch autosuspend
+  confirmed at the 5-minute plan default — with cached reads, idle windows now actually occur.
+- **Image optimization trimmed** — `minimumCacheTTL` 31 days; `deviceSizes`/`imageSizes` pruned to
+  what the app renders (rides PRD 50's host allow-list).
+- **Tests** — `test:events-cache` (8): once-per-key, tag-invalidation re-query, the freshness
+  regression (feed change appears after revalidate — and only then), by-id caching, the per-view
+  filter, plus a source-scan that every signal write route revalidates and the read path routes
+  through the cache. All suites, typecheck, lint, build, readability smoke (18) green; touched
+  files Snyk-clean.
+
+**Remaining (owner, dated in the epic when done):** the PRD's verification pass — on a preview
+deploy, `/` twice → no event DB queries on the second load (Vercel logs); Neon compute shows an
+idle/suspended window during a no-traffic gap.
 
 ## Requirements
 

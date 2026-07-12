@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runArtistMatchBackfill } from "@/lib/artist-match";
 import { recordJobRun } from "@/lib/admin/job-runs";
 import { assertCronRequest } from "@/lib/cron-auth";
+import { revalidateEventSignals } from "@/lib/event-signals-cache";
 
 export const maxDuration = 300;
 export const runtime = "nodejs";
@@ -32,6 +33,8 @@ export async function GET(request: Request) {
 
   try {
     const summary = await runArtistMatchBackfill({ limit });
+    // Track counts feed the cached board signal maps (PRD 51) — surface new matches immediately.
+    revalidateEventSignals();
 
     await recordJobRun({
       job: "artist_match",

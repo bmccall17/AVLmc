@@ -9,9 +9,8 @@ import {
   ANONYMOUS_SESSION_COOKIE_NAME,
   getAnonymousSessionIdFromCookieValue,
 } from "@/lib/anonymous-session";
-import { getArtistTrackCountsByEvent } from "@/lib/artist-match";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
-import { getCommunityCountsByEvent } from "@/lib/community";
+import { getPublicBoardSignals } from "@/lib/board-data";
 import { scoreDiscoveryEvents, type DiscoveryScore } from "@/lib/discovery";
 import {
   listDiscoveryPreferenceSignals,
@@ -26,14 +25,16 @@ import { DEFAULT_LISTENER_DISCOVERY_PREFERENCES } from "@/lib/listener-preferenc
 import { getListenerDiscoveryPreferences } from "@/lib/listener-preferences-store";
 import { listMusicConnections, listMusicProfileItems } from "@/lib/music";
 import { getSavedKeys } from "@/lib/saved-items";
-import { getSharedSongSummariesByEvent } from "@/lib/shared-songs";
 import { getCircleEventActivity } from "@/lib/social-activity";
-import { getCuratedByForEvents, getFollowedCuratorPicks } from "@/lib/curators";
+import { getFollowedCuratorPicks } from "@/lib/curators";
 import { SPOTIFY_LIMITED_BETA_CODE } from "@/lib/spotify-limited-access";
 
-// Reads cookies/auth and queries the DB on render. Force dynamic so Next.js skips the
-// build-time render pass that would otherwise open DB connections and risk exhausting
-// the Neon pool (53300 too_many_connections) during the build.
+// Reads cookies/auth on render, so the route is per-request by nature (anonymous session tuning
+// is server-rendered — Phase 14). Force dynamic so Next.js also skips the build-time render pass
+// that would otherwise open DB connections during the build. The cost decoupling (PRD 51) lives
+// in the data layer instead: event reads and the public signal maps are `unstable_cache`d and
+// write-invalidated, and every viewer-scoped read short-circuits without a session identity — a
+// cookieless view costs zero DB queries even though the render itself stays dynamic.
 export const dynamic = "force-dynamic";
 
 type HomePageProps = {
@@ -63,7 +64,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     : null;
   const userId = user?.id ?? null;
   const [
-    counts,
+    // Cached, viewer-independent payload (counts, shared-song summaries, curated-by, track
+    // counts) — one shared entry, write-invalidated via the `event-signals` tag (PRD 51).
+    publicSignals,
     musicConnections,
     musicProfileItems,
     discoveryStates,
@@ -73,14 +76,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     listenerPreferences,
     avlgoTop30EventIds,
     savedKeys,
-    sharedSongSummaries,
     circleActivityByEvent,
-    curatedByEvent,
     followedCuratorPicksByEvent,
-    artistTrackCounts,
   ] =
     await Promise.all([
-      getCommunityCountsByEvent(eventIds),
+      getPublicBoardSignals(eventIds),
       userId ? listMusicConnections(userId) : Promise.resolve([]),
       userId ? listMusicProfileItems(userId) : Promise.resolve([]),
       listDiscoveryStates(eventIds, { sessionId, userId }),
@@ -90,17 +90,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       userId ? getListenerDiscoveryPreferences(userId) : Promise.resolve(undefined),
       getAvlgoTop30EventIds(events),
       userId ? getSavedKeys(userId) : Promise.resolve([]),
-      getSharedSongSummariesByEvent(eventIds),
       // Batched one-query-per-page "your people" activity; empty for anonymous viewers (PRD 24 / C2).
       getCircleEventActivity(userId, eventIds),
-      // Batched "curated by" lookup for the board signal (PRD 25 / C3); public, anonymous-safe.
-      getCuratedByForEvents(eventIds),
       // Followed-curator picks feed the off-by-default socialCircle component (PRD 26 / C4); empty
       // for anonymous viewers and for curators the viewer doesn't follow.
       getFollowedCuratorPicks(userId, eventIds),
-      // Matched-artist preview-track counts for the board's listenable chip (PRD 46, Story E).
-      getArtistTrackCountsByEvent(eventIds),
     ]);
+  const { counts, sharedSongSummaries, curatedByEvent, artistTrackCounts } = publicSignals;
   const savedEventKeys = savedKeys
     .filter((key) => key.itemType === "event")
     .map((key) => key.itemKey);

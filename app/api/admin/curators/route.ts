@@ -15,6 +15,7 @@ import {
   type CuratorStatus,
 } from "@/lib/curators";
 import { CURATOR_SELF_SERVE_GATE } from "@/lib/curators-core";
+import { revalidateEventSignals } from "@/lib/event-signals-cache";
 import {
   listCuratorRecommendationsForAdmin,
   setCuratorRecommendationStatus,
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
         eventTitle: typeof body.eventTitle === "string" ? body.eventTitle : undefined,
         note: typeof body.note === "string" ? body.note : null,
       });
+      revalidateEventSignals();
       return NextResponse.json({ ok: true });
     }
 
@@ -78,6 +80,7 @@ export async function POST(request: Request) {
       displayName: typeof body.displayName === "string" ? body.displayName : null,
       bio: typeof body.bio === "string" ? body.bio : null,
     });
+    revalidateEventSignals();
     return NextResponse.json({ curator });
   } catch (error) {
     return handleError(error);
@@ -92,6 +95,9 @@ export async function PATCH(request: Request) {
   try {
     if (body.target === "pick" && typeof body.id === "string") {
       const ok = await setPickStatus(body.id, body.status as CuratorPickStatus);
+      if (ok) {
+        revalidateEventSignals();
+      }
       return ok ? NextResponse.json({ ok }) : notFound();
     }
     if (body.target === "recommendation" && typeof body.id === "string") {
@@ -100,6 +106,9 @@ export async function PATCH(request: Request) {
     }
     if (typeof body.id === "string" && typeof body.status === "string") {
       const ok = await setCuratorStatus(body.id, body.status as CuratorStatus);
+      if (ok) {
+        revalidateEventSignals();
+      }
       return ok ? NextResponse.json({ ok }) : notFound();
     }
     return badRequest("An id and status are required.");

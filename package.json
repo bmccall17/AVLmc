@@ -34,6 +34,7 @@
     "test:cron-auth": "node --import tsx --test tests/cron-auth.test.ts",
     "test:blob-guard": "node --import tsx --test tests/blob-ingest-guard.test.ts",
     "test:read-path": "node --import tsx --test tests/read-path-fallback.test.ts",
+    "test:events-cache": "node --import tsx --test tests/events-cache.test.ts",
     "test:spotify-gate": "node --import tsx --test tests/spotify-gate.test.ts",
     "test:spotify-reconnect": "node --import tsx --test tests/spotify-reconnect.test.ts",
     "test:artist-match": "rm -rf /tmp/avlmc-artist-match-tests && tsc -p tests/tsconfig.artist-match.json && node --test /tmp/avlmc-artist-match-tests/tests/artist-match.test.js",

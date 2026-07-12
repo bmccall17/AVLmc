@@ -4,6 +4,7 @@ import {
   setSharedSongStatus,
   type SharedSongStatus,
 } from "@/lib/shared-songs";
+import { revalidateEventSignals } from "@/lib/event-signals-cache";
 
 const STATUSES = new Set<SharedSongStatus>(["visible", "hidden", "pending"]);
 
@@ -35,5 +36,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Shared song not found." }, { status: 404 });
   }
 
+  revalidateEventSignals();
   return NextResponse.json({ song });
 }

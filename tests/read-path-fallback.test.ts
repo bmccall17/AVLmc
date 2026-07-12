@@ -55,7 +55,11 @@ test("getUpcomingEvents falls back to seed, never a scrape", () => {
 test("getEventById returns not-found for unknown ids, never a scrape", () => {
   const body = extractSection("export async function getEventById");
   assert.ok(!/syncUpcomingEvents/.test(body), "getEventById must not scrape");
-  assert.ok(/getEventByIdFromDatabase\(id\)/.test(body), "lookup must be DB-only");
+  // PRD 51: the DB lookup goes through the tagged read cache; either form is a plain read.
+  assert.ok(
+    /eventReadCache\.readById\(id\)/.test(body) || /getEventByIdFromDatabase\(id\)/.test(body),
+    "lookup must be a plain (cached) DB read"
+  );
 });
 
 function extractSection(startMarker: string): string {

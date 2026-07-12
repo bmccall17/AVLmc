@@ -10,6 +10,7 @@ import { describeImageIngestStats } from "@/lib/image-resilience";
 import { recordJobRun } from "@/lib/admin/job-runs";
 import { matchArtistsForNewEvents } from "@/lib/artist-match";
 import { assertCronRequest } from "@/lib/cron-auth";
+import { revalidateEventReads, revalidateEventSignals } from "@/lib/event-signals-cache";
 
 export const maxDuration = 300;
 export const runtime = "nodejs";
@@ -26,6 +27,10 @@ export async function GET(request: Request) {
   try {
     if (auditMode === "duplicates") {
       const result = await syncUpcomingEventsWithDuplicateAudit();
+      // Fresh feed data must be visible immediately after a successful sync (PRD 51 / ADR 002):
+      // the tag revalidation here is the primary freshness mechanism; the daily cache
+      // `revalidate` is only a backstop.
+      revalidateEventReads();
       const duplicateGroups = await attachHiddenActivity(result);
 
       await recordJobRun({
@@ -54,6 +59,9 @@ export async function GET(request: Request) {
     }
 
     const { events, imageStats } = await syncUpcomingEventsDetailed();
+    // Primary freshness mechanism (PRD 51 / ADR 002): a successful upsert invalidates the cached
+    // event reads + public signal maps so the new feed is visible immediately — and only then.
+    revalidateEventReads();
 
     await recordJobRun({
       job: "avlgo_sync",
@@ -89,6 +97,8 @@ async function runArtistMatchHook() {
   try {
     const summary = await matchArtistsForNewEvents();
     if (summary && summary.processed > 0) {
+      // The hook runs after the main revalidation — new matches feed the cached signal maps.
+      revalidateEventSignals();
       await recordJobRun({
         job: "artist_match",
         status: "success",

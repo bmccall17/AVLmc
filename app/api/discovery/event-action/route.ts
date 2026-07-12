@@ -19,6 +19,7 @@ import {
   recordDiscoveryEventAction,
   type DiscoveryEventAction,
 } from "@/lib/discovery-memory";
+import { revalidateEventSignals } from "@/lib/event-signals-cache";
 import { getEventById } from "@/lib/events";
 import { seedSharedSongsForEvent } from "@/lib/shared-songs";
 import { addPickIfActiveCurator, hidePickIfActiveCurator } from "@/lib/curators";
@@ -231,6 +232,8 @@ function shouldRevalidateAfterAction(action: DiscoveryEventAction) {
 function revalidateEventSurfaces(eventId: string) {
   revalidatePath("/");
   revalidatePath(`/event/${encodeURIComponent(eventId)}`);
+  // Cached public signal maps (PRD 51): counts/shared-songs/picks move on the write itself.
+  revalidateEventSignals();
 }
 
 function getString(body: object, key: string) {

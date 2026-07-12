@@ -10,12 +10,12 @@ import { EventImage } from "@/components/EventImage";
 import { SaveButton } from "@/components/SaveButton";
 import { SharedListening } from "@/components/SharedListening";
 import { TicketIntentLink } from "@/components/TicketIntentLink";
-import { getPublishedArtistMatch } from "@/lib/artist-match";
 import {
   ANONYMOUS_SESSION_COOKIE_NAME,
   getAnonymousSessionIdFromCookieValue,
 } from "@/lib/anonymous-session";
-import { getCommunityForEvent, publicContribution } from "@/lib/community";
+import { getPublicEventContext } from "@/lib/board-data";
+import { publicContribution } from "@/lib/community";
 import { getOptionalUserId } from "@/lib/current-user";
 import { normalizeText } from "@/lib/discovery";
 import { listDiscoveryStates } from "@/lib/discovery-memory";
@@ -25,7 +25,6 @@ import { listMusicConnections } from "@/lib/music";
 import { getSavedKeys } from "@/lib/saved-items";
 import { listPublicSharedSongs } from "@/lib/shared-songs";
 import { attributeSharedSongs, getCircleEventActivity } from "@/lib/social-activity";
-import { getCuratedByForEvents } from "@/lib/curators";
 
 type EventPageProps = {
   params: Promise<{
@@ -33,6 +32,11 @@ type EventPageProps = {
   }>;
 };
 
+// Per-request by nature (cookies/session drive save state, discovery state, and circle
+// attribution); force dynamic also skips the build-time render pass that would open DB
+// connections. The PRD 51 cost decoupling is in the data layer: the event row and the public
+// context (community, shared songs, curated-by, artist match) are cached and write-invalidated,
+// so an anonymous view costs zero DB queries.
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: EventPageProps): Promise<Metadata> {
@@ -73,33 +77,37 @@ export default async function EventPage({ params }: EventPageProps) {
     notFound();
   }
 
-  const community = await getCommunityForEvent(event.id);
   const userId = await getOptionalUserId();
   const cookieStore = await cookies();
   const sessionId = getAnonymousSessionIdFromCookieValue(
     cookieStore.get(ANONYMOUS_SESSION_COOKIE_NAME)?.value
   );
   const [
+    // Cached, viewer-independent payload (community, shared songs, curated-by, artist match) —
+    // one shared entry per event, write-invalidated via the `event-signals` tag (PRD 51).
+    publicContext,
     musicConnections,
     discoveryStates,
     savedKeys,
-    publicSharedSongs,
     circleActivityByEvent,
-    curatedByEvent,
-    artistMatch,
   ] = await Promise.all([
+    getPublicEventContext(event.id),
     userId ? listMusicConnections(userId) : Promise.resolve([]),
     listDiscoveryStates([event.id], { sessionId, userId }),
     userId ? getSavedKeys(userId) : Promise.resolve([]),
-    listPublicSharedSongs(event.id, userId),
     getCircleEventActivity(userId, [event.id]),
-    getCuratedByForEvents([event.id]),
-    getPublishedArtistMatch(event.id),
   ]);
+  const { community, curatedBy, artistMatch } = publicContext;
+  // Signed-in viewers re-read the shared list with their own top-tracks badge matching; the
+  // anonymous shape comes straight from the cached context.
+  const publicSharedSongs = userId
+    ? await listPublicSharedSongs(event.id, userId)
+    : publicContext.sharedSongs;
   // Attribute in-circle seeders server-side at the gate (no-op for anonymous viewers).
-  const sharedSongs = await attributeSharedSongs(userId, event.id, publicSharedSongs);
+  const sharedSongs = userId
+    ? await attributeSharedSongs(userId, event.id, publicSharedSongs)
+    : publicSharedSongs;
   const circleActivity = circleActivityByEvent[event.id] ?? null;
-  const curatedBy = curatedByEvent[event.id] ?? [];
   const spotifySearchEnabled = musicConnections.some(
     (connection) => connection.provider === "spotify" && !connection.disconnectedAt
   );

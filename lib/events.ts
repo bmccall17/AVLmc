@@ -1,9 +1,15 @@
+import { unstable_cache } from "next/cache";
 import { query } from "@/lib/db";
 import {
   buildEventDuplicateAudit,
   getCanonicalEvents,
   type EventDuplicateAuditGroup,
 } from "@/lib/event-dedupe";
+import {
+  createEventReadCache,
+  filterNotYetStarted,
+  type TaggedCacheFactory,
+} from "@/lib/event-read-cache";
 import { ingestImageToBlob, deleteImageBlob } from "@/lib/blob-storage";
 import {
   emptyImageIngestStats,
@@ -167,11 +173,27 @@ export function getDateWindow(now = new Date()) {
   return { start, end };
 }
 
+// Cached read path (PRD 51 / ADR 002 §1): the DB reads are day-keyed `unstable_cache` entries
+// under the `events` tag — the AVLgo cron revalidates the tag after a successful upsert, and the
+// daily `revalidate` is only a backstop. The rows are cached pre-dedupe from local midnight so
+// one shared entry serves every viewer; the per-view "already started" filter and canonical
+// dedupe replay in-memory, keeping output identical to the uncached query.
+const eventReadCache = createEventReadCache<EventRecord, EventRecord>({
+  cacheFactory: unstable_cache as TaggedCacheFactory,
+  listUpcomingByDay: (dayKey: string) =>
+    listUpcomingEventsFromDatabase(dayFromKey(dayKey), { dedupe: false }),
+  getById: (id: string) => getEventByIdFromDatabase(id),
+});
+
 // Render paths never scrape (PRD 50 / ADR 002 §2): an empty read serves the static seed
 // fallback and an unknown id is simply not-found. Ingest is the cron's job only — otherwise
 // `/event/<bogus-id>` in a loop is a single-actor scrape/normalize/ingest cost lever.
 export async function getUpcomingEvents(now = new Date()): Promise<EventRecord[]> {
-  const storedEvents = await listUpcomingEventsFromDatabase(now);
+  const dayKey = formatYmd(atLocalMidnight(now));
+  const storedCandidates = await eventReadCache.readUpcomingByDay(dayKey);
+  const storedEvents = getCanonicalEvents(filterNotYetStarted(storedCandidates, now)).sort(
+    compareByDateTime
+  );
 
   if (storedEvents.length > 0) {
     return storedEvents;
@@ -181,7 +203,11 @@ export async function getUpcomingEvents(now = new Date()): Promise<EventRecord[]
 }
 
 export async function getEventById(id: string): Promise<EventRecord | null> {
-  return getEventByIdFromDatabase(id);
+  return eventReadCache.readById(id);
+}
+
+function dayFromKey(dayKey: string) {
+  return new Date(`${dayKey}T00:00:00`);
 }
 
 export function getSeedFallbackEvents(now = new Date()): EventRecord[] {

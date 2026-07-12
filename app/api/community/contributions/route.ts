@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createContribution, getCommunityForEvent, publicContribution } from "@/lib/community";
 import type { ContributionType } from "@/lib/community";
 import { recordDiscoveryEventAction } from "@/lib/discovery-memory";
+import { revalidateEventSignals } from "@/lib/event-signals-cache";
 import { getEventById } from "@/lib/events";
 import {
   getOrCreateAnonymousSessionId,
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
         userId,
       });
     }
+    revalidateEventSignals();
     const community = await getCommunityForEvent(input.eventId);
 
     const response = NextResponse.json({

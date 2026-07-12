@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { requireUserId } from "@/lib/current-user";
+import { revalidateEventSignals } from "@/lib/event-signals-cache";
 import { shareWithCircle, type CircleShareKind } from "@/lib/social-activity";
 
 export const runtime = "nodejs";
@@ -29,6 +30,9 @@ export async function POST(request: Request) {
   const eventTitle = typeof body?.eventTitle === "string" ? body.eventTitle : undefined;
 
   const shared = await shareWithCircle({ userId, eventId, eventTitle, kind });
+  if (shared) {
+    revalidateEventSignals();
+  }
   return NextResponse.json({ shared });
 }
 

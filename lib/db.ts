@@ -36,11 +36,12 @@ export function getPool() {
     throw new Error("DATABASE_URL is not set");
   }
 
-  // Serverless connection hygiene: one connection per warm Lambda (`max: 1`), but release it
-  // quickly when idle so a traffic spike of many concurrent Lambdas does not pin every slot of
-  // a small Postgres connection cap (Aiven free tier) and trigger `53300 too_many_connections`.
-  // `allowExitOnIdle` lets the pool drop its socket between bursts. The durable fix is a
-  // server-side connection pooler (PgBouncer) — point DATABASE_URL at the Aiven pooler endpoint.
+  // Serverless connection hygiene: one connection per warm Lambda (`max: 1`), released quickly
+  // when idle so concurrent Lambdas do not pin connection slots; `allowExitOnIdle` lets the pool
+  // drop its socket between bursts, which is what allows Neon compute to autosuspend once the
+  // PRD 51 read caches leave real idle windows. DATABASE_URL points at the Neon **-pooler**
+  // endpoint (validated Jul 12, 2026); migrations use the direct endpoint via
+  // DATABASE_URL_UNPOOLED (`npm run db:apply`) because they need a real session.
   pool ??= new Pool({
     connectionString: normalizeConnectionString(connectionString),
     max: 1,
