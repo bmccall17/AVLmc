@@ -587,6 +587,23 @@ unchanged, the canonical keeps its own start time, and fuzzy merges surface in t
 with a `merged: start times within 90 minutes across sources` reason. Verified against the live prod
 rows; regression-locked by a real-fixture test. DB cleanup of hidden loser rows stays a later phase.
 
+### Phase 20: Cost Containment & Scale Readiness (planned)
+
+An infrastructure/cost-hardening epic tracked by
+[Cost Containment & Scale Readiness (Epic)](cost-containment-prd.md). Driven by the July 11, 2026
+systems/UX/UI audit, reframed through a cost lens: the stack is correct and $0 today, but read cost
+scales *linearly with pageviews* (every public page is `force-dynamic` with zero caching) and several
+*traffic-independent* surfaces (unauthenticated `/api/sync/*`, an open `/_next/image` proxy, unbounded
+Blob ingest) let a single actor generate spend at zero real users. With traffic expected to climb by
+end of 2026, this epic makes cost **bounded and observable before** the ramp, in three cycles:
+**C1 Defuse the Cost Bombs** (authenticate every compute trigger, close the open proxy, cap ingest,
+turn on spend/usage alerts), **C2 Decouple Read Cost from Traffic** (cached event reads invalidated by
+the cron + static shell + Neon pooled scale-to-zero — see
+[ADR 002](adrs/0002-decouple-read-cost-from-traffic.md)), and **C3 Guardrails** (rate-limit + honeypot
+public writes, edge bot controls, a lean CI gate, transactional automated `db:apply` — see
+[ADR 003](adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md)). No listener-visible
+change; $0 posture held. Recommended order C1 → C2 → C3. **Planned — not started.**
+
 ## Scaling Milestones & Tracking
 
 Analytics are actively running via **Umami Cloud** to monitor Unique Visitors (proxy for WAU/MAU) without heavy cookies or breaking the $0 constraint.
@@ -594,7 +611,7 @@ Analytics are actively running via **Umami Cloud** to monitor Unique Visitors (p
 | Metric Threshold | Triggered Action | Status |
 | --- | --- | --- |
 | **WAU < 10** | Keep Vercel OG image generation fully dynamic (no caching). | Current |
-| **WAU > 100** or **Events > 5,000/mo** | Implement Next.js `revalidate = 3600` on `opengraph-image.tsx` and `twitter-image.tsx` to cache Satori image generation and avoid Vercel compute limit overages. | Parked |
+| **WAU > 100** or **Events > 5,000/mo** | Implement Next.js `revalidate = 3600` on `opengraph-image.tsx` and `twitter-image.tsx` to cache Satori image generation and avoid Vercel compute limit overages. **Now generalized and pulled forward** by [Phase 20 / C2](cost-containment-prd.md) (caches the whole event read path, not just OG images) — do it proactively rather than as a reaction to this threshold. | Parked → superseded by Phase 20 |
 | **Events > 10,000/mo** | Umami Cloud Free Tier limit reached. Transition to self-hosted Umami on a $5/mo VPS or upgrade Umami tier. | Parked |
 | **Active curators ≥ 25** or **Users ≥ 250** | Self-serve curator promotion (Phase 13 / PRD 29) switches from **instant** to an **admin-reviewed pending queue** (`CURATOR_SELF_SERVE_GATE` in `lib/curators-core.ts`; tune against real signups). The admin panel surfaces the live count vs. the gate. | **Active (shipped Jun 17, 2026)** |
 
@@ -605,6 +622,8 @@ See [Architecture Reference](architecture-reference.md) for current routes, comp
 ## Architecture Decision Records (ADRs)
 
 - [ADR 001: Real-Time Taste Signals and Event State Persistence](adrs/0001-real-time-taste-signals-and-state-persistence.md)
+- [ADR 002: Decouple Read Cost from Traffic](adrs/0002-decouple-read-cost-from-traffic.md) — Proposed (Phase 20)
+- [ADR 003: Authenticated Internal Endpoints & Abuse Controls](adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md) — Proposed (Phase 20)
 
 ## Hard Constraints
 
