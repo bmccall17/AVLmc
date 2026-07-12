@@ -69,12 +69,17 @@ test("slow fetch aborts: ingestImageToBlob returns null instead of hanging", asy
       );
     })) as typeof fetch;
 
+  // AbortSignal.timeout's timer is unref'd, so with fetch mocked nothing else holds the event
+  // loop open — without a ref'd keepalive, Node 20's test runner drains the loop and cancels
+  // this (and every later) test before the 50ms abort ever fires.
+  const keepAlive = setTimeout(() => undefined, 5_000);
   try {
     const result = await ingestImageToBlob("https://example.com/slow.jpg", "evt-slow", {
       timeoutMs: 50,
     });
     assert.equal(result, null);
   } finally {
+    clearTimeout(keepAlive);
     globalThis.fetch = originalFetch;
   }
 });
