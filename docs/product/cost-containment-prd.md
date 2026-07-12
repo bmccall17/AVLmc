@@ -196,11 +196,24 @@ for scope. Operational facts a future maintainer needs:
 - **Post-deploy smoke (run after the next push to `main`, date the results here):**
   `curl -i https://avlmc.vercel.app/api/sync/cleanup` → 401; same with bearer → 200; Vercel cron
   logs green the next morning; `/_next/image?url=https://example.com/x.jpg` → 400.
-- **Safety net (owner dashboard steps, ~5 min — record thresholds here when set):**
-  1. Vercel → Team **Settings → Billing → Spend Management**: enable, set a hard cap (suggested
-     **$10/mo** — far above $0-normal, far below pain) + email alert.
-  2. Neon console → project `avlmc` (`long-violet-36681196`) → **Settings/Billing → usage
-     alerts**: enable compute-hours + storage alerts (suggested ~80% of free tier).
+- **Safety net — amended Jul 12, 2026 after verifying the live plans: neither dashboard
+  control exists on the current tiers, and neither is needed for $0 safety.** The Vercel team
+  (`brett-5075s-projects`) is **Hobby** — Spend Management is Pro-only, and Hobby has no metered
+  overage billing at all (usage past included limits is paused, never charged). The Neon org
+  (`bmccall17`) is **Free** — the Spending-limit card is Launch/Scale-only, and Free cannot be
+  charged: compute suspends at 100 CU-hours/project/month, storage writes fail at 0.5 GB, data is
+  never deleted. Both plans are therefore **structurally hard-capped at $0**, which satisfies this
+  item's intent without configuration. The steps below become **mandatory day-one actions on any
+  plan upgrade** (record chosen thresholds here when set):
+  1. **On Vercel Pro:** Team **Settings → Billing → Spend Management**: enable, set a hard cap
+     (suggested **$10/mo** — far above $0-normal, far below pain). Web+email alerts fire
+     automatically at 50/75/100%; decide deliberately on the **Pause production deployment**
+     toggle (pauses *all* team projects at 100%, manual per-project resume). Spend checks run
+     "every few minutes," so set the cap below the true pain threshold.
+  2. **On Neon Launch/Scale:** Console → **Organization → Billing → Spending limit** card: set a
+     monthly cap (suggested low, e.g. **$5/mo**). Emails fire at 80%/100% (fixed, checked every
+     15 min) — note this is **alert-only** today: projects keep running and accruing past the
+     limit (auto-suspension "coming soon" per Neon docs).
 
 ---
 

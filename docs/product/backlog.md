@@ -40,10 +40,14 @@ Updated: July 12, 2026
      build record: `curl -i https://avlmc.vercel.app/api/sync/cleanup` → **401**; same with
      `-H "Authorization: Bearer $CRON_SECRET"` → **200**; Vercel cron logs green the next
      morning; `/_next/image?url=https://example.com/x.jpg` → **400**.
-  2. Enable **Vercel Spend Management** (suggested $10/mo hard cap + email alert) and **Neon
-     usage alerts** (~80% of free tier) — step-by-step in
-     [`cost-containment-prd.md`](cost-containment-prd.md) → C1 build record; record the chosen
-     thresholds there.
+  2. ~~Enable **Vercel Spend Management** + **Neon usage alerts**~~ — **resolved Jul 12, 2026
+     (not applicable on current plans).** Verified live: the Vercel team is **Hobby** (Spend
+     Management is Pro-only; Hobby pauses at included limits and cannot bill overages) and the
+     Neon org is **Free** (Spending limit is Launch/Scale-only; Free suspends compute at
+     100 CU-hours and cannot charge). Both tiers are structurally hard-capped at $0, so the
+     safety-net intent is already met. The dashboard steps are recorded in the
+     [`cost-containment-prd.md`](cost-containment-prd.md) C1 build record as **mandatory
+     day-one actions on any plan upgrade**.
 
 * _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. **Active build focus is
   Phase 20 (Cost Containment — C1–C2/PRDs 50–51 shipped Jul 12, 2026; next PRD 52)**, plus the
