@@ -15,6 +15,7 @@ import {
   TesterRequestValidationError,
 } from "@/lib/tester-requests-core";
 import { SchemaNotProvisionedError } from "@/lib/schema-errors";
+import { getClientIp } from "@/lib/write-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
   }
 
   const email = normalizeTesterEmail(typeof body.email === "string" ? body.email : null);
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip = getClientIp(request);
   const now = Date.now();
   if (
     isRateLimited(attemptsByIp.get(ip) ?? [], now, RATE_MAX_PER_IP) ||

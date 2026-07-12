@@ -2,9 +2,17 @@ import { NextResponse } from "next/server";
 import { getOptionalUserId } from "@/lib/current-user";
 import { submitFeedback } from "@/lib/feedback";
 import { FeedbackValidationError } from "@/lib/feedback-core";
+import {
+  RATE_LIMIT_MESSAGE,
+  createWriteRateLimiter,
+  getClientIp,
+  honeypotTripped,
+} from "@/lib/write-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const limiter = createWriteRateLimiter({ route: "feedback", maxPerIp: 5 });
 
 /**
  * Listener feedback API. Public (anonymous-friendly) — used by the 404 detour and general feedback.
@@ -13,9 +21,16 @@ export const dynamic = "force-dynamic";
  * not-yet-provisioned table degrades to a friendly success rather than a 500.
  */
 export async function POST(request: Request) {
+  if (limiter.check({ ip: getClientIp(request) })) {
+    return NextResponse.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
+  }
+
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+  if (honeypotTripped(body.website)) {
+    return NextResponse.json({ error: "Spam check failed." }, { status: 400 });
   }
 
   try {

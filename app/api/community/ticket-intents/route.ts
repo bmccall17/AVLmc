@@ -9,9 +9,15 @@ import {
   setAnonymousSessionCookie,
 } from "@/lib/anonymous-session";
 import { getOptionalUserId } from "@/lib/current-user";
+import { RATE_LIMIT_MESSAGE, createWriteRateLimiter, getClientIp } from "@/lib/write-rate-limit";
+
+const limiter = createWriteRateLimiter({ route: "ticket-intents", maxPerIp: 20, maxPerIdentity: 20 });
 
 export async function POST(request: Request) {
   const sessionId = getOrCreateAnonymousSessionId(request);
+  if (limiter.check({ ip: getClientIp(request), identity: sessionId })) {
+    return NextResponse.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
+  }
   const userId = await getOptionalUserId();
   const body = await request.json().catch(() => null);
 

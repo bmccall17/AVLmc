@@ -23,6 +23,7 @@ import { revalidateEventSignals } from "@/lib/event-signals-cache";
 import { getEventById } from "@/lib/events";
 import { seedSharedSongsForEvent } from "@/lib/shared-songs";
 import { addPickIfActiveCurator, hidePickIfActiveCurator } from "@/lib/curators";
+import { RATE_LIMIT_MESSAGE, createWriteRateLimiter, getClientIp } from "@/lib/write-rate-limit";
 
 const ACTIONS = new Set<DiscoveryEventAction>([
   "impression",
@@ -37,8 +38,15 @@ const ACTIONS = new Set<DiscoveryEventAction>([
 ]);
 const INTENT_SOURCES = new Set<EventIntentSource>(["avlmc", "spotify", "ticket_click"]);
 
+// Telemetry-shaped route (impressions/detail opens fire per card) — generous by design so a
+// legitimate board browse never trips it; the ceiling exists for scripted floods.
+const limiter = createWriteRateLimiter({ route: "event-action", maxPerIp: 120, maxPerIdentity: 120 });
+
 export async function POST(request: Request) {
   const sessionId = getOrCreateAnonymousSessionId(request);
+  if (limiter.check({ ip: getClientIp(request), identity: sessionId })) {
+    return NextResponse.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
+  }
   const userId = await getOptionalUserId();
   const body = await request.json().catch(() => null);
 

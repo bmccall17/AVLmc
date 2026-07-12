@@ -9,10 +9,15 @@ import {
   setAnonymousSessionCookie,
 } from "@/lib/anonymous-session";
 import { getOptionalUserId } from "@/lib/current-user";
+import { RATE_LIMIT_MESSAGE, createWriteRateLimiter, getClientIp } from "@/lib/write-rate-limit";
 
 export const runtime = "nodejs";
 
 const TYPES = new Set<ContributionType>(["song", "comment"]);
+
+// The IP dimension is the cookie-clear fix (PRD 52): the durable session-keyed check stays in
+// lib/community.ts assertRateLimit, but rotating the anonymous-session cookie no longer resets it.
+const limiter = createWriteRateLimiter({ route: "contributions", maxPerIp: 5, maxPerIdentity: 5 });
 
 type ContributionInput = {
   eventId: string | null;
@@ -41,6 +46,9 @@ type ValidContributionInput = ContributionInput & {
 export async function POST(request: Request) {
   try {
     const sessionId = getOrCreateAnonymousSessionId(request);
+    if (limiter.check({ ip: getClientIp(request), identity: sessionId })) {
+      return NextResponse.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
+    }
     const userId = await getOptionalUserId();
     const contentType = request.headers.get("content-type") ?? "";
     const input = contentType.includes("multipart/form-data")

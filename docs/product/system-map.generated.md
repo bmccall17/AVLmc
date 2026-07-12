@@ -113,6 +113,17 @@ Groups near-identical events with fuzzy time bucketing — start times within FU
 - **Fed by / required by:**
   - ← Event Ingestion (flowsTo) — normalized rows
 
+#### Write Rate Limiter  `svc-write-rate-limit`
+
+Shared sliding-window rate limiting for every public write route (PRD 52 / ADR 003 §4): feedback, reactions, contributions, ticket intents, discovery event actions, Spotify match corrections, and avatar uploads each gate on an IP dimension plus an optional identity dimension (session/user id) before parsing the body — the Nth write in the window is a 429. Also owns the shared getClientIp helper and the `website` honeypot check.
+
+- **Kind:** Service
+- **Source of truth:** `lib/write-rate-limit.ts`
+- **Access:** internal
+- **Ownership:** automated
+- **Implementation notes:**
+  - _Note:_ Deliberately in-memory per warm instance (ADR 003 amendment 4 accepted limitation): free and dependency-less, effective under Fluid Compute instance reuse; the Vercel WAF rules are the cross-instance backstop and a KV-backed limiter is the escape hatch only if multi-instance accuracy becomes a measured problem. Windows reuse the pure helpers in lib/tester-requests-core.ts; the IP dimension on contributions is the cookie-clear fix (the session-keyed DB check in lib/community.ts stays). test:write-rate-limits guards the window math and source-scans the route wiring.
+
 #### Music Taste Sync  `svc-music`
 
 Pulls a connected listener's Spotify profile into music_connections and music_profile_items, and matches event artists to Spotify.
@@ -1534,4 +1545,4 @@ Curated Spotify playlist featured in the navigation — the first ecosystem part
 
 ---
 
-_84 nodes, 114 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._
+_85 nodes, 114 edges. Regenerate with `npm run generate:system-map` after editing `lib/system-registry.ts`._

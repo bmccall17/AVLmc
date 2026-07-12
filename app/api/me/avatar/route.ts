@@ -3,9 +3,14 @@ import { NextResponse } from "next/server";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { requireUserId } from "@/lib/current-user";
 import { deleteCustomAvatarBlob, getUserImage, setUserImage } from "@/lib/user-image";
+import { RATE_LIMIT_MESSAGE, createWriteRateLimiter, getClientIp } from "@/lib/write-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// Keyed per IP and per signed-in user — caps Blob churn per account; the 429 fires before the
+// body read so a flood never pays the 4 MB buffer or the Blob put.
+const limiter = createWriteRateLimiter({ route: "avatar", maxPerIp: 5, maxPerIdentity: 5 });
 
 const MAX_AVATAR_BYTES = 4_000_000; // 4 MB — generous for a profile photo, safe for Blob upload.
 const ALLOWED_TYPES: Record<string, string> = {
@@ -25,6 +30,9 @@ export async function POST(request: Request) {
   const userId = await getSignedInUserId();
   if (!userId) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+  }
+  if (limiter.check({ ip: getClientIp(request), identity: userId })) {
+    return NextResponse.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
   }
 
   if (!process.env.BLOB_READ_WRITE_TOKEN) {

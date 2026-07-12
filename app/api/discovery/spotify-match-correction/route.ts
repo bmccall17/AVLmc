@@ -9,11 +9,17 @@ import {
   type SpotifyMatchCorrectionAction,
 } from "@/lib/discovery-memory";
 import { getEventById } from "@/lib/events";
+import { RATE_LIMIT_MESSAGE, createWriteRateLimiter, getClientIp } from "@/lib/write-rate-limit";
 
 const ACTIONS = new Set<SpotifyMatchCorrectionAction>(["reject", "replace"]);
 
+const limiter = createWriteRateLimiter({ route: "spotify-match-correction", maxPerIp: 10, maxPerIdentity: 10 });
+
 export async function POST(request: Request) {
   const sessionId = getOrCreateAnonymousSessionId(request);
+  if (limiter.check({ ip: getClientIp(request), identity: sessionId })) {
+    return NextResponse.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
+  }
   const userId = await getOptionalUserId();
   const body = await request.json().catch(() => null);
 

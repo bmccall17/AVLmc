@@ -13,12 +13,18 @@ import { getOptionalUserId } from "@/lib/current-user";
 import { recordDiscoveryEventAction } from "@/lib/discovery-memory";
 import { revalidateEventSignals } from "@/lib/event-signals-cache";
 import { getEventById } from "@/lib/events";
+import { RATE_LIMIT_MESSAGE, createWriteRateLimiter, getClientIp } from "@/lib/write-rate-limit";
 
 const REACTIONS = new Set<ReactionType>(["going", "fire"]);
 const INTENT_SOURCES = new Set<EventIntentSource>(["avlmc", "spotify", "ticket_click"]);
 
+const limiter = createWriteRateLimiter({ route: "reactions", maxPerIp: 30, maxPerIdentity: 30 });
+
 export async function POST(request: Request) {
   const sessionId = getOrCreateAnonymousSessionId(request);
+  if (limiter.check({ ip: getClientIp(request), identity: sessionId })) {
+    return NextResponse.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
+  }
   const userId = await getOptionalUserId();
   const body = await request.json().catch(() => null);
 

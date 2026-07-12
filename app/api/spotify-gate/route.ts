@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getAuthFeatureFlags } from "@/lib/auth-flags";
 import { checkSpotifyGate } from "@/lib/spotify-gate";
+import { getClientIp } from "@/lib/write-rate-limit";
 import {
   isRateLimited,
   normalizeTesterEmail,
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ outcome: "allowed" });
   }
 
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip = getClientIp(request);
   const now = Date.now();
   if (isRateLimited(attemptsByIp.get(ip) ?? [], now, RATE_MAX_PER_IP)) {
     return NextResponse.json(

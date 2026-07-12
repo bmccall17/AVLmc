@@ -16,6 +16,7 @@ export function FeedbackForm() {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [email, setEmail] = useState("");
+  const [website, setWebsite] = useState("");
   const [state, setState] = useState<FormState>({ kind: "idle", message: "" });
 
   async function submit() {
@@ -32,6 +33,7 @@ export function FeedbackForm() {
           message: trimmed,
           email: email.trim() || undefined,
           path: typeof window !== "undefined" ? window.location.pathname : undefined,
+          website,
         }),
       });
       const data = (await response.json()) as { error?: string };
@@ -68,6 +70,17 @@ export function FeedbackForm() {
         placeholder="Email (optional — only if you'd like a reply)"
         type="email"
         value={email}
+      />
+      {/* Honeypot — humans never see or fill this (same anti-spam pattern as the community form). */}
+      <input
+        aria-hidden="true"
+        autoComplete="off"
+        name="website"
+        onChange={(event) => setWebsite(event.target.value)}
+        style={{ position: "absolute", left: "-9999px", height: 0, width: 0, opacity: 0 }}
+        tabIndex={-1}
+        type="text"
+        value={website}
       />
       <div className="not-found-feedback-actions">
         <button
