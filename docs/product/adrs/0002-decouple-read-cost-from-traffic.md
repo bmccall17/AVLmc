@@ -1,7 +1,10 @@
 # ADR 002: Decouple Read Cost from Traffic (Cached Reads + Pooled Scale-to-Zero Postgres)
 
-Status: **Proposed** — July 11, 2026. Owns cycle **C2** of the
-[Cost Containment & Scale Readiness epic (Phase 20)](../cost-containment-prd.md).
+Status: **Accepted** — July 12, 2026 (proposed July 11, 2026). Owns cycle **C2** of the
+[Cost Containment & Scale Readiness epic (Phase 20)](../cost-containment-prd.md), executed as
+[PRD 51](../prds/prd-51-decouple-read-cost.md). **Amended July 12, 2026** — see Amendments at the
+bottom: decision §2 (render-path sync removal) moved to C1 ([PRD 50](../prds/prd-50-defuse-cost-bombs.md));
+a §6 (anonymous/personalized payload split) was added from the July 12 re-audit.
 
 ## Context
 
@@ -95,3 +98,24 @@ Constraints that shape the decision:
 - **Testability:** cache behavior is unit-tested by spying the underlying DB query fn (invoked once
   across two reads; re-invoked after `revalidateTag`) — no live DB, honoring the no-local-`DATABASE_URL`
   constraint.
+
+## Amendments
+
+### July 12, 2026 — re-audit refinements (cycles promoted to PRDs 50–52)
+
+1. **Decision §2 (remove ingest from the render path) executes in C1, not C2.** The July 12
+   re-audit found `getEventById` (`lib/events.ts:178`) falls back to a full `syncUpcomingEvents()`
+   on *any unknown id* — so a `/event/<bogus-id>` loop is a **traffic-independent** cost lever,
+   the same class as the unauthenticated sync routes ADR 003 closes. It is pulled forward into
+   [PRD 50](../prds/prd-50-defuse-cost-bombs.md). The decision itself is unchanged.
+2. **New decision §6 — split the anonymous payload from personalization.** The board serializes the
+   full events array plus ~15 per-event signal maps (discovery states, saved keys, circle activity,
+   music profile…) into the RSC/HTML payload on **every** render (`app/page.tsx:82–102`). For the
+   static shell (§3) to be cacheable — and to stop payload egress scaling with event volume ×
+   signal maps — the anonymous (cacheable) payload and the signed-in personalization maps are
+   split: personalization is fetched only for signed-in viewers and never serialized into the
+   anonymous shell. Rendered anonymous output stays byte-for-byte equivalent. Executed in
+   [PRD 51](../prds/prd-51-decouple-read-cost.md).
+3. **Confirmation:** the re-audit found **no client-side polling** (the only `setInterval` is a
+   UI-only headline rotator), confirming the uncached read path is the sole linear-scaling surface
+   this ADR needs to address.

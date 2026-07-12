@@ -1,6 +1,6 @@
 # AVL Music Companion Backlog
 
-Updated: July 9, 2026
+Updated: July 12, 2026
 
 ## Urgent
 
@@ -33,11 +33,26 @@ Updated: July 9, 2026
   session-bound signed-token + confirm route (the email-provider path doesn't auto-link to the session like
   OAuth does), plus hardening `findUserIdByEmail` to `verified`-only — security-sensitive, lower urgency.
 
-* _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. Active focus is the design
-  audit cleanup, the Phase 15 follow-up above, and the Personalized Discovery follow-ups tracked in
+* _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. **Active build focus is
+  Phase 20 (Cost Containment, PRDs 50–52 — first item below)**, plus the two owner actions above and
+  the Personalized Discovery follow-ups tracked in
   [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
 
 ## Planned Next / Up Next
+
+- **Phase 20 — Cost Containment & Scale Readiness (PRDs 50–52), in order C1 → C2 → C3.** Scoped
+  July 12, 2026 from the July 11 audit + July 12 code re-audit; the epic is
+  [`cost-containment-prd.md`](cost-containment-prd.md) and the build docs are
+  [PRD 50 (defuse the cost bombs)](prds/prd-50-defuse-cost-bombs.md) →
+  [PRD 51 (decouple read cost from traffic)](prds/prd-51-decouple-read-cost.md) →
+  [PRD 52 (guardrails: rate limits, bot controls, lean CI, transactional `db:apply`)](prds/prd-52-cost-guardrails.md).
+  Start with PRD 50 — every item is effort-S, independently shippable, and closes a surface that
+  can cost money at zero real users. `$0`, no listener-visible change, no new heavy compute.
+
+- **Aiven decommission is past its trigger (scheduled for on/after June 23; it's July 12).** See the
+  Scheduled section below — Neon has been prod-stable for ~4 weeks; run the retirement checklist
+  (final `pg_dump`, remove env vars everywhere, delete the service, rotate credentials). A powered-on
+  abandoned DB with live credentials is a standing liability.
 
 - **Phase 16 C3 remainder — local-DB degradation + readability smoke test.** The June 25 audit's readability
   and integrity blockers shipped (Phase 16 C1–C2, see Done); two follow-ups remain, tracked by

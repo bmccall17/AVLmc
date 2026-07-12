@@ -1,7 +1,10 @@
 # ADR 003: Authenticated Internal Endpoints & Abuse Controls (the Compute Trust Boundary)
 
-Status: **Proposed** — July 11, 2026. Owns cycle **C1** and the rate-limiting portion of cycle
-**C3** of the [Cost Containment & Scale Readiness epic (Phase 20)](../cost-containment-prd.md).
+Status: **Accepted** — July 12, 2026 (proposed July 11, 2026). Owns cycle **C1** and the
+rate-limiting portion of cycle **C3** of the
+[Cost Containment & Scale Readiness epic (Phase 20)](../cost-containment-prd.md), executed as
+[PRD 50](../prds/prd-50-defuse-cost-bombs.md) and [PRD 52](../prds/prd-52-cost-guardrails.md).
+**Amended July 12, 2026** — see Amendments at the bottom.
 
 ## Context
 
@@ -98,3 +101,27 @@ authenticated, allow-listed, or throttled by construction.** Concretely:
 - **Neutral:** these are security-shaped changes with a cost rationale; the DB-TLS and admin-session
   security findings from the same audit are deliberately **not** in scope here — they belong to a
   security hardening track, not this cost epic.
+
+## Amendments
+
+### July 12, 2026 — re-audit refinements (cycles promoted to PRDs 50–52)
+
+1. **The trust boundary gains a fourth member: the render-path scrape fallback.**
+   `getEventById` (`lib/events.ts:178`) runs a full `syncUpcomingEvents()` on any unknown id — an
+   unauthenticated compute trigger reachable via `/event/<bogus-id>`. Removing it (originally ADR
+   002 §2 / cycle C2) executes with this ADR's C1 items in
+   [PRD 50](../prds/prd-50-defuse-cost-bombs.md).
+2. **Two of the four sync routes have no legitimate external caller at all** — `backfill-images`
+   and `artist-match` are absent from `vercel.json`'s cron list; they are manual/agent tools only.
+   The bearer gate covers them identically; the point is that today they are pure attack surface.
+   `artist-match` additionally lets the caller set `?limit=` (≤500 events of live Spotify work per
+   hit) — clamped behind the gate in PRD 50.
+3. **The open image proxy is latent, not active** — the board renders posters via plain `<img>`,
+   and only local static assets flow through `next/image` today. Decision §2 (allow-list) stands
+   unchanged; the cost of closing it is one line and it also closes the SSRF-adjacent surface.
+4. **The existing limiters are per-instance in-memory `Map`s** (`spotify-gate`, `tester-requests`)
+   — reset on cold start, unshared across concurrent instances. Decision §4 (reuse the sliding-
+   window pattern, no new service) stands, with the limitation now **recorded as accepted**:
+   adequate at current scale under Fluid Compute instance reuse, with §5's edge bot controls as
+   the cross-instance layer and a KV-backed limiter remaining the measured-only escape hatch.
+   Executed in [PRD 52](../prds/prd-52-cost-guardrails.md).

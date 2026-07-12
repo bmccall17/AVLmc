@@ -1,9 +1,15 @@
 # Cost Containment & Scale Readiness — Master PRD (Epic)
 
-Updated: July 11, 2026
+Updated: July 12, 2026
 
-**Status: Planned.** Decomposed into three dependency-sequenced cycles (C1–C3), tracked inline in
-this single document. Not started.
+**Status: Scoped — ready to build.** Decomposed into three dependency-sequenced cycles (C1–C3),
+each promoted to a numbered cycle PRD on July 12, 2026 (per the numbering reservation below):
+[PRD 50 — Defuse the Cost Bombs](prds/prd-50-defuse-cost-bombs.md),
+[PRD 51 — Decouple Read Cost from Traffic](prds/prd-51-decouple-read-cost.md),
+[PRD 52 — Guardrails so Growth Stays Cheap](prds/prd-52-cost-guardrails.md). The cycle PRDs are the
+build documents; this epic remains the umbrella (posture, sequencing, success criteria, evidence).
+A **July 12 code re-audit** independently confirmed every Appendix A finding still live and added
+four refinements, folded into the cycle PRDs and Appendix B. Not started.
 
 This is **Phase 20** in [`master-roadmap.md`](master-roadmap.md). It is driven by the
 [July 11, 2026 systems/UX/UI audit](#appendix-a--evidence-base-july-11-2026-audit) (evidence folded
@@ -92,11 +98,17 @@ not architecture — no ADR; specified directly in C3.
 
 ## Outcome → Cycle Map
 
-| Cycle | Theme | Cost class | ADR | Effort |
-| --- | --- | --- | --- | --- |
-| **C1 — Defuse the Cost Bombs** | Authenticate every compute trigger, close the open image proxy, bound image ingest, cap the heavy sync jobs, and turn on spend/usage alerts. | Traffic-independent (1) + safety net | 0003 | ~2–3 days (all S) |
-| **C2 — Decouple Read Cost from Traffic** | Cache event reads + invalidate from the cron; serve the public pages as a static shell with dynamic islands; move Neon to the pooled scale-to-zero endpoint. | Linear scaling (2) | 0002 | ~3–5 days (M) |
-| **C3 — Guardrails so Growth Stays Cheap** | Rate-limit + honeypot public writes, add edge bot controls on hot/dynamic + `/_next/image` routes, add a **lean** CI gate, and automate a transactional `db:apply`. | Guardrails (3) | 0003 (rate limits) | ~3–5 days (M) |
+| Cycle | PRD | Theme | Cost class | ADR | Effort | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| **C1 — Defuse the Cost Bombs** | [PRD 50](prds/prd-50-defuse-cost-bombs.md) | Authenticate every compute trigger, close the open image proxy, bound image ingest, cap the heavy sync jobs, kill the render-path scrape fallback (pulled forward from C2), and turn on spend/usage alerts. | Traffic-independent (1) + safety net | 0003 | ~2–3 days (all S) | Planned |
+| **C2 — Decouple Read Cost from Traffic** | [PRD 51](prds/prd-51-decouple-read-cost.md) | Cache event reads + invalidate from the cron; serve the public pages as a static shell with dynamic islands; split the anonymous payload from the signed-in personalization maps; move Neon to the pooled scale-to-zero endpoint. | Linear scaling (2) | 0002 | ~3–5 days (M) | Planned |
+| **C3 — Guardrails so Growth Stays Cheap** | [PRD 52](prds/prd-52-cost-guardrails.md) | Rate-limit + honeypot public writes, add edge bot controls on hot/dynamic + `/_next/image` routes, add a **lean** CI gate, and automate a transactional `db:apply`. | Guardrails (3) | 0003 (rate limits) | ~3–5 days (M) | Planned |
+
+> **Scope moves (July 12, 2026):** the render-path-sync removal moved **C2 → C1** (the
+> `getEventById` bogus-id fallback is a single-actor cost lever, same class as the unauth sync
+> routes — see Appendix B item 4); C2 gained the **anonymous/personalized payload split** (Appendix
+> B context). The inline C1–C3 requirement sections below are retained as the epic-level record;
+> where they differ from a cycle PRD, **the cycle PRD wins**.
 
 ## Delivery Sequence & Dependencies
 
@@ -302,9 +314,8 @@ lean (path-filtered, cancel-in-progress); `db:apply` is transactional and runs i
   verified against a live feed sample.
 - **Open (C3):** CI provider — GitHub Actions vs. relying on Vercel's build-time checks. Default:
   **GitHub Actions** (runs on PR before deploy, gates merge); keep it lean per the requirement.
-- **Assumed:** this registers as **Phase 20**; cycle labels C1–C3 scope to this initiative; if the
-  cycles are later promoted to numbered PRDs they continue at **50–52** (after the auth epic's
-  47–49). This single doc is executable as-is.
+- **Resolved (July 12, 2026):** this registers as **Phase 20**; the cycles are promoted to
+  **PRDs 50–52** (after the auth epic's 47–49) — the cycle PRDs are now the executable build docs.
 - **Assumed:** no schema changes are required by the epic itself (C3's `db:apply` automation runs the
   *existing* `schema.sql`; the transaction wrapper is a script change, not a migration).
 
@@ -332,3 +343,31 @@ the working tree on July 11, 2026.
 limit finding (a *security* fix, tracked separately — not a cost surface), and DB TLS
 `rejectUnauthorized: false` (security). This epic is cost/scale only; those belong in a security
 hardening track.
+
+## Appendix B — July 12, 2026 code re-audit (refinements)
+
+An independent code audit on July 12, 2026 re-verified every Appendix A finding as still live
+(nothing shipped between the two audits) and added the following refinements, now folded into the
+cycle PRDs:
+
+1. **`artist-match` batch size is caller-controlled** — `?limit=` up to 500, each unit live Spotify
+   work (`app/api/sync/artist-match/route.ts`). → PRD 50 clamps it behind the bearer gate.
+2. **`backfill-images` and `artist-match` are not in `vercel.json`'s cron list** — they exist only
+   as publicly triggerable heavy endpoints (no scheduled caller to protect; pure attack surface).
+   → PRD 50.
+3. **The open image proxy is latent, not active** — the board renders posters via plain `<img>`
+   (`components/EventBoard.tsx`), not `next/image`; only local static assets flow through
+   optimization today. Still closed in PRD 50 (one-line allow-list); PRD 51's TTL/size trim locks
+   the cost shape in before any poster migration.
+4. **`getEventById` scrape-on-miss** (`lib/events.ts:178`) — any bogus `/event/<id>` triggers a full
+   `syncUpcomingEvents()`; a loop is a single-actor cost lever. → moved **C2 → C1** (PRD 50).
+5. **The board render is a ~15-call DB fan-out per anonymous view** (`app/page.tsx:82–102`) against
+   a `max: 1` pool, and the full events array **plus all per-event signal maps** are serialized
+   into the RSC/HTML payload every render. → PRD 51 adds the anonymous/personalized payload split.
+6. **Existing rate limiters are in-memory per instance** (module-level `Map`s in `spotify-gate`,
+   `tester-requests`) — reset on cold start, unshared across instances; advisory, not protection.
+   → PRD 52 records this as an accepted limitation with edge bot controls as the cross-instance
+   layer.
+7. **No client-side polling exists** — the only `setInterval` is the rotating hero headline
+   (UI-only); all fetches are user-action-triggered. No per-visitor invocation storm from the
+   client; confirms the read path (5) is the sole linear-scaling surface.
