@@ -1,0 +1,103 @@
+# Lean CI gate (PRD 52 / Phase 20 C3). Cheap by construction: one checks job, npm + Playwright
+# caches, docs-only pushes skipped, superseded runs cancelled. No `next build` — Vercel builds
+# every push to main anyway, so a build break is loudly visible on the deployment; typecheck +
+# lint catch the rest far cheaper. Measure minutes in week one (PRD requirement).
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      # Every pure-node suite (no DB, no network, no env). The two DB integration suites
+      # (test:account-loop, test:one-identity) self-skip without DATABASE_URL and stay manual.
+      - name: Unit suites
+        run: |
+          for suite in \
+            discovery event-dedupe image-resilience taxonomy shared-songs insight \
+            social-graph social-activity curators curator-recommendations account-linking \
+            spotify-access tester-requests auth-failures auth-email feedback \
+            account-integrity social-guardrails personalization-benchmark artist-match \
+            hover-player audius-core \
+            registry cron-auth blob-guard read-path events-cache write-rate-limits \
+            spotify-gate spotify-reconnect; do
+            echo "::group::test:$suite"
+            npm run "test:$suite"
+            echo "::endgroup::"
+          done
+
+      # Readability smoke (chromium-only, boots `next dev` with DATABASE_URL="" — zero secrets).
+      # Last on purpose: a red unit suite never pays the browser install.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run test:readability
+
+  # Transactional schema apply (PRD 52 W4) — prod Neon does not auto-apply db/schema.sql, and
+  # silent drift breaks features (see the Health tab's drift probe). Runs only on green main
+  # pushes, against the DIRECT endpoint via the MIGRATION_DATABASE_URL repo secret. Until the
+  # owner adds that secret the job warns and exits green.
+  db-apply:
+    needs: checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for the migration secret
+        id: secret
+        run: |
+          if [ -z "$MIGRATION_DATABASE_URL" ]; then
+            echo "::warning::MIGRATION_DATABASE_URL secret not set — schema apply skipped. Add it (direct/unpooled Neon URL) in repo Settings → Secrets to enable automated db:apply."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.secret.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - if: steps.secret.outputs.present == 'true'
+        run: npm ci
+
+      - if: steps.secret.outputs.present == 'true'
+        run: npm run db:apply

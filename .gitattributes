@@ -1,0 +1,4 @@
+# Normalize line endings to LF everywhere. test:registry compares the generated system map
+# byte-for-byte against docs/product/system-map.generated.md, so a CRLF checkout would fail it
+# spuriously (PRD 52 / lean CI).
+* text=auto eol=lf
