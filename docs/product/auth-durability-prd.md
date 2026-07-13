@@ -1,8 +1,12 @@
 # Auth Durability Hardening — Master PRD (Epic)
 
-Updated: July 8, 2026
+Updated: July 12, 2026
 
-**Status: Planned.** Decomposed into three dependency-sequenced cycle PRDs (47–49). Not started.
+**Status: C1 shipped (Jul 12, 2026); C2–C3 open.** Decomposed into three dependency-sequenced
+cycle PRDs (47–49). [PRD 47 — Sign-In Event Resilience](prds/prd-47-signin-event-resilience.md)
+(**shipped Jul 12, 2026** — F2 closed; see the C1 build note below; the manual F2 repro remains an
+owner action, tracked in `backlog.md`); [PRD 48 — Right-Door Failure Recovery](prds/prd-48-right-door-failure-recovery.md)
+and [PRD 49 — Environment Reach](prds/prd-49-environment-reach.md) are next.
 
 This is **Phase 19** in [`master-roadmap.md`](master-roadmap.md). It is driven directly by the
 [July 8, 2026 auth durability audit](auth-durability-audit-2026-07-08.md), which graded production
@@ -105,7 +109,7 @@ there); the `/api/sync/cleanup` cron (F7); and the System Registry discipline
 
 | Cycle | PRD | Findings | Theme |
 | --- | --- | --- | --- |
-| C1 | [PRD 47 — Sign-In Event Resilience](prds/prd-47-signin-event-resilience.md) | F2 (+F7 optional) | Sign-in survives its side effects: every `events.signIn` step becomes best-effort by construction, with a regression test that a throwing side effect cannot fail sign-in. Optional: expired token/session purge in the cleanup cron. |
+| C1 | [PRD 47 — Sign-In Event Resilience](prds/prd-47-signin-event-resilience.md) — **Shipped (Jul 12, 2026)** | F2 (F7 not taken) | Sign-in survives its side effects: every `events.signIn` step becomes best-effort by construction, with a regression test that a throwing side effect cannot fail sign-in. Optional: expired token/session purge in the cleanup cron. |
 | C2 | [PRD 48 — Right-Door Failure Recovery](prds/prd-48-right-door-failure-recovery.md) | F3 + F4 | The taxonomy learns two truths it's missing: `expired_link` (mapped from Auth.js `Verification`) recovers through the email door, and generic OAuth callback errors get provider-neutral copy — Spotify-beta copy is reserved for the app's own Spotify codes. |
 | C3 | [PRD 49 — Environment Reach: Webviews, Local Dev & Previews](prds/prd-49-environment-reach.md) | F5 + F6 | The chooser becomes environment-aware (webview detection surfaces the existing `browser_fallback` guidance; Google door suppressed where Google will refuse), and the callback-registration + preview posture is verified, decided, and documented. |
 
@@ -127,6 +131,17 @@ C1 Sign-In Event Resilience        (the flow itself can no longer break — do f
   the owner's manual dashboard/device checklist, which doubles as the epic's live verification
   pass.
 - Each cycle is independently shippable; recommended order **C1 → C2 → C3**.
+
+**C1 build note (July 12, 2026).** Shipped as commit `bf2ed56`, closing F2. The open decision
+resolved to the **helper** (`runBestEffort`), making the best-effort posture structural rather than
+a convention each step could forget. The `events.signIn` body moved to `lib/auth-signin-event.ts`
+(`handleSignInEvent`), where all four steps run through `runBestEffort` — which logs a stable
+`signIn side-effect failed:` prefix and never throws; `auth.ts` now just delegates. Side effects are
+injectable deps so `tests/signin-event.test.ts` (6) drives the contract with a throwing stub and no
+DB. The `int-authjs` registry node carries the F2 gotcha. F7 (token/session purge) was **not** taken.
+`lib/music.ts` was left unchanged — the wrap is the fix, not schema tolerance. The only remainder is
+the owner's manual F2 repro (drop the `music_connections` unique constraint on a throwaway Neon
+branch → sign-in still round-trips), tracked in `backlog.md`.
 
 ## Cross-Cutting Risks
 

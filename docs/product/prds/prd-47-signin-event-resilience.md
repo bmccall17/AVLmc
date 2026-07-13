@@ -5,6 +5,8 @@ Part of the [Auth Durability Hardening initiative](../auth-durability-prd.md) (P
 [July 8, 2026 auth durability audit](../auth-durability-audit-2026-07-08.md); optionally closes
 **F7** (Info). No dependencies — do this first.
 
+Updated: July 12, 2026
+
 ## Goal
 
 **No post-sign-in side effect can ever fail an otherwise-successful sign-in.** A listener whose
@@ -27,7 +29,33 @@ regression-tested.
 
 ## Implementation Status
 
-**Planned.**
+**Shipped (Jul 12, 2026).** Delivered:
+
+- **`lib/auth-signin-event.ts` (new)** — `handleSignInEvent` extracts the `events.signIn` body out
+  of the `auth.ts` factory and runs **all four** steps (record music connection, refresh avatar,
+  record provider email, anonymous session hand-off) through `runBestEffort(label, fn)`, which
+  awaits the step, swallows any throw, logs it with the stable prefix `signIn side-effect failed:`,
+  and never rejects. Side effects are injectable deps (defaulting to the real implementations) so
+  the contract is unit-testable with a throwing stub — no DB, no request context.
+- **`auth.ts`** — `events.signIn` is now a one-line delegate (`signIn: handleSignInEvent`); the bare
+  `recordMusicConnection` await and the three ad-hoc try/catch blocks are gone, along with the
+  helpers/imports that migrated into the new module. No bare `await` side effect remains.
+- **`tests/signin-event.test.ts` (`test:signin-event`, 6)** — a throwing `recordMusicConnection`
+  still completes the handler; a step-1 throw does not skip steps 2–4; the failure is logged with
+  the prefix; happy path runs each step once; a non-music provider skips the music step; missing
+  id/provider is a no-op. Runs under the `server-only` stub tsconfig
+  (`tests/tsconfig.signin-event.json`); registered in `package.json` and the CI suite loop.
+- **Registry** — the `int-authjs` node (`lib/system-registry.ts`) gains the F2 `runtime_gotcha`
+  (events are awaited inside the `@auth/core` callback → every step must be best-effort); system map
+  regenerated.
+- **F7 not taken** (out of scope this cycle). No schema change; `lib/music.ts` untouched (adding
+  `42P01/42703` tolerance was an explicit non-goal — the best-effort wrap is the fix). Named
+  regression suites (`test:account-linking`, `test:auth-failures`, `test:auth-email`,
+  `test:account-integrity`, `test:registry`) + typecheck + lint green; touched files Snyk-clean; `$0`.
+
+**Remaining (owner):** manual F2 repro on a throwaway Neon branch — drop the `music_connections`
+unique constraint, confirm Spotify sign-in still round-trips (session cookie set, no `/auth/error`);
+date the result in the epic. Tracked in `backlog.md`.
 
 ## Background: evidence
 

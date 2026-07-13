@@ -65,9 +65,18 @@ Updated: July 12, 2026
      the WAF `rate_limit` action is Pro-gated, so the edge throttle waits on a plan upgrade or
      Vercel BotID — the in-repo limiter is the active protection meanwhile.
 
+* **Manual F2 repro for PRD 47 (owner, ~10 minutes on a throwaway Neon branch).** The code shipped
+  Jul 12, 2026 (commit `bf2ed56`); the best-effort contract is unit-proven (`test:signin-event`).
+  The one remaining proof needs a live sign-in: on a Neon branch off prod, drop the
+  `music_connections` unique constraint (the F2 trigger), then complete a Spotify sign-in and
+  confirm it round-trips — session cookie set, lands signed-in, **not** on `/auth/error` — with a
+  `signIn side-effect failed: record music connection` line in the logs. Date the result in the
+  auth-durability epic's C1 build note. Never against prod.
+
 * _Otherwise none open._ The analytics/WAU‑MAU dependency below is resolved. **Phase 20 (Cost
-  Containment — PRDs 50–52 / C1–C3) shipped Jul 12, 2026; the epic is complete** (owner proofs above).
-  Next build focus is unset — run `/orchestrator`. Personalized Discovery follow-ups remain tracked in
+  Containment — PRDs 50–52) shipped Jul 12, 2026, epic complete; Phase 19 (Auth Durability) C1/PRD 47
+  shipped Jul 12, 2026 — next is PRD 48 (C2, right-door failure recovery).** Personalized Discovery
+  follow-ups remain tracked in
   [`personalized-discovery-backlog.md`](personalized-discovery-backlog.md).
 
 ## Planned Next / Up Next

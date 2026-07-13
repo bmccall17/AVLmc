@@ -30,7 +30,7 @@ Use this document as the master tracker. The focused PRDs live in `docs/product/
 | 16 | [Design-System Readability & Integrity Repair (Epic)](design-system-readability-prd.md) | C1–C2 Shipped (Jun 25, 2026); C3 in progress | Repair the split design system the June 25 audit found (light tokens leaking into dark routes → unreadable pages) with one canonical dark route-shell token context, fix the functional blockers surfaced as design failures (`/icon.png`, silent admin failures, form labels, auth mobile CTA), and codify the result in the design spec + a readability smoke test. `$0`, no new deps, dark-mode-exclusive. PRDs 39–41 across three cycles. |
 | 17 | [Open Spotify Access (Epic)](spotify-access-prd.md) | C1–C4 shipped (Jul 2, 2026); **seat-free taste import shipped (Jul 4, 2026)** as the practical exit ramp — listeners import taste from an uploaded playlist export with no allowlist seat, since Extended Quota is now effectively closed (Spotify's Apr-2025 ~250k-MAU / registered-business rule) | Any listener with an active Spotify account can sign in, connect, and have their taste persistently feed discovery — one account per person, no dead ends. While Spotify's 25-seat Development Mode cap applies: capture sign-in intent at the exact moment it's expressed (pre-redirect chooser + gate, anonymous `tester_requests` capture with owner notification + invite loop), auto-link the two email-verified doors onto one identity, and file the Extended Quota exit ramp so the gate retires with one `SPOTIFY_OPEN_ACCESS` flag flip. `$0`, read-only scopes, no Spotify writes. PRDs 42–45 across four cycles. |
 | 18 | [Cross-Source Duplicate Event Unification](prds/prd-06-cross-source-duplicate-unification.md) | Shipped (Jul 3, 2026) | Collapse cross-source copies of the same show (doors-vs-showtime listings, e.g. the Spoon @ Orange Peel pair) into one canonical card via fuzzy time bucketing in `lib/event-dedupe.ts`, while keeping legitimate same-night repeats and distinctly titled early/late shows separate. Pure read-path change; `$0`. |
-| 19 | [Auth Durability Hardening (Epic)](auth-durability-prd.md) | Planned | Harden the passing auth system against the failure modes the [July 8 auth durability audit](auth-durability-audit-2026-07-08.md) found (F2–F6): no post-sign-in side effect can fail a successful sign-in (F2); expired magic links and Google OAuth failures recover through the *right* door instead of Spotify-beta copy (F3+F4); in-app webviews, local dev, and preview deploys get honest, working sign-in guidance (F5+F6). F1 (Spotify unverified-email auto-link) deliberately parked in `backlog.md` with a hard pre-open-access trigger. `$0`, no schema changes, failure-paths only. PRDs 47–49 across three cycles. |
+| 19 | [Auth Durability Hardening (Epic)](auth-durability-prd.md) | C1 Shipped (Jul 12, 2026); C2–C3 open | Harden the passing auth system against the failure modes the [July 8 auth durability audit](auth-durability-audit-2026-07-08.md) found (F2–F6): no post-sign-in side effect can fail a successful sign-in (F2); expired magic links and Google OAuth failures recover through the *right* door instead of Spotify-beta copy (F3+F4); in-app webviews, local dev, and preview deploys get honest, working sign-in guidance (F5+F6). F1 (Spotify unverified-email auto-link) deliberately parked in `backlog.md` with a hard pre-open-access trigger. `$0`, no schema changes, failure-paths only. PRDs 47–49 across three cycles. |
 | 20 | [Cost Containment & Scale Readiness (Epic)](cost-containment-prd.md) | C1–C3 Shipped (Jul 12, 2026) — epic complete | Make cost bounded and observable before the end-of-2026 traffic ramp, per the [July 11 audit](cost-containment-prd.md#appendix-a--evidence-base-july-11-2026-audit) + [July 12 re-audit](cost-containment-prd.md#appendix-b--july-12-2026-code-re-audit-refinements): defuse the traffic-independent cost bombs (unauth `/api/sync/*`, open `/_next/image` proxy, unbounded ingest, render-path scrape fallback), decouple read cost from pageviews (cached reads + static shell + Neon pooled scale-to-zero), then guardrails (write rate limits, edge bot controls, lean CI, transactional `db:apply`). No listener-visible change; every item a cost reduction or cap, never a new paid service. `$0`. PRDs 50–52 across three cycles ([ADR 002](adrs/0002-decouple-read-cost-from-traffic.md) + [ADR 003](adrs/0003-authenticated-internal-endpoints-and-abuse-controls.md)). |
 
 > Phase 6 (Personalized Discovery V2 — per-person learning, removed-event memory, account+cookie state) shipped inside the Phase 5 backlog; see [Personalized Discovery Backlog](personalized-discovery-backlog.md).
@@ -587,6 +587,27 @@ prevent chain collapse; TBA copies join only an unambiguous single timed cluster
 unchanged, the canonical keeps its own start time, and fuzzy merges surface in the admin Gaps audit
 with a `merged: start times within 90 minutes across sources` reason. Verified against the live prod
 rows; regression-locked by a real-fixture test. DB cleanup of hidden loser rows stays a later phase.
+
+### Phase 19: Auth Durability Hardening (C1 shipped Jul 12, 2026; C2–C3 open)
+
+An auth failure-path hardening epic tracked by
+[Auth Durability Hardening (Epic)](auth-durability-prd.md), driven by the July 8 auth durability
+audit (F2–F6). Failure-paths only — no change to what passes today. PRDs 47–49 across three cycles,
+order C1 → C2 → C3.
+
+**C1 shipped (Jul 12, 2026) — [PRD 47: Sign-In Event Resilience](prds/prd-47-signin-event-resilience.md):**
+closes audit finding **F2 (High)**, the project's known prod failure mode. `@auth/core` awaits
+`events.signIn` *inside* the callback, so a throwing side effect aborts the response after the
+session row is created but before the cookie is set — a valid sign-in stranded on `/auth/error`. The
+one unguarded step (`recordMusicConnection`) meant a drifted `music_connections` table broke **all**
+Spotify sign-in, not just taste import. The event body moved to `lib/auth-signin-event.ts`
+(`handleSignInEvent`), where all four steps run through a `runBestEffort` helper that logs a stable
+`signIn side-effect failed:` prefix and never throws; `auth.ts` now just delegates. Side effects are
+injectable deps so `tests/signin-event.test.ts` (6) proves a throwing step still completes sign-in.
+No schema change, `lib/music.ts` untouched (the wrap is the fix); the `int-authjs` registry node
+carries the F2 gotcha. Named regression suites + typecheck + lint green; Snyk-clean; `$0`. The manual
+F2 repro on a Neon branch remains an owner action (tracked in `backlog.md`). C2 (PRD 48, right-door
+recovery) is next.
 
 ### Phase 20: Cost Containment & Scale Readiness (C1–C3 shipped Jul 12, 2026 — epic complete)
 
