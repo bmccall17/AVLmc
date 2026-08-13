@@ -1,6 +1,6 @@
 # AVL Music Companion Backlog
 
-Updated: July 12, 2026
+Updated: August 13, 2026
 
 ## Urgent
 
@@ -192,6 +192,27 @@ Updated: July 12, 2026
 * **Vercel Caching for OG Image Generation**: Add Next.js route segment caching (`export const revalidate = 3600;`) to the dynamic per-event `app/event/[id]/opengraph-image.tsx` and `twitter-image.tsx`. This will cache the expensive Satori/WebAssembly image generation on Vercel's CDN, preventing runaway compute costs (GB-Hours) if an event link goes viral and is scraped thousands of times. Parked while WAU < 10.
 
 ## Done
+
+* **Ticket clicks inflated the "Going" count + admin who-clicked attribution** —
+  Shipped (August 13, 2026), from an admin noticing a Going tick on an event nobody had
+  pressed GOING on (recorded in [PRD 02](prds/prd-02-community-contributions-and-reactions.md)
+  Implementation Status).
+  * **Symptom:** an event page showed "1 Going" though no one had tapped the button — the sole
+    signal was a ticket-link click.
+  * **Root cause:** the headline `going` count was `count(*)` over all `event_intents` rows, so
+    `ticket_click` (and Spotify saves) counted the same as a real GOING tap.
+  * **Fix (count):** `queryIntentCountsByEvent` (`lib/community.ts`) now counts `going` as
+    `count(*) filter (where source in ('avlmc','spotify'))` — deliberate intent-to-go only. Ticket
+    clicks stay recorded and still show in the `goingSources` breakdown; live-computed, no backfill
+    (prod event verified 1 → 0).
+  * **Feature (admin attribution):** admin-gated `GET /api/admin/event-signals` (401 unless
+    `isAdminSession`) + `getEventSignalAttribution` (`lib/community.ts`) return name/email/source/time
+    for an event's Going/Fire ticks; `GET /api/admin/session` (`{admin:boolean}`, no PII) +
+    `useIsAdmin` (`lib/use-admin-reveal.ts`) + `<AdminSignalReveal>` (`components/AdminSignalReveal.tsx`)
+    add a who-clicked hover on the ticks in `EventBoard.tsx` and `CommunityPanel.tsx` — admins only,
+    everyone else renders unchanged.
+  * `typecheck` / `lint` / `test:registry` / `test:discovery` green; production build clean;
+    Corridor-reviewed (parameterized SQL + server-side PII gating); `$0`, no new deps, no schema changes.
 
 * **Prod schema drift silently broke preference saves → Health schema-drift probe** —
   Shipped (July 9, 2026), incident fix + permanent detection (PRD 07 / C2 enhancement;

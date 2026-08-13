@@ -14,6 +14,7 @@ import type { CuratedBy } from "@/lib/curators-core";
 import type { DiscoveryPersonEventState } from "@/lib/discovery-memory";
 import type { SpotifyTrackSearchResult } from "@/lib/music";
 import { SHARED_SONGS_REFRESH_EVENT } from "@/lib/shared-songs-core";
+import { AdminSignalReveal } from "@/components/AdminSignalReveal";
 
 type EventSummary = {
   id: string;
@@ -334,7 +335,9 @@ export function CommunityPanel({
           type="button"
         >
           <span>{discoveryState.planning ? "You're going" : "Going"}</span>
-          <strong>{community.going}</strong>
+          <AdminSignalReveal eventId={event.id} kind="going">
+            <strong>{community.going}</strong>
+          </AdminSignalReveal>
         </button>
         {spotifySearchEnabled ? (
           <button
@@ -365,7 +368,9 @@ export function CommunityPanel({
           type="button"
         >
           <span>{discoveryState.fire ? "Fired" : "Fire"}</span>
-          <strong>{community.fire}</strong>
+          <AdminSignalReveal eventId={event.id} kind="fire">
+            <strong>{community.fire}</strong>
+          </AdminSignalReveal>
         </button>
         <button
           className={`reaction-button remove ${discoveryState.removed ? "is-active" : ""}`}

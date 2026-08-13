@@ -53,6 +53,23 @@ export type EventCommunity = CommunityCounts & {
   contributions: Contribution[];
 };
 
+/**
+ * One person behind a Going/Fire tick. Contains PII (name/email), so it must only
+ * ever leave the server through an admin-gated route — see app/api/admin/event-signals.
+ */
+export type EventSignalActor = {
+  name: string | null;
+  email: string | null;
+  source: EventIntentSource | "fire";
+  createdAt: string;
+  guest: boolean;
+};
+
+export type EventSignalAttribution = {
+  going: EventSignalActor[];
+  fire: EventSignalActor[];
+};
+
 export type PublicContribution = Omit<Contribution, "sessionId" | "userId"> & {
   isOwner?: boolean;
 };
@@ -264,7 +281,10 @@ async function queryIntentCountsByEvent(eventIds: string[]) {
       `
         select
           event_id,
-          count(*)::int as going,
+          -- Headline "Going" = deliberate intent-to-go only (GOING button + Spotify).
+          -- Ticket/source clicks are interest, not a commitment, so they never inflate
+          -- the tally — they stay tracked and surface in the goingSources breakdown.
+          count(*) filter (where source in ('avlmc', 'spotify'))::int as going,
           count(*) filter (where source = 'avlmc')::int as going_avlmc,
           count(*) filter (where source = 'spotify')::int as going_spotify,
           count(*) filter (where source = 'ticket_click')::int as going_ticket_click,
@@ -697,6 +717,78 @@ async function getCountsForEvent(eventId: string): Promise<CommunityCounts> {
   return {
     ...counts,
     fire: toNumber(fireCounts.rows[0]?.fire),
+  };
+}
+
+/**
+ * Who is behind an event's Going/Fire ticks, for admin attribution tooltips.
+ * Going actors mirror the headline count (avlmc + spotify) so the list length matches
+ * the number shown. Returns PII — callers MUST gate on an admin session first.
+ */
+export async function getEventSignalAttribution(
+  eventId: string
+): Promise<EventSignalAttribution> {
+  const [going, fire] = await Promise.all([
+    query<{
+      name: string | null;
+      email: string | null;
+      source: string;
+      created_at: Date | string;
+      user_id: number | null;
+    }>(
+      `
+        select u.name, u.email, ei.source, ei.created_at, ei.user_id
+        from public.event_intents ei
+        left join public.users u on u.id = ei.user_id
+        where ei.event_id = $1
+          and ei.source in ('avlmc', 'spotify')
+        order by ei.created_at asc
+      `,
+      [eventId]
+    ).catch((error) => {
+      if (isMissingRelationError(error)) {
+        return { rows: [] as never[] };
+      }
+      throw error;
+    }),
+    query<{
+      name: string | null;
+      email: string | null;
+      created_at: Date | string;
+      user_id: number | null;
+    }>(
+      `
+        select u.name, u.email, r.created_at, r.user_id
+        from public.reactions r
+        left join public.users u on u.id = r.user_id
+        where r.event_id = $1
+          and r.type = 'fire'
+        order by r.created_at asc
+      `,
+      [eventId]
+    ).catch((error) => {
+      if (isMissingRelationError(error)) {
+        return { rows: [] as never[] };
+      }
+      throw error;
+    }),
+  ]);
+
+  return {
+    going: going.rows.map((row) => ({
+      name: row.name,
+      email: row.email,
+      source: row.source as EventIntentSource,
+      createdAt: toIsoString(row.created_at),
+      guest: row.user_id === null,
+    })),
+    fire: fire.rows.map((row) => ({
+      name: row.name,
+      email: row.email,
+      source: "fire" as const,
+      createdAt: toIsoString(row.created_at),
+      guest: row.user_id === null,
+    })),
   };
 }
 

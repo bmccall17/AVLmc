@@ -6,6 +6,7 @@ import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent
 import { Bell, CalendarCheck, Check, ChevronDown, ChevronRight, ExternalLink, Flame, Headphones, Search, Share2, SlidersHorizontal, Star, UserPlus, X } from "lucide-react";
 import { useSignInChooser } from "@/components/SignInChooser";
 import { SaveButton } from "@/components/SaveButton";
+import { AdminSignalReveal } from "@/components/AdminSignalReveal";
 import { SharedSongsCard, type SharedSongSummary } from "@/components/SharedSongsCard";
 import { circleBadgeCount, type CircleEventActivity } from "@/lib/social-activity-core";
 import type { CuratedBy } from "@/lib/curators-core";
@@ -1747,7 +1748,9 @@ function DiscoveryEventCard({
         >
           <CalendarCheck aria-hidden="true" size={16} strokeWidth={2.5} />
           <span>Going</span>
-          <strong>{going}</strong>
+          <AdminSignalReveal eventId={event.id} kind="going">
+            <strong>{going}</strong>
+          </AdminSignalReveal>
         </ActionButton>
         <ActionButton
           action="fire"
@@ -1768,7 +1771,9 @@ function DiscoveryEventCard({
         >
           <Flame aria-hidden="true" size={16} strokeWidth={2.5} />
           <span>Fire</span>
-          <strong>{fire}</strong>
+          <AdminSignalReveal eventId={event.id} kind="fire">
+            <strong>{fire}</strong>
+          </AdminSignalReveal>
         </ActionButton>
         <ActionButton
           action="remove"
