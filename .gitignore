@@ -19,3 +19,4 @@ output/
 # Local Spotify export test files (personal listening data — never commit)
 *.csv
 *:Zone.Identifier
+docs/slice.zip
